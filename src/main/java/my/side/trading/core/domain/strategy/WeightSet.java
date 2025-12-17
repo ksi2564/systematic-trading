@@ -18,6 +18,22 @@ public record WeightSet(
         return of(70, 30, 0);
     }
 
+    public static WeightSet drawDown(BigDecimal ddPercent) {
+        switch (DdBucket.from(ddPercent)) {
+            case LESS_THAN_15:
+                return of(100, 0, 0);
+            case FROM_15_TO_25:
+                return of(60, 30, 10);
+            case FROM_25_TO_35:
+                return of(40, 40, 20);
+            case FROM_35_TO_45:
+                return of(30, 30, 40);
+            case MORE_THAN_45:
+                return of(20, 20, 60);
+        }
+        throw new IllegalStateException("ddPercent=" + ddPercent);
+    }
+
     // 정수(%)로 넣으면 소수 둘째 자리까지 BigDecimal로 만들어주는 팩토리
     public static WeightSet of(int qqq, int qld, int tqqq) {
         return new WeightSet(

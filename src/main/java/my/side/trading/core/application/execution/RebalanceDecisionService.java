@@ -1,7 +1,7 @@
 package my.side.trading.core.application.execution;
 
+import my.side.trading.core.domain.execution.order.ExecutionOrderSide;
 import my.side.trading.core.domain.execution.plan.OrderIntent;
-import my.side.trading.core.domain.execution.plan.OrderSide;
 import my.side.trading.core.domain.execution.plan.RebalanceDecision;
 import my.side.trading.core.domain.execution.plan.RebalanceType;
 import my.side.trading.core.domain.portfolio.Portfolio;
@@ -25,7 +25,7 @@ public class RebalanceDecisionService {
 
     public RebalanceDecision decide(StrategyState state, Portfolio portfolio) {
 
-        // 전략 OFF면 리밸런싱 판단 자체를 하지 않음 (정책)
+        // 전략 OFF면 리밸런싱 판단 자체를 하지 않음
         if (!state.strategyOn()) {
             return RebalanceDecision.no("strategyOn=false (NORMAL 구간): 리밸런싱 미수행");
         }
@@ -36,14 +36,12 @@ public class RebalanceDecisionService {
         }
 
         WeightSet target = state.targetWeights();
-
         // 실제 비중이 목표 비중 대비 ±5% 이상 이탈
         boolean exceeds = SYMBOLS.stream().anyMatch(sym -> {
             BigDecimal wTarget = targetWeightOf(target, sym);
             BigDecimal wActual = actualWeightOf(portfolio, sym);
             return wActual.subtract(wTarget).abs().compareTo(TOLERANCE_PCT) >= 0;
         });
-
         if (!exceeds) {
             return RebalanceDecision.no("비중 오차가 허용범위(±" + TOLERANCE_PCT + "%) 이내");
         }
@@ -51,7 +49,7 @@ public class RebalanceDecisionService {
         // 목표/실제 금액 비교로 주식 주문 리스트 반환
         List<OrderIntent> intents = buildIntents(target, portfolio);
 
-        String reason = "비중 오차 초과로 리밸런싱 필요 (phase=" + state.phase() + ")";
+        String reason = "비중 오차 초과로 리밸런싱 필요 (phase=" + state.phase() + ", ddBucket=" + state.ddBucket() + ")";
         return RebalanceDecision.yes(RebalanceType.THRESHOLD, reason, intents);
     }
 
@@ -80,12 +78,12 @@ public class RebalanceDecisionService {
 
             if (diff.compareTo(BigDecimal.ZERO) > 0) {
                 intents.add(new OrderIntent(
-                        sym, OrderSide.BUY, diff.setScale(2, RoundingMode.HALF_UP),
+                        sym, ExecutionOrderSide.BUY, diff.setScale(2, RoundingMode.HALF_UP),
                         "목표금액 (" + targetNotional.get(sym) + ") > 현재 보유금액 (" + actualNotional.get(sym) + ")"
                 ));
             } else if (diff.compareTo(BigDecimal.ZERO) < 0) {
                 intents.add(new OrderIntent(
-                        sym, OrderSide.SELL, diff.abs().setScale(2, RoundingMode.HALF_UP),
+                        sym, ExecutionOrderSide.SELL, diff.abs().setScale(2, RoundingMode.HALF_UP),
                         "목표금액 (" + targetNotional.get(sym) + ") < 현재 보유금액 (" + actualNotional.get(sym) + ")"
                 ));
             }

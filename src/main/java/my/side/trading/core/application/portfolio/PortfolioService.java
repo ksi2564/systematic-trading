@@ -11,6 +11,8 @@ import java.math.BigDecimal;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import static my.side.trading.core.domain.portfolio.OverseasAccountReader.AccountSnapshot;
+
 @Service
 @RequiredArgsConstructor
 public class PortfolioService {
@@ -22,7 +24,7 @@ public class PortfolioService {
      * KIS 잔고 + 실시간 가격을 기반으로 현재 포트폴리오 상태를 계산한다.
      */
     public Portfolio getCurrentPortfolio() {
-        OverseasAccountReader.AccountSnapshot snapshot = accountReader.getAccountSnapshot();
+        AccountSnapshot snapshot = accountReader.getAccountSnapshot();
 
         List<Position> positions = snapshot.positions().stream()
                 .map(pos -> {

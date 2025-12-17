@@ -1,11 +1,13 @@
 package my.side.trading.core.domain.execution.order;
 
+/**
+ * 실행 주문의 생명주기 동안 가질 수 있는 다양한 상태를 나타내는 Enum
+ * 각 주문이 가질 수 있는 특정 상태를 설명
+ */
 public enum ExecutionOrderStatus {
-    PLANNED,            // 수량 확정 완료(아직 전송 전)
-    SENT,               // 주문 전송 완료
-    PARTIALLY_FILLED,   // 부분 체결
-    FILLED,             // 전량 체결
-    REJECTED,           // 증권사 거절(파라미터/규정 등)
-    FAILED,             // 시스템/네트워크 등 실패
-    CANCELED            // 취소됨
+    PLANNED,    // 주문 수량이 확정되었으나 아직 전송되지 않은 상태
+    REQUESTED,  // 주문이 전송된 상태
+    ACCEPTED,   // 주문 요청이 수락된 상태
+    REJECTED,   // 주문 요청이 거절된 상태
+    CANCELED    // 주문이 취소된 상태
 }

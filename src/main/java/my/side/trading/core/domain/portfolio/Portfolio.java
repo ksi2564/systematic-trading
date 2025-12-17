@@ -35,6 +35,13 @@ public record Portfolio(
                 .setScale(4, RoundingMode.HALF_UP);
     }
 
+    public BigDecimal quantityOf(String symbol) {
+        return positions.stream()
+                .filter(p -> p.symbol().equals(symbol))
+                .map(Position::quantity)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
     public BigDecimal wQqq() {
         return weightOf("QQQ");
     }

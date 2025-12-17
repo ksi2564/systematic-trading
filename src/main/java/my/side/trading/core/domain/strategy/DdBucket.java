@@ -3,7 +3,7 @@ package my.side.trading.core.domain.strategy;
 import java.math.BigDecimal;
 
 public enum DdBucket {
-    ZERO_TO_15,        // 0% ~ <15%
+    LESS_THAN_15,        // <15%
     FROM_15_TO_25,      // 15% ~ <25%
     FROM_25_TO_35,      // 25% ~ <35%
     FROM_35_TO_45,      // 35% ~ <45%
@@ -14,7 +14,7 @@ public enum DdBucket {
      */
     public static DdBucket from(BigDecimal ddPercent) {
         if (ddPercent.compareTo(new BigDecimal("15")) < 0) {
-            return ZERO_TO_15;
+            return LESS_THAN_15;
         } else if (ddPercent.compareTo(new BigDecimal("25")) < 0) {
             return FROM_15_TO_25;
         } else if (ddPercent.compareTo(new BigDecimal("35")) < 0) {

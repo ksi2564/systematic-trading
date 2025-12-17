@@ -1,11 +1,11 @@
 package my.side.trading.core.application.strategy;
 
 import lombok.RequiredArgsConstructor;
+import my.side.trading.adapter.out.persistence.jpa.impl.StrategyStateRepositoryImpl;
 import my.side.trading.core.domain.strategy.DdBucket;
 import my.side.trading.core.domain.strategy.StrategyPhase;
 import my.side.trading.core.domain.strategy.StrategyState;
 import my.side.trading.core.domain.strategy.WeightSet;
-import my.side.trading.core.infrastructure.jpa.repository.StrategyStateRepository;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -18,63 +18,45 @@ public class StrategyStateEodService {
 
     private static final int CURRENT_STRATEGY_VERSION = 1;
 
-    private final StrategyStateRepository strategyStateRepository;
-    private final WeightRuleService weightRuleService;
+    private final StrategyStateRepositoryImpl strategyStateRepositoryImpl;
 
     /**
      * EOD 기준으로 새로운 StrategyState를 계산하고 저장한다.
+     * 초기 StrategyState는 QQQ 의 전고점 데이터를 직접 DB에 Insert (1회성)
      *
      * @param asOfDate 상태 기준 일자 (예: 2025-12-10, "장 마감일")
      * @param qqqClose 해당 날 QQQ 종가
      * @return 계산된 StrategyState 도메인 객체
      */
     public StrategyState runEod(LocalDate asOfDate, BigDecimal qqqClose) {
-        StrategyState prev = strategyStateRepository.findLatestState()
+        StrategyState prev = strategyStateRepositoryImpl.findLatestState()
                 .orElseThrow(() -> new IllegalStateException("초기 StrategyState가 DB에 없습니다."));
 
         StrategyState newState = calculateNextState(asOfDate, qqqClose, prev);
-
-        return strategyStateRepository.save(newState);
+        return strategyStateRepositoryImpl.save(newState);
     }
 
 
     private StrategyState calculateNextState(LocalDate asOfDate, BigDecimal qqqClose, StrategyState prev) {
-
         BigDecimal prevAth = prev.ath();
-        BigDecimal ath;
+        BigDecimal ath, dd, maxDd;
 
         // 전고 돌파 시
         if (qqqClose.compareTo(prevAth) > 0) {
-            // ATH 갱신 + DD 리셋 + NORMAL + QQQ 100%
+            // ATH 갱신 + DD 리셋
             ath = qqqClose;
-            BigDecimal dd = BigDecimal.ZERO;
-            BigDecimal maxDd = BigDecimal.ZERO;
-
-            return new StrategyState(
-                    asOfDate,
-                    ath,
-                    qqqClose,
-                    dd,
-                    maxDd,
-                    DdBucket.ZERO_TO_15,
-                    StrategyPhase.NORMAL,
-                    new WeightSet(new BigDecimal("100"), BigDecimal.ZERO, BigDecimal.ZERO),
-                    false,
-                    CURRENT_STRATEGY_VERSION
-            );
+            dd = BigDecimal.ZERO;
+            maxDd = BigDecimal.ZERO;
+        } else {
+            ath = prevAth;
+            dd = calculateDrawdownPercent(ath, qqqClose);
+            maxDd = prev.maxDrawdownPctSinceAth().max(dd);
         }
 
-        ath = prevAth;
-        BigDecimal dd = calculateDrawdownPercent(ath, qqqClose);
-        BigDecimal maxDd = prev.maxDrawdownPctSinceAth().max(dd);
-
+        // bucket + phase + 목표 비중 + 전략 ON/OFF 결정
         DdBucket bucket = DdBucket.from(dd);
-
-        // phase + 목표 비중 결정
         StrategyPhase phase = StrategyPhase.from(maxDd, dd);
-        WeightSet targetWeights = decideTargetWeights(phase, dd, prev, CURRENT_STRATEGY_VERSION);
-
-        // 전략 ON/OFF
+        WeightSet targetWeights = decideTargetWeights(phase, dd, prev);
         boolean strategyOn = (phase != StrategyPhase.NORMAL);
 
         return new StrategyState(
@@ -91,18 +73,12 @@ public class StrategyStateEodService {
         );
     }
 
-    private WeightSet decideTargetWeights(StrategyPhase phase, BigDecimal dd, StrategyState prev, int version) {
-
+    private WeightSet decideTargetWeights(StrategyPhase phase, BigDecimal dd, StrategyState prev) {
         return switch (phase) {
             case NORMAL -> WeightSet.normal();
             case RECOVERY -> WeightSet.recovery();
-            case DRAWDOWN -> {
-                // 10% < DD < 15% 이고, 직전에도 DRAWDOWN이면 -> 이전 비중 유지
-                boolean inMidRecoveryBand =
-                        dd.compareTo(BigDecimal.TEN) > 0 && dd.compareTo(BigDecimal.valueOf(15)) < 0;
-                yield inMidRecoveryBand && prev.phase() == StrategyPhase.DRAWDOWN ?
-                        prev.targetWeights() : weightRuleService.getTargetWeights(dd, version);
-            }
+            case DRAWDOWN -> dd.compareTo(BigDecimal.TEN) > 0 && dd.compareTo(BigDecimal.valueOf(15)) < 0 ?
+                    prev.targetWeights() : WeightSet.drawDown(dd); // 10% < DD < 15% 이면 -> 이전 비중 유지
         };
     }
 

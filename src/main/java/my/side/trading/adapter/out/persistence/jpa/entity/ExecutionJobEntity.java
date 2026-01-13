@@ -26,7 +26,7 @@ public class ExecutionJobEntity {
     @Column(name = "signal_date", nullable = false)
     private LocalDate signalDate;
 
-    // 집행 가능 시각 (다음 거래일 장 시작 후 30분 뒤)
+    // 집행 가능 시각 (다음 거래일 장 시작 후 15분 뒤)
     @Column(name = "execute_after", nullable = false)
     private LocalDateTime executeAfter;
 

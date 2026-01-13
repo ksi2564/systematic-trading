@@ -9,5 +9,6 @@ public enum ExecutionOrderStatus {
     REQUESTED,  // 주문이 전송된 상태
     ACCEPTED,   // 주문 요청이 수락된 상태
     REJECTED,   // 주문 요청이 거절된 상태
-    CANCELED    // 주문이 취소된 상태
+    CANCELED,   // 주문이 취소된 상태
+    SKIPPED     // 주문배치가 OFF 상태
 }

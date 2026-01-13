@@ -12,6 +12,12 @@ public class KisOverseasQuotedPriceService {
     private final WebClient webClient;
     private final KisAuthService kisAuthService;
 
+    /**
+     * 해외주식 현재 체결가(v1_해외주식-009)
+     *
+     * @param symbol
+     * @return
+     */
     public QuotedPriceResponse getQuotedPrice(String symbol) {
         String accessToken = kisAuthService.getAccessToken();
 

@@ -89,9 +89,21 @@ public class ExecutionOrder {
         );
     }
 
-    public void markRequested() {
+    public void markRequested(String message) {
         requireStatus(ExecutionOrderStatus.PLANNED);
+        this.message = message;
         this.status = ExecutionOrderStatus.REQUESTED;
+    }
+
+    public void remarkRequested(String message) {
+        requireStatus(ExecutionOrderStatus.REQUESTED);
+        this.message = message;
+    }
+
+    public void markSkipped(String message) {
+        if (isTerminal()) throw new IllegalStateException("터미널 상태는 SKIPPED 전이 불가: " + status);
+        this.message = message;
+        this.status = ExecutionOrderStatus.SKIPPED;
     }
 
     public void accept(String brokerOrderId, String message) {
@@ -118,7 +130,12 @@ public class ExecutionOrder {
     public boolean isTerminal() {
         return status == ExecutionOrderStatus.ACCEPTED
                 || status == ExecutionOrderStatus.REJECTED
-                || status == ExecutionOrderStatus.CANCELED;
+                || status == ExecutionOrderStatus.CANCELED
+                || status == ExecutionOrderStatus.SKIPPED;
+    }
+
+    public ExecutionOrder changeQty(long newQuantity) {
+        return rehydrate(id, symbol, side, newQuantity, refPrice, limitPrice, status, brokerOrderId, message);
     }
 
     private void requireStatus(ExecutionOrderStatus expected) {

@@ -75,14 +75,19 @@ public class ExecutionJob {
         this.completedAt = null;
     }
 
-    public void markOrderRequested(Long orderId) {
+    public void markOrderRequested(Long orderId, String message) {
         requireRunning();
-        findOrderById(orderId).markRequested();
+        findOrderById(orderId).markRequested(message);
     }
 
-    public void markOrderRequested(String symbol, ExecutionOrderSide side) {
+    public void remarkOrderRequested(Long orderId, String message) {
         requireRunning();
-        findOrderBySymbolSide(symbol, side).markRequested();
+        findOrderById(orderId).remarkRequested(message);
+    }
+
+    public void markOrderRequested(String symbol, ExecutionOrderSide side, String message) {
+        requireRunning();
+        findOrderBySymbolSide(symbol, side).markRequested(message);
     }
 
     public void acceptOrder(Long orderId, String brokerOrderId, String message, LocalDateTime now) {
@@ -103,6 +108,12 @@ public class ExecutionJob {
         completeIfAllTerminal(now);
     }
 
+    public void skipOrder(Long orderId, String message, LocalDateTime now) {
+        requireRunning();
+        findOrderById(orderId).markSkipped(message);
+        completeIfAllTerminal(now);
+    }
+
     public void completeIfAllTerminal(LocalDateTime now) {
         if (now == null) throw new IllegalArgumentException("now는 필수");
         if (status != ExecutionStatus.RUNNING) return;
@@ -114,6 +125,25 @@ public class ExecutionJob {
         this.status = anyFailed ? ExecutionStatus.FAILED : ExecutionStatus.COMPLETED;
         this.completedAt = now;
     }
+
+    public void replaceOrder(ExecutionOrder updated) {
+        requireRunning();
+        if (updated == null) throw new IllegalArgumentException("updated order는 필수");
+        if (updated.getId() == null) throw new IllegalArgumentException("updated order id는 필수");
+
+        for (int i = 0; i < orders.size(); i++) {
+            ExecutionOrder current = orders.get(i);
+            if (Objects.equals(current.getId(), updated.getId())) {
+                if (current.isTerminal()) {
+                    throw new IllegalStateException("terminal order는 교체 불가: " + current.getStatus());
+                }
+                orders.set(i, updated);
+                return;
+            }
+        }
+        throw new NoSuchElementException("해당 orderId를 찾을 수 없음: " + updated.getId());
+    }
+
 
     private void requireRunning() {
         if (status != ExecutionStatus.RUNNING) {

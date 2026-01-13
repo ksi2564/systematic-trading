@@ -11,6 +11,7 @@ import my.side.trading.adapter.out.persistence.jpa.repository.ExecutionOrderJpaR
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
@@ -46,6 +47,18 @@ public class ExecutionJobRepositoryImpl implements ExecutionJobRepository {
     @Transactional(readOnly = true)
     public Optional<ExecutionJob> findById(Long id) {
         return jobJpaRepository.findById(id).map(jobEntity -> {
+            List<ExecutionOrder> orders = orderJpaRepository.findAllByJobId(jobEntity.getId())
+                    .stream()
+                    .map(ExecutionOrderEntity::toDomain)
+                    .toList();
+            return jobEntity.toDomain(orders);
+        });
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<ExecutionJob> findBySignalDate(LocalDate signalDate) {
+        return jobJpaRepository.findBySignalDate(signalDate).map(jobEntity -> {
             List<ExecutionOrder> orders = orderJpaRepository.findAllByJobId(jobEntity.getId())
                     .stream()
                     .map(ExecutionOrderEntity::toDomain)

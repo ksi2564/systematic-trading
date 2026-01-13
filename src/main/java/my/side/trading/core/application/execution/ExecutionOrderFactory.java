@@ -17,42 +17,49 @@ import java.util.Optional;
 @RequiredArgsConstructor
 public class ExecutionOrderFactory {
 
-    private final RealtimePriceProvider priceProvider;
-    private final MarketLikePricingPolicy pricingPolicy =
-            new MarketLikePricingPolicy(new BigDecimal("0.5"), new BigDecimal("0.5"));
+    private static final BigDecimal SELL_PROCEEDS_HAIRCUT = new BigDecimal("0.995");
 
-    public Optional<ExecutionOrder> fromIntent(OrderIntent intent, Portfolio portfolio) {
+    private final RealtimePriceProvider priceProvider;
+    private final MarketLikePricingPolicy pricingPolicy;
+
+    public Optional<OrderAndCashDelta> fromIntentWithCashDelta(
+            OrderIntent intent,
+            Portfolio portfolio,
+            BigDecimal remainingCashUsd
+    ) {
         BigDecimal refPrice = priceProvider.getLastPrice(intent.symbol())
                 .orElseThrow(() -> new IllegalStateException("price cache miss: " + intent.symbol()));
 
         BigDecimal limitPrice = computeLimitPrice(intent.side(), refPrice);
 
-        long desireQty = computeDesiredQty(intent.notionalUsd(), limitPrice);
-        if (desireQty <= 0) return Optional.empty();
+        long desiredQty = computeDesiredQty(intent.notionalUsd(), limitPrice);
+        if (desiredQty <= 0) return Optional.empty();
 
-        long finalQty = desireQty;
+        long finalQty = desiredQty;
+
         if (intent.side() == ExecutionOrderSide.SELL) {
-            long maxSellQty = portfolio.quantityOf(intent.symbol()).setScale(0, RoundingMode.DOWN).longValue();
-            finalQty = Math.min(desireQty, Math.max(0, maxSellQty));
-            if (finalQty <= 0) return Optional.empty();
+            long maxSellQty = portfolio.quantityOf(intent.symbol())
+                    .setScale(0, RoundingMode.DOWN)
+                    .longValue();
+            finalQty = Math.min(desiredQty, maxSellQty);
+
+        } else if (intent.side() == ExecutionOrderSide.BUY) {
+            finalQty = Math.min(desiredQty, computeMaxBuyQty(remainingCashUsd, limitPrice));
         }
 
-        return Optional.of(
-                ExecutionOrder.create(
-                        intent.symbol(),
-                        intent.side(),
-                        finalQty,
-                        refPrice,
-                        limitPrice
-                )
-        );
-    }
+        if (finalQty <= 0) return Optional.empty();
 
-    private long computeDesiredQty(BigDecimal notionalUsd, BigDecimal limitPrice) {
-        if (notionalUsd == null || notionalUsd.signum() <= 0) return 0L;
-        return notionalUsd
-                .divide(limitPrice, 0, RoundingMode.DOWN)
-                .longValueExact();
+        ExecutionOrder order = ExecutionOrder.create(
+                intent.symbol(),
+                intent.side(),
+                finalQty,
+                refPrice,
+                limitPrice
+        );
+
+        BigDecimal cashDelta = estimateCashDelta(order);
+
+        return Optional.of(new OrderAndCashDelta(order, cashDelta));
     }
 
     private BigDecimal computeLimitPrice(ExecutionOrderSide side, BigDecimal refPrice) {
@@ -61,5 +68,49 @@ public class ExecutionOrderFactory {
                 : BigDecimal.ONE.subtract(pricingPolicy.sellBuffer());
 
         return refPrice.multiply(multiplier).setScale(2, RoundingMode.HALF_UP);
+    }
+
+    private long computeDesiredQty(BigDecimal notionalUsd, BigDecimal finalPrice) {
+        if (notionalUsd == null || notionalUsd.signum() <= 0) return 0L;
+        return notionalUsd
+                .divide(finalPrice, 0, RoundingMode.DOWN)
+                .longValueExact();
+    }
+
+    /**
+     * BUY 최대 가능 수량 = remainingCash / (limitPrice * (1 + feeRate))
+     */
+    private long computeMaxBuyQty(BigDecimal remainingCashUsd, BigDecimal limitPrice) {
+        if (remainingCashUsd == null || remainingCashUsd.signum() <= 0) return 0L;
+
+        BigDecimal feeRate = pricingPolicy.feeRate();
+        BigDecimal finalPrice = limitPrice.multiply(BigDecimal.ONE.add(feeRate));
+        if (finalPrice.signum() <= 0) return 0L;
+
+        return remainingCashUsd.divide(finalPrice, 0, RoundingMode.DOWN).longValue();
+    }
+
+    /**
+     * cashDelta 정의:
+     * - BUY: - (limitPrice * qty * (1 + feeRate))
+     * - SELL: + (limitPrice * qty * (1 - feeRate) * haircut)
+     */
+    private BigDecimal estimateCashDelta(ExecutionOrder order) {
+        BigDecimal feeRate = pricingPolicy.feeRate();
+        BigDecimal notional = order.getLimitPrice().multiply(BigDecimal.valueOf(order.getQuantity()));
+
+        if (order.getSide() == ExecutionOrderSide.BUY) {
+            BigDecimal cashOut = notional.multiply(BigDecimal.ONE.add(feeRate));
+            return cashOut.negate();
+        }
+
+        if (order.getSide() == ExecutionOrderSide.SELL) {
+            BigDecimal cashIn = notional
+                    .multiply(BigDecimal.ONE.subtract(feeRate))
+                    .multiply(SELL_PROCEEDS_HAIRCUT);
+            return cashIn;
+        }
+
+        return BigDecimal.ZERO;
     }
 }

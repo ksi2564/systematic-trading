@@ -26,3 +26,28 @@ kis:
   account-no: ${KIS_ACCOUNT_NO}
   cano: ${KIS_CANO}
   acnt-prdt-cd: ${KIS_ACNT_PRDT_CD}
+
+trading:
+  scheduling:
+    enabled: false
+  execution:
+    enabled: false
+  strategy:
+    tolerance-pct: 5.0
+    symbols:
+      - QQQ
+      - QLD
+      - TQQQ
+    sell-priority:
+      - TQQQ
+      - QLD
+      - QQQ
+    buy-priority:
+      - QQQ
+      - QLD
+      - TQQQ
+  circuit-breaker:
+    enabled: true
+    vix-enabled: true
+    vix-threshold: 35
+    ma-period: 200

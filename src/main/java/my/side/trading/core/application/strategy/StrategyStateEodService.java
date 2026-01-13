@@ -1,11 +1,7 @@
 package my.side.trading.core.application.strategy;
 
 import lombok.RequiredArgsConstructor;
-import my.side.trading.adapter.out.persistence.jpa.impl.StrategyStateRepositoryImpl;
-import my.side.trading.core.domain.strategy.DdBucket;
-import my.side.trading.core.domain.strategy.StrategyPhase;
-import my.side.trading.core.domain.strategy.StrategyState;
-import my.side.trading.core.domain.strategy.WeightSet;
+import my.side.trading.core.domain.strategy.*;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -18,7 +14,7 @@ public class StrategyStateEodService {
 
     private static final int CURRENT_STRATEGY_VERSION = 1;
 
-    private final StrategyStateRepositoryImpl strategyStateRepositoryImpl;
+    private final StrategyStateRepository strategyStateRepository;
 
     /**
      * EOD 기준으로 새로운 StrategyState를 계산하고 저장한다.
@@ -29,11 +25,11 @@ public class StrategyStateEodService {
      * @return 계산된 StrategyState 도메인 객체
      */
     public StrategyState runEod(LocalDate asOfDate, BigDecimal qqqClose) {
-        StrategyState prev = strategyStateRepositoryImpl.findLatestState()
+        StrategyState prev = strategyStateRepository.findLatestState()
                 .orElseThrow(() -> new IllegalStateException("초기 StrategyState가 DB에 없습니다."));
 
         StrategyState newState = calculateNextState(asOfDate, qqqClose, prev);
-        return strategyStateRepositoryImpl.save(newState);
+        return strategyStateRepository.save(newState);
     }
 
 
@@ -53,11 +49,12 @@ public class StrategyStateEodService {
             maxDd = prev.maxDrawdownPctSinceAth().max(dd);
         }
 
-        // bucket + phase + 목표 비중 + 전략 ON/OFF 결정
+        // bucket + phase + 목표 비중 결정
         DdBucket bucket = DdBucket.from(dd);
         StrategyPhase phase = StrategyPhase.from(maxDd, dd);
         WeightSet targetWeights = decideTargetWeights(phase, dd, prev);
-        boolean strategyOn = (phase != StrategyPhase.NORMAL);
+        // strategyOn은 KillSwitch이므로 이전 상태 유지
+        boolean strategyOn = prev.strategyOn();
 
         return new StrategyState(
                 asOfDate,

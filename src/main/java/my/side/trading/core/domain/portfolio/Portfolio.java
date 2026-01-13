@@ -5,9 +5,8 @@ import java.math.RoundingMode;
 import java.util.List;
 
 public record Portfolio(
-        BigDecimal cash,        // 현금 잔고
-        List<Position> positions
-) {
+        BigDecimal cash, // 현금 잔고
+        List<Position> positions) {
 
     public BigDecimal totalValue() {
         BigDecimal sum = cash != null ? cash : BigDecimal.ZERO;
@@ -35,6 +34,13 @@ public record Portfolio(
                 .setScale(4, RoundingMode.HALF_UP);
     }
 
+    /**
+     * Ticker enum을 사용하는 타입 안전한 weightOf 메서드
+     */
+    public BigDecimal weightOf(Ticker ticker) {
+        return weightOf(ticker.name());
+    }
+
     public BigDecimal quantityOf(String symbol) {
         return positions.stream()
                 .filter(p -> p.symbol().equals(symbol))
@@ -42,15 +48,22 @@ public record Portfolio(
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
+    /**
+     * Ticker enum을 사용하는 타입 안전한 quantityOf 메서드
+     */
+    public BigDecimal quantityOf(Ticker ticker) {
+        return quantityOf(ticker.name());
+    }
+
     public BigDecimal wQqq() {
-        return weightOf("QQQ");
+        return weightOf(Ticker.QQQ);
     }
 
     public BigDecimal wQld() {
-        return weightOf("QLD");
+        return weightOf(Ticker.QLD);
     }
 
     public BigDecimal wTqqq() {
-        return weightOf("TQQQ");
+        return weightOf(Ticker.TQQQ);
     }
 }

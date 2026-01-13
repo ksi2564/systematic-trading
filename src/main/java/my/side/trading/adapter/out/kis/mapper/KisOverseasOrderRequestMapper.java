@@ -28,7 +28,7 @@ public class KisOverseasOrderRequestMapper {
     }
 
     private String resolveExchangeCode(String symbol) {
-        // TODO: QLD는 AMEX인지 NASD인지 확인 / QQQ, QQQM, TQQQ는 NASD 맞음
+        // TODO: QLD는 AMEX인지 NASD인지 확인
         return "NASD";
     }
 

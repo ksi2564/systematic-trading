@@ -1,4 +1,4 @@
-package my.side.trading.core.domain.snapshot;
+package my.side.trading.core.domain.portfolio;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;

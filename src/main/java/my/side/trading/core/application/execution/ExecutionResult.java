@@ -23,8 +23,16 @@ public record ExecutionResult(
         return new ExecutionResult(ResultType.SUCCESS, brokerOrderId, fill.filledQty(), fill.filledAmount(), null);
     }
 
+    public static ExecutionResult success(String brokerOrderId, long filledQty, BigDecimal filledAmount) {
+        return new ExecutionResult(ResultType.SUCCESS, brokerOrderId, filledQty, filledAmount, null);
+    }
+
     public static ExecutionResult partial(String brokerOrderId, FillResult fill) {
         return new ExecutionResult(ResultType.PARTIAL, brokerOrderId, fill.filledQty(), fill.filledAmount(), null);
+    }
+
+    public static ExecutionResult partial(String brokerOrderId, long filledQty, BigDecimal filledAmount) {
+        return new ExecutionResult(ResultType.PARTIAL, brokerOrderId, filledQty, filledAmount, null);
     }
 
     public static ExecutionResult failed(String symbol) {

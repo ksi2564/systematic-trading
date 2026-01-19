@@ -10,8 +10,9 @@ import java.util.List;
 
 /**
  * 주문 실행기
- * - SELL 주문 먼저 실행 → 체결 대기
+ * - SELL 주문 먼저 실행 → 체결 확인
  * - BUY 주문 나중에 실행
+ * - 재시도 정책: 10초 대기, 부분체결 시 미체결분 재시도, 최대 3회
  */
 @Slf4j
 @Service
@@ -19,7 +20,7 @@ import java.util.List;
 public class ExecutionJobExecutor {
 
     private final ExecutionJobRepository jobRepository;
-    private final OrderBroker orderBroker;
+    private final RetryableOrderExecutor retryableExecutor;
     private final OrderInquiry orderInquiry;
     private final ExecutionGuard guard;
 
@@ -54,7 +55,7 @@ public class ExecutionJobExecutor {
 
         log.info("[EXEC] Phase 1: SELL 주문 {} 개 실행", sellOrders.size());
         for (ExecutionOrder order : sellOrders) {
-            executeOrder(job, order, now);
+            executeOrderWithRetry(job, order, now);
         }
 
         // Phase 2: BUY 주문 실행
@@ -65,14 +66,14 @@ public class ExecutionJobExecutor {
 
         log.info("[EXEC] Phase 2: BUY 주문 {} 개 실행", buyOrders.size());
         for (ExecutionOrder order : buyOrders) {
-            executeOrder(job, order, now);
+            executeOrderWithRetry(job, order, now);
         }
 
         job.completeIfAllTerminal(now);
         return jobRepository.save(job);
     }
 
-    private void executeOrder(ExecutionJob job, ExecutionOrder order, LocalDateTime now) {
+    private void executeOrderWithRetry(ExecutionJob job, ExecutionOrder order, LocalDateTime now) {
         if (order.getStatus() == ExecutionOrderStatus.REQUESTED) {
             // 재실행 시 재주문 금지
             OrderInquiryResult result = orderInquiry.confirm(order);
@@ -87,33 +88,20 @@ public class ExecutionJobExecutor {
         }
 
         // PLANNED -> REQUESTED
-        job.markOrderRequested(order.getId(), "주문 요청");
+        job.markOrderRequested(order.getId(), "주문 요청 (재시도 정책 적용)");
 
-        BrokerOrderResult result = orderBroker.place(order);
+        // 재시도 로직을 통한 주문 실행
+        ExecutionResult result = retryableExecutor.executeWithRetry(order);
 
-        // 차단은 실패(REJECT)가 아니라 SKIPPED
-        if (isBlocked(result)) {
-            job.skipOrder(order.getId(), result.message(), now);
-            return;
-        }
-
-        if (result.success()) {
-            if (result.brokerOrderId() == null || result.brokerOrderId().isBlank()) {
-                job.remarkOrderRequested(order.getId(),
-                        "broker success but missing orderId. msg=" + result.message());
-                OrderInquiryResult inquiryResult = orderInquiry.confirm(order);
-                if (inquiryResult.found()) {
-                    job.acceptOrder(order.getId(), inquiryResult.brokerOrderId(), inquiryResult.message(), now);
-                }
-            } else {
-                job.acceptOrder(order.getId(), result.brokerOrderId(), result.message(), now);
-            }
+        if (result.isSuccess()) {
+            job.acceptOrder(order.getId(), result.brokerOrderId(),
+                    String.format("전량 체결: %d주", result.filledQty()), now);
+        } else if (result.isPartial()) {
+            job.acceptOrder(order.getId(), result.brokerOrderId(),
+                    String.format("부분 체결: %d주 (일부 미체결)", result.filledQty()), now);
         } else {
-            job.rejectOrder(order.getId(), result.brokerOrderId(), result.message(), now);
+            job.rejectOrder(order.getId(), result.brokerOrderId(),
+                    "3회 재시도 실패: " + result.symbol(), now);
         }
-    }
-
-    private boolean isBlocked(BrokerOrderResult r) {
-        return r != null && r.message() != null && r.message().startsWith("BLOCKED:");
     }
 }

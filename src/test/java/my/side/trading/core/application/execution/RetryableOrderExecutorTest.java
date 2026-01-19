@@ -76,6 +76,30 @@ class RetryableOrderExecutorTest {
     }
 
     @Test
+    @DisplayName("부분체결이 연속 발생해도 최대 3회만 주문")
+    void 부분체결_연속_발생_시_최대_3회_제한() {
+        ExecutionOrder order = createOrder("QQQ", ExecutionOrderSide.BUY, 10);
+        broker.setOrderIds("ORD001", "ORD002", "ORD003");
+
+        // 1차: 10주 → 7주 체결, 3주 미체결
+        fillChecker.setFillResult("ORD001", FillResult.partial(7, 3, new BigDecimal("700")));
+        // 2차: 3주 → 2주 체결, 1주 미체결
+        fillChecker.setFillResult("ORD002", FillResult.partial(2, 1, new BigDecimal("200")));
+        // 3차: 1주 → 0주 체결, 1주 미체결 (3번째 시도에서 실패)
+        fillChecker.setFillResult("ORD003", FillResult.partial(0, 1, BigDecimal.ZERO));
+
+        ExecutionResult result = executor.executeWithRetry(order);
+
+        // 총 9주 체결 (7 + 2 + 0)
+        assertThat(result.isPartial()).isTrue();
+        assertThat(result.filledQty()).isEqualTo(9);
+
+        // 중요: broker.setOrderIds에 3개만 설정했으므로,
+        // 4번째 주문이 시도되면 예외 발생했을 것
+        // 예외 없이 여기까지 왔다 = 최대 3회만 주문됨 ✅
+    }
+
+    @Test
     @DisplayName("버퍼 퍼센트는 시도 횟수에 따라 증가")
     void 버퍼_증가_확인() {
         assertThat(executor.getBufferPercent(1)).isEqualByComparingTo("0.3");

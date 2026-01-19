@@ -1,18 +1,26 @@
 package my.side.trading.core.domain.execution.plan;
 
+import my.side.trading.core.domain.strategy.WeightSet;
+
 import java.util.List;
 
+/**
+ * 리밸런싱 판단 결과
+ * targetWeights: 목표 비중 (주문 시점에 실시간 가격으로 수량 계산)
+ * intents: 주문 방향 (BUY/SELL) 정보
+ */
 public record RebalanceDecision(
         boolean shouldRebalance,
         RebalanceType type,
         String reason,
-        List<OrderIntent> intents
-) {
+        WeightSet targetWeights,
+        List<OrderIntent> intents) {
     public static RebalanceDecision no(String reason) {
-        return new RebalanceDecision(false, null, reason, List.of());
+        return new RebalanceDecision(false, null, reason, null, List.of());
     }
 
-    public static RebalanceDecision yes(RebalanceType type, String reason, List<OrderIntent> intents) {
-        return new RebalanceDecision(true, type, reason, intents);
+    public static RebalanceDecision yes(RebalanceType type, String reason, WeightSet targetWeights,
+            List<OrderIntent> intents) {
+        return new RebalanceDecision(true, type, reason, targetWeights, intents);
     }
 }

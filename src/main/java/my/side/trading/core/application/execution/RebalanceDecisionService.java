@@ -7,14 +7,12 @@ import my.side.trading.core.domain.execution.plan.OrderIntent;
 import my.side.trading.core.domain.execution.plan.RebalanceDecision;
 import my.side.trading.core.domain.execution.plan.RebalanceType;
 import my.side.trading.core.domain.portfolio.Portfolio;
-import my.side.trading.core.domain.portfolio.Position;
 import my.side.trading.core.domain.strategy.StrategyState;
 import my.side.trading.core.domain.strategy.WeightSet;
 import my.side.trading.core.infrastructure.config.TradingStrategyProps;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.util.*;
 import java.util.stream.Stream;
 
@@ -82,41 +80,27 @@ public class RebalanceDecisionService {
         if (maTriggered) {
             reason += " [200MA Circuit Breaker 활성]";
         }
-        return RebalanceDecision.yes(RebalanceType.THRESHOLD, reason, intents);
+        return RebalanceDecision.yes(RebalanceType.THRESHOLD, reason, target, intents);
     }
 
+    /**
+     * 주문 방향만 결정 (금액/수량은 주문 시점에 계산)
+     */
     private List<OrderIntent> buildIntents(WeightSet target, Portfolio portfolio) {
-        BigDecimal total = portfolio.totalValue();
         List<String> symbols = strategyProps.symbols();
-
-        Map<String, BigDecimal> targetNotional = new HashMap<>();
-        Map<String, BigDecimal> actualNotional = new HashMap<>();
-
-        for (String sym : symbols) {
-            // 각 종목별 목표금액
-            BigDecimal wTarget = targetWeightOf(target, sym);
-            targetNotional.put(sym, pctOf(total, wTarget));
-
-            // 각 종목별 평가금액
-            BigDecimal actualValue = portfolio.positions().stream()
-                    .filter(p -> p.symbol().equals(sym))
-                    .map(Position::value)
-                    .reduce(BigDecimal.ZERO, BigDecimal::add);
-            actualNotional.put(sym, actualValue);
-        }
 
         List<OrderIntent> intents = new ArrayList<>();
         for (String sym : symbols) {
-            BigDecimal diff = targetNotional.get(sym).subtract(actualNotional.get(sym));
+            BigDecimal wTarget = targetWeightOf(target, sym);
+            BigDecimal wActual = actualWeightOf(portfolio, sym);
+            BigDecimal diff = wTarget.subtract(wActual);
 
             if (diff.signum() > 0) {
-                intents.add(new OrderIntent(
-                        sym, ExecutionOrderSide.BUY, diff.setScale(2, RoundingMode.HALF_UP),
-                        "목표금액 (" + targetNotional.get(sym) + ") > 현재 보유금액 (" + actualNotional.get(sym) + ")"));
+                intents.add(new OrderIntent(sym, ExecutionOrderSide.BUY,
+                        "목표비중 (" + wTarget + "%) > 현재비중 (" + wActual + "%)"));
             } else if (diff.signum() < 0) {
-                intents.add(new OrderIntent(
-                        sym, ExecutionOrderSide.SELL, diff.abs().setScale(2, RoundingMode.HALF_UP),
-                        "목표금액 (" + targetNotional.get(sym) + ") < 현재 보유금액 (" + actualNotional.get(sym) + ")"));
+                intents.add(new OrderIntent(sym, ExecutionOrderSide.SELL,
+                        "목표비중 (" + wTarget + "%) < 현재비중 (" + wActual + "%)"));
             }
         }
 
@@ -149,10 +133,5 @@ public class RebalanceDecisionService {
             case "TQQQ" -> target.wTqqq();
             default -> BigDecimal.ZERO;
         };
-    }
-
-    private BigDecimal pctOf(BigDecimal total, BigDecimal pct) {
-        return total.multiply(pct)
-                .divide(new BigDecimal("100"), 8, RoundingMode.HALF_UP);
     }
 }

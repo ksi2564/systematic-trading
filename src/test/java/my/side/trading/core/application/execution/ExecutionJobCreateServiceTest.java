@@ -6,6 +6,8 @@ import my.side.trading.core.domain.execution.plan.OrderIntent;
 import my.side.trading.core.domain.execution.plan.RebalanceDecision;
 import my.side.trading.core.domain.execution.plan.RebalanceType;
 import my.side.trading.core.domain.portfolio.Portfolio;
+import my.side.trading.core.domain.portfolio.Position;
+import my.side.trading.core.domain.strategy.WeightSet;
 import my.side.trading.testutil.FakeExecutionJobRepository;
 import my.side.trading.testutil.FakeRealtimePriceProvider;
 import org.junit.jupiter.api.Test;
@@ -20,116 +22,101 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class ExecutionJobCreateServiceTest {
 
-    @Test
-    void 계획_가능한_주문이_하나라도_있으면_Job_생성() {
-        FakeRealtimePriceProvider priceProvider = new FakeRealtimePriceProvider(Map.of(
-                "QQQ", new BigDecimal("100.00")
-        ));
-        MarketLikePricingPolicy pricing = new MarketLikePricingPolicy(
-                new BigDecimal("0.5"), new BigDecimal("0.5"), new BigDecimal("0.25")
-        );
-        ExecutionOrderFactory factory = new ExecutionOrderFactory(priceProvider, pricing);
+        @Test
+        void 계획_가능한_주문이_하나라도_있으면_Job_생성() {
+                FakeRealtimePriceProvider priceProvider = new FakeRealtimePriceProvider(Map.of(
+                                "QQQ", new BigDecimal("100.00")));
+                MarketLikePricingPolicy pricing = new MarketLikePricingPolicy(
+                                new BigDecimal("0.5"), new BigDecimal("0.5"), new BigDecimal("0.25"));
+                ExecutionOrderFactory factory = new ExecutionOrderFactory(priceProvider, pricing);
 
-        FakeExecutionJobRepository repo = new FakeExecutionJobRepository();
-        ExecutionJobCreateService service = new ExecutionJobCreateService(factory, repo);
+                FakeExecutionJobRepository repo = new FakeExecutionJobRepository();
+                ExecutionJobCreateService service = new ExecutionJobCreateService(factory, repo);
 
-        Portfolio portfolio = new Portfolio(new BigDecimal("1000.00"), List.of());
+                Portfolio portfolio = new Portfolio(new BigDecimal("1000.00"), List.of());
 
-        RebalanceDecision decision = RebalanceDecision.yes(
-                RebalanceType.THRESHOLD,
-                "test",
-                List.of(new my.side.trading.core.domain.execution.plan.OrderIntent(
-                        "QQQ",
-                        ExecutionOrderSide.BUY,
-                        new BigDecimal("500.00"),
-                        "buy test"
-                ))
-        );
+                // 목표비중: QQQ 50%
+                WeightSet targetWeights = new WeightSet(new BigDecimal("50"), BigDecimal.ZERO, BigDecimal.ZERO);
 
-        var jobOpt = service.createJob(
-                LocalDate.of(2025, 12, 21),
-                LocalDateTime.of(2025, 12, 21, 23, 45),
-                decision,
-                portfolio
-        );
+                RebalanceDecision decision = RebalanceDecision.yes(
+                                RebalanceType.THRESHOLD,
+                                "test",
+                                targetWeights,
+                                List.of(new OrderIntent("QQQ", ExecutionOrderSide.BUY, "buy test")));
 
-        assertThat(jobOpt).isPresent();
-        assertThat(jobOpt.get().getOrders()).hasSize(1);
-        assertThat(jobOpt.get().getId()).isNotNull();
-    }
+                var jobOpt = service.createJob(
+                                LocalDate.of(2025, 12, 21),
+                                LocalDateTime.of(2025, 12, 21, 23, 45),
+                                decision,
+                                portfolio);
 
-    @Test
-    void 계획_가능한_주문이_없으면_Job_생성_안함() {
-        FakeRealtimePriceProvider priceProvider = new FakeRealtimePriceProvider(Map.of(
-                "QQQ", new BigDecimal("100.00")
-        ));
-        MarketLikePricingPolicy pricing = new MarketLikePricingPolicy(
-                new BigDecimal("0.5"), new BigDecimal("0.5"), new BigDecimal("0.25")
-        );
-        ExecutionOrderFactory factory = new ExecutionOrderFactory(priceProvider, pricing);
+                assertThat(jobOpt).isPresent();
+                assertThat(jobOpt.get().getOrders()).hasSize(1);
+                assertThat(jobOpt.get().getId()).isNotNull();
+        }
 
-        FakeExecutionJobRepository repo = new FakeExecutionJobRepository();
-        ExecutionJobCreateService service = new ExecutionJobCreateService(factory, repo);
+        @Test
+        void 계획_가능한_주문이_없으면_Job_생성_안함() {
+                FakeRealtimePriceProvider priceProvider = new FakeRealtimePriceProvider(Map.of(
+                                "QQQ", new BigDecimal("100.00")));
+                MarketLikePricingPolicy pricing = new MarketLikePricingPolicy(
+                                new BigDecimal("0.5"), new BigDecimal("0.5"), new BigDecimal("0.25"));
+                ExecutionOrderFactory factory = new ExecutionOrderFactory(priceProvider, pricing);
 
-        // 현금이 거의 없음 -> BUY 주문은 qty=0
-        Portfolio portfolio = new Portfolio(new BigDecimal("10.00"), List.of());
+                FakeExecutionJobRepository repo = new FakeExecutionJobRepository();
+                ExecutionJobCreateService service = new ExecutionJobCreateService(factory, repo);
 
-        RebalanceDecision decision = RebalanceDecision.yes(
-                RebalanceType.THRESHOLD,
-                "test",
-                List.of(new OrderIntent(
-                        "QQQ",
-                        ExecutionOrderSide.BUY,
-                        new BigDecimal("500.00"),
-                        "buy test"
-                ))
-        );
+                // 현금이 거의 없고, 이미 목표비중에 도달함 -> 주문 필요 없음
+                Portfolio portfolio = new Portfolio(new BigDecimal("10.00"), List.of(
+                                new Position("QQQ", new BigDecimal("10"), new BigDecimal("100.00"),
+                                                new BigDecimal("100.00")))); // 목표비중: QQQ 100% (이미 달성)
+                WeightSet targetWeights = new WeightSet(new BigDecimal("100"), BigDecimal.ZERO, BigDecimal.ZERO);
 
-        var jobOpt = service.createJob(
-                LocalDate.of(2025, 12, 21),
-                LocalDateTime.of(2025, 12, 21, 9, 0),
-                decision,
-                portfolio
-        );
+                RebalanceDecision decision = RebalanceDecision.yes(
+                                RebalanceType.THRESHOLD,
+                                "test",
+                                targetWeights,
+                                List.of(new OrderIntent("QQQ", ExecutionOrderSide.BUY, "buy test")));
 
-        assertThat(jobOpt).isEmpty();
-    }
+                var jobOpt = service.createJob(
+                                LocalDate.of(2025, 12, 21),
+                                LocalDateTime.of(2025, 12, 21, 9, 0),
+                                decision,
+                                portfolio);
 
-    @Test
-    void 같은_signalDate_Job이_이미_있으면_새로_생성_안함() {
-        FakeRealtimePriceProvider priceProvider = new FakeRealtimePriceProvider(Map.of(
-                "QQQ", new BigDecimal("100.00")
-        ));
-        MarketLikePricingPolicy pricing = new MarketLikePricingPolicy(
-                new BigDecimal("0.5"), new BigDecimal("0.5"), new BigDecimal("0.25")
-        );
-        ExecutionOrderFactory factory = new ExecutionOrderFactory(priceProvider, pricing);
+                assertThat(jobOpt).isEmpty();
+        }
 
-        FakeExecutionJobRepository repo = new FakeExecutionJobRepository();
-        ExecutionJobCreateService service = new ExecutionJobCreateService(factory, repo);
+        @Test
+        void 같은_signalDate_Job이_이미_있으면_새로_생성_안함() {
+                FakeRealtimePriceProvider priceProvider = new FakeRealtimePriceProvider(Map.of(
+                                "QQQ", new BigDecimal("100.00")));
+                MarketLikePricingPolicy pricing = new MarketLikePricingPolicy(
+                                new BigDecimal("0.5"), new BigDecimal("0.5"), new BigDecimal("0.25"));
+                ExecutionOrderFactory factory = new ExecutionOrderFactory(priceProvider, pricing);
 
-        Portfolio portfolio = new Portfolio(new BigDecimal("1000.00"), List.of());
+                FakeExecutionJobRepository repo = new FakeExecutionJobRepository();
+                ExecutionJobCreateService service = new ExecutionJobCreateService(factory, repo);
 
-        RebalanceDecision decision = RebalanceDecision.yes(
-                RebalanceType.THRESHOLD,
-                "test",
-                List.of(new OrderIntent(
-                        "QQQ",
-                        ExecutionOrderSide.BUY,
-                        new BigDecimal("500.00"),
-                        "buy test"
-                ))
-        );
+                Portfolio portfolio = new Portfolio(new BigDecimal("1000.00"), List.of());
 
-        LocalDate signalDate = LocalDate.of(2025, 12, 21);
-        LocalDateTime executeAfter = LocalDateTime.of(2025, 12, 21, 23, 45);
+                WeightSet targetWeights = new WeightSet(new BigDecimal("50"), BigDecimal.ZERO, BigDecimal.ZERO);
 
-        // 1회 생성 -> job 정상 생성
-        var first = service.createJob(signalDate, executeAfter, decision, portfolio);
-        assertThat(first).isPresent();
+                RebalanceDecision decision = RebalanceDecision.yes(
+                                RebalanceType.THRESHOLD,
+                                "test",
+                                targetWeights,
+                                List.of(new OrderIntent("QQQ", ExecutionOrderSide.BUY, "buy test")));
 
-        // 2회 생성 시도 -> empty
-        var second = service.createJob(signalDate, executeAfter, decision, portfolio);
-        assertThat(second).isEmpty();
-    }
+                LocalDate signalDate = LocalDate.of(2025, 12, 21);
+                LocalDateTime executeAfter = LocalDateTime.of(2025, 12, 21, 23, 45);
+
+                // 1회 생성 -> job 정상 생성
+                var first = service.createJob(signalDate, executeAfter, decision, portfolio);
+                assertThat(first).isPresent();
+
+                // 2회 생성 시도 -> empty
+                var second = service.createJob(signalDate, executeAfter, decision, portfolio);
+                assertThat(second).isEmpty();
+        }
 }

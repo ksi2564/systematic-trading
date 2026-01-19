@@ -8,6 +8,7 @@ import my.side.trading.core.domain.execution.order.ExecutionOrder;
 import my.side.trading.core.domain.execution.plan.OrderIntent;
 import my.side.trading.core.domain.execution.plan.RebalanceDecision;
 import my.side.trading.core.domain.portfolio.Portfolio;
+import my.side.trading.core.domain.strategy.WeightSet;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -17,10 +18,16 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
+/**
+ * 리밸런싱 결정을 기반으로 ExecutionJob 생성
+ * 목표비중 + 실시간 가격으로 주문 수량 계산
+ */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class ExecutionJobCreateService {
+
+    private static final BigDecimal DEFAULT_BUFFER_PCT = new BigDecimal("0.3");
 
     private final ExecutionOrderFactory orderFactory;
     private final ExecutionJobRepository jobRepository;
@@ -29,35 +36,52 @@ public class ExecutionJobCreateService {
             LocalDate signalDate,
             LocalDateTime executeAfter,
             RebalanceDecision decision,
-            Portfolio portfolio
-    ) {
+            Portfolio portfolio) {
+        return createJob(signalDate, executeAfter, decision, portfolio, DEFAULT_BUFFER_PCT);
+    }
+
+    public Optional<ExecutionJob> createJob(
+            LocalDate signalDate,
+            LocalDateTime executeAfter,
+            RebalanceDecision decision,
+            Portfolio portfolio,
+            BigDecimal bufferPct) {
         if (!decision.shouldRebalance()) {
             throw new IllegalArgumentException("shouldRebalance=false decision으로 job 생성 불가");
+        }
+
+        WeightSet targetWeights = decision.targetWeights();
+        if (targetWeights == null) {
+            throw new IllegalArgumentException("targetWeights가 null입니다.");
         }
 
         List<ExecutionOrder> orders = new ArrayList<>();
         BigDecimal remainingCash = portfolio.cash();
 
         for (OrderIntent intent : decision.intents()) {
-            OrderAndCashDelta ocd = orderFactory.fromIntentWithCashDelta(intent, portfolio, remainingCash)
-                    .orElse(null);
-            if (ocd == null) continue;
+            OrderAndCashDelta ocd = orderFactory.fromTargetWeight(
+                    intent.symbol(),
+                    intent.side(),
+                    targetWeights,
+                    portfolio,
+                    remainingCash,
+                    bufferPct).orElse(null);
+
+            if (ocd == null)
+                continue;
 
             orders.add(ocd.order());
-            // BUY면 음수, SELL이면 양수
             remainingCash = remainingCash.add(ocd.cashDelta());
 
             if (remainingCash.signum() < 0) {
-                log.warn(
-                        "remainingCash 0 이하로 떨어짐. 0으로 변환 후 진행 | " +
-                                "symbol={}, side={}, qty={}, limitPrice={}, cashDelta={}, cashBefore={}",
+                log.warn("remainingCash 0 이하로 떨어짐. 0으로 변환 후 진행 | " +
+                        "symbol={}, side={}, qty={}, limitPrice={}, cashDelta={}, cashBefore={}",
                         ocd.order().getSymbol(),
                         ocd.order().getSide(),
                         ocd.order().getQuantity(),
                         ocd.order().getLimitPrice(),
                         ocd.cashDelta(),
-                        remainingCash.subtract(ocd.cashDelta())
-                );
+                        remainingCash.subtract(ocd.cashDelta()));
                 remainingCash = BigDecimal.ZERO;
             }
 
@@ -67,8 +91,7 @@ public class ExecutionJobCreateService {
                     ocd.order().getQuantity(),
                     ocd.order().getLimitPrice(),
                     ocd.cashDelta(),
-                    remainingCash
-            );
+                    remainingCash);
         }
 
         if (orders.isEmpty()) {

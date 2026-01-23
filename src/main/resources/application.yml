@@ -11,12 +11,23 @@ spring:
     hibernate:
       ddl-auto: update
     show-sql: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: always
     properties:
       hibernate:
         format_sql: true
     database-platform: org.hibernate.dialect.MySQL8Dialect
 
 logging:
+  file:
+    path: logs
   level:
     org.hibernate.SQL: debug
 

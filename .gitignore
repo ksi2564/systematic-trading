@@ -39,3 +39,4 @@ out/
 .env
 application-secret.yml
 **/application-secret.yml
+logs/

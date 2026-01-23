@@ -1,0 +1,12 @@
+spring:
+  config:
+    activate:
+      on-profile: prod
+
+logging:
+  file:
+    path: /var/logs
+  level:
+    # 운영 환경에서는 SQL 로그를 줄이거나 INFO로 변경
+    org.hibernate.SQL: INFO
+    my.side.trading: INFO

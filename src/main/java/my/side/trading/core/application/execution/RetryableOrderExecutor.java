@@ -119,12 +119,16 @@ public class RetryableOrderExecutor {
     }
 
     private ExecutionOrder createRetryOrder(ExecutionOrder original, long newQty) {
-        return ExecutionOrder.create(
+        return ExecutionOrder.rehydrate(
+                original.getId(),
                 original.getSymbol(),
                 original.getSide(),
                 newQty,
                 original.getRefPrice(),
-                original.getLimitPrice());
+                original.getLimitPrice(),
+                ExecutionOrderStatus.PLANNED,
+                null,
+                null);
     }
 
     private void waitForFill() {

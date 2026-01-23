@@ -25,8 +25,7 @@ public final class FakeExecutionJobRepository implements ExecutionJobRepository 
                     job.getStatus(),
                     job.getOrders(),
                     job.getStartedAt(),
-                    job.getCompletedAt()
-            );
+                    job.getCompletedAt());
             store.put(id, withId);
             return withId;
         }
@@ -44,5 +43,10 @@ public final class FakeExecutionJobRepository implements ExecutionJobRepository 
         return store.values().stream()
                 .filter(j -> j.getSignalDate().equals(signalDate))
                 .findFirst();
+    }
+
+    @Override
+    public java.util.List<ExecutionJob> findAll() {
+        return new java.util.ArrayList<>(store.values());
     }
 }

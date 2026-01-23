@@ -66,4 +66,18 @@ public class ExecutionJobRepositoryImpl implements ExecutionJobRepository {
             return jobEntity.toDomain(orders);
         });
     }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<ExecutionJob> findAll() {
+        return jobJpaRepository.findAll().stream()
+                .map(jobEntity -> {
+                    List<ExecutionOrder> orders = orderJpaRepository.findAllByJobId(jobEntity.getId())
+                            .stream()
+                            .map(ExecutionOrderEntity::toDomain)
+                            .toList();
+                    return jobEntity.toDomain(orders);
+                })
+                .toList();
+    }
 }

@@ -9,4 +9,6 @@ public interface ExecutionJobRepository {
     Optional<ExecutionJob> findById(Long id);
 
     Optional<ExecutionJob> findBySignalDate(LocalDate signalDate);
+
+    java.util.List<ExecutionJob> findAll();
 }

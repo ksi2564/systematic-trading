@@ -32,6 +32,13 @@ public class RateLimitFilter implements Filter {
     public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain)
             throws IOException, ServletException {
         HttpServletRequest httpRequest = (HttpServletRequest) request;
+
+        // 공개 경로는 레이트리밋 적용 제외
+        if (isPublicPath(httpRequest.getRequestURI())) {
+            chain.doFilter(request, response);
+            return;
+        }
+
         String clientIp = httpRequest.getRemoteAddr();
 
         Bucket bucket = buckets.get(clientIp, key -> createNewBucket());
@@ -42,6 +49,16 @@ public class RateLimitFilter implements Filter {
             log.warn("Rate limit exceeded for IP: {}", clientIp);
             ((HttpServletResponse) response).sendError(429, "Too Many Requests");
         }
+    }
+
+    /**
+     * 레이트리밋 적용 제외 대상인 공개 경로 여부 확인
+     */
+    private boolean isPublicPath(String path) {
+        return path.startsWith("/api/dashboard") ||
+                path.startsWith("/swagger-ui") ||
+                path.startsWith("/v3/api-docs") ||
+                path.startsWith("/actuator");
     }
 
     private Bucket createNewBucket() {

@@ -47,6 +47,7 @@ public class ApiKeyAuthFilter implements Filter {
     private boolean isPublicPath(String path) {
         return path.startsWith("/api/dashboard") ||
                 path.startsWith("/swagger-ui") ||
-                path.startsWith("/v3/api-docs");
+                path.startsWith("/v3/api-docs") ||
+                path.startsWith("/actuator");
     }
 }

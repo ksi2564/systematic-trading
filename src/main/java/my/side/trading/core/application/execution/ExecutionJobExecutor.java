@@ -4,7 +4,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import my.side.trading.core.domain.execution.order.*;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.Comparator;
@@ -21,7 +20,10 @@ public class ExecutionJobExecutor {
     private final OrderInquiry orderInquiry;
     private final ExecutionGuard guard;
 
-    @Transactional
+    /**
+     * Job 실행 – 외부 I/O(주문/체결/취소)를 포함하므로 @Transactional 미적용
+     * DB 저장은 개별 시점에서 짧은 트랜잭션으로 처리 (jobRepository.save 호출)
+     */
     public ExecutionJob execute(Long jobId, LocalDateTime now) {
         // 1. 실행 권한 체크 (Kill Switch 등)
         guard.requireExecutionAllowed();
@@ -48,7 +50,7 @@ public class ExecutionJobExecutor {
             return jobRepository.save(job);
         } catch (Exception e) {
             log.error("Job execution failed: jobId={}", jobId, e);
-            throw e; // 트랜잭션 롤백을 위해 예외 전파 (또는 비즈니스 예외로 래핑)
+            throw e;
         }
     }
 

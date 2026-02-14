@@ -2,6 +2,7 @@ package my.side.trading.adapter.out.yahoo;
 
 import lombok.extern.slf4j.Slf4j;
 import my.side.trading.adapter.out.yahoo.dto.YahooQuoteResponse;
+import my.side.trading.core.application.port.out.MarketDataProvider;
 import my.side.trading.core.infrastructure.config.TradingCircuitBreakerProps;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
@@ -12,10 +13,11 @@ import java.util.Optional;
 
 /**
  * Yahoo Finance API를 통해 VIX 지수를 조회하는 서비스
+ * MarketDataProvider 포트 인터페이스를 구현하여 core 계층에 추상화를 제공
  */
 @Slf4j
 @Service
-public class YahooVixService {
+public class YahooVixService implements MarketDataProvider {
 
     private static final String YAHOO_FINANCE_BASE_URL = "https://query1.finance.yahoo.com";
     private static final String VIX_SYMBOL = "^VIX";

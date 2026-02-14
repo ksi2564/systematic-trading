@@ -2,10 +2,10 @@ package my.side.trading.core.application.orchestration;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import my.side.trading.adapter.out.yahoo.YahooVixService;
 import my.side.trading.core.application.execution.ExecutionJobCreateService;
 import my.side.trading.core.application.execution.ExecutionJobExecutor;
 import my.side.trading.core.application.execution.RebalanceDecisionService;
+import my.side.trading.core.application.port.out.MarketDataProvider;
 import my.side.trading.core.application.portfolio.PortfolioService;
 import my.side.trading.core.domain.execution.plan.RebalanceDecision;
 import my.side.trading.core.domain.portfolio.Portfolio;
@@ -27,7 +27,7 @@ public class RebalanceOrchestrator {
     private final RebalanceDecisionService decisionService;
     private final ExecutionJobCreateService jobCreateService;
     private final ExecutionJobExecutor jobExecutor;
-    private final YahooVixService yahooVixService;
+    private final MarketDataProvider marketDataProvider;
 
     /**
      * 자동 매매 시작점
@@ -40,9 +40,9 @@ public class RebalanceOrchestrator {
 
         Portfolio portfolio = portfolioService.getCurrentPortfolio();
 
-        // Circuit Breaker용 VIX 및 200MA 조회
-        BigDecimal vix = yahooVixService.getVixPrice().orElse(null);
-        BigDecimal qqqMa200 = yahooVixService.getQqq200Ma().orElse(null);
+        // Circuit Breaker용 VIX 및 200MA 조회 (포트 인터페이스를 통해 추상화)
+        BigDecimal vix = marketDataProvider.getVixPrice().orElse(null);
+        BigDecimal qqqMa200 = marketDataProvider.getQqq200Ma().orElse(null);
         log.info("Circuit Breaker data: VIX={}, QQQ_200MA={}", vix, qqqMa200);
 
         RebalanceDecision decision = decisionService.decide(state, portfolio, vix, qqqMa200);

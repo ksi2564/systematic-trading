@@ -5,6 +5,7 @@ import my.side.trading.adapter.in.scheduler.StrategyEodScheduler;
 import my.side.trading.adapter.in.web.dashboard.dto.DashboardResponse;
 import my.side.trading.core.adapter.in.web.common.ApiResponse;
 import my.side.trading.core.application.execution.ExecutionGuard;
+import my.side.trading.core.application.operation.OperationsKpiService;
 import my.side.trading.core.application.portfolio.PortfolioService;
 import my.side.trading.core.domain.execution.order.ExecutionJob;
 import my.side.trading.core.domain.execution.order.ExecutionJobRepository;
@@ -27,6 +28,7 @@ public class DashboardController {
     private final StrategyEodScheduler scheduler; // VIX, 200MA 조회용
     private final ExecutionJobRepository jobRepository;
     private final ExecutionGuard executionGuard;
+    private final OperationsKpiService operationsKpiService;
 
     @GetMapping("/summary")
     public ApiResponse<DashboardResponse> getSummary() {
@@ -47,11 +49,14 @@ public class DashboardController {
                 .limit(5)
                 .toList();
 
+        var operationsKpi = operationsKpiService.snapshot();
+
         return ApiResponse.success(DashboardResponse.of(
                 portfolio,
                 state,
                 vix,
                 qqq200Ma,
+                operationsKpi,
                 executionGuard.snapshot(),
                 recentJobs));
     }

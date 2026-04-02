@@ -1,5 +1,6 @@
 package my.side.trading.core.application.execution;
 
+import my.side.trading.core.application.operation.OperationsKpiService;
 import my.side.trading.core.domain.execution.ExecutionTriggerType;
 import my.side.trading.core.domain.guard.KillSwitchReader;
 import my.side.trading.core.domain.operation.OperatingMode;
@@ -9,6 +10,8 @@ import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 class ExecutionGuardTest {
 
@@ -63,12 +66,30 @@ class ExecutionGuardTest {
         assertThat(guard.isKillSwitchOn()).isTrue();
     }
 
+    @Test
+    void auto_live에서_kpi_breach면_자동실행만_차단한다() {
+        ExecutionGuard guard = createGuard(true, OperatingMode.AUTO_LIVE, false, true);
+
+        assertThatThrownBy(() -> guard.requireExecutionAllowed(ExecutionTriggerType.AUTOMATED))
+                .isInstanceOf(ExecutionBlockedException.class)
+                .hasMessageContaining("KPI_BREACH");
+
+        assertThat(guard.canExecute(ExecutionTriggerType.MANUAL)).isTrue();
+    }
+
     private ExecutionGuard createGuard(boolean enabled, OperatingMode mode, boolean killSwitchOn) {
+        return createGuard(enabled, mode, killSwitchOn, false);
+    }
+
+    private ExecutionGuard createGuard(boolean enabled, OperatingMode mode, boolean killSwitchOn, boolean kpiBreached) {
         TradingExecutionProps props = new TradingExecutionProps(enabled);
         TradingOperationProps operationProps = new TradingOperationProps(
                 mode,
-                new TradingOperationProps.AutoLiveGateProps(5, true, true, true));
+                new TradingOperationProps.AutoLiveGateProps(5, true, true, true),
+                new TradingOperationProps.KpiProps(true, 0, 0, new java.math.BigDecimal("5.0")));
         KillSwitchReader killSwitchReader = () -> killSwitchOn;
-        return new ExecutionGuard(props, operationProps, killSwitchReader);
+        OperationsKpiService operationsKpiService = mock(OperationsKpiService.class);
+        when(operationsKpiService.hasAutoLiveBreach()).thenReturn(kpiBreached);
+        return new ExecutionGuard(props, operationProps, killSwitchReader, operationsKpiService);
     }
 }

@@ -3,6 +3,7 @@ package my.side.trading.core.application.execution;
 import my.side.trading.core.domain.execution.ExecutionTriggerType;
 import my.side.trading.core.domain.execution.order.*;
 import my.side.trading.core.domain.operation.OperatingMode;
+import my.side.trading.core.application.operation.OperationsKpiService;
 import my.side.trading.core.application.execution.pricing.MarketLikePricingPolicy;
 import my.side.trading.core.infrastructure.config.TradingExecutionProps;
 import my.side.trading.core.infrastructure.config.TradingOperationProps;
@@ -21,6 +22,8 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 class ExecutionJobExecutorTest {
 
@@ -39,12 +42,16 @@ class ExecutionJobExecutorTest {
                 fillChecker = new FakeOrderFillChecker();
                 canceller = new FakeOrderCanceller();
                 orderInquiry = new FakeOrderInquiry();
+                OperationsKpiService operationsKpiService = mock(OperationsKpiService.class);
+                when(operationsKpiService.hasAutoLiveBreach()).thenReturn(false);
                 guard = new ExecutionGuard(
                                 new TradingExecutionProps(true),
                                 new TradingOperationProps(
                                                 OperatingMode.AUTO_LIVE,
-                                                new TradingOperationProps.AutoLiveGateProps(5, true, true, true)),
-                                () -> false);
+                                                new TradingOperationProps.AutoLiveGateProps(5, true, true, true),
+                                                new TradingOperationProps.KpiProps(true, 0, 0, new BigDecimal("5.0"))),
+                                () -> false,
+                                operationsKpiService);
                 FakeRealtimePriceProvider priceProvider = FakeRealtimePriceProvider.withLastPrices(
                                 java.util.Map.of("QQQ", new BigDecimal("100.00"), "TQQQ", new BigDecimal("100.00")));
                 ExecutionOrderFactory orderFactory = new ExecutionOrderFactory(

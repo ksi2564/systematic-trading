@@ -1,6 +1,7 @@
 package my.side.trading.core.application.execution;
 
 import lombok.RequiredArgsConstructor;
+import my.side.trading.core.application.operation.OperationsKpiService;
 import my.side.trading.core.domain.execution.ExecutionTriggerType;
 import my.side.trading.core.domain.guard.KillSwitchReader;
 import my.side.trading.core.domain.operation.OperatingMode;
@@ -17,6 +18,7 @@ public class ExecutionGuard {
     private final TradingExecutionProps executionProps;
     private final TradingOperationProps operationProps;
     private final KillSwitchReader killSwitchReader;
+    private final OperationsKpiService operationsKpiService;
 
     public void requireExecutionAllowed(ExecutionTriggerType triggerType) {
         getExecutionBlockReason(triggerType)
@@ -44,6 +46,9 @@ public class ExecutionGuard {
         }
         if (!executionProps.enabled()) {
             return Optional.of(ExecutionBlockReason.EXECUTION_DISABLED);
+        }
+        if (triggerType == ExecutionTriggerType.AUTOMATED && operationsKpiService.hasAutoLiveBreach()) {
+            return Optional.of(ExecutionBlockReason.KPI_BREACH);
         }
         return Optional.empty();
     }

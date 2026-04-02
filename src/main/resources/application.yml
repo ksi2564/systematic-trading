@@ -62,6 +62,11 @@ trading:
       require-zero-pending-orders: true
       require-zero-duplicate-signal-jobs: true
       require-manual-approval-record: true
+    kpi:
+      require-latest-eod-success: true
+      max-duplicate-signal-jobs: 0
+      max-unresolved-orders: 0
+      max-order-failure-rate-pct: 5.0
   security:
     api-key: ${TRADING_API_KEY:change-me}
     public-path-prefixes: []

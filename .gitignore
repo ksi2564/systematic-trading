@@ -40,3 +40,7 @@ out/
 application-secret.yml
 **/application-secret.yml
 logs/
+.agent/
+.codex/
+check_result.log
+git_status.txt

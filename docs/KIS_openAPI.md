@@ -1,6 +1,6 @@
 # KIS OpenAPI Documentation
 
-Source: docs\KIS_openAPI_20251104_030000.xlsx
+This document is the canonical project copy of the KIS OpenAPI reference.
 
 ## Sheet: API 목록
 

@@ -5,6 +5,7 @@ import lombok.extern.slf4j.Slf4j;
 import my.side.trading.adapter.out.kis.client.KisOverseasQuotedPriceService;
 import my.side.trading.adapter.out.kis.dto.QuotedPriceResponse;
 import my.side.trading.adapter.out.yahoo.YahooVixService;
+import my.side.trading.core.application.market.MarketCalendarService;
 import my.side.trading.core.application.strategy.StrategyStateEodService;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -21,6 +22,7 @@ public class StrategyEodScheduler {
     private final KisOverseasQuotedPriceService quotedPriceService;
     private final StrategyStateEodService eodService;
     private final YahooVixService yahooVixService;
+    private final MarketCalendarService marketCalendarService;
 
     @Value("${trading.scheduling.enabled:false}")
     private boolean enabled;
@@ -32,11 +34,19 @@ public class StrategyEodScheduler {
         if (!enabled) {
             return;
         }
-        runEod(LocalDate.now().minusDays(1));
+        LocalDate marketDate = marketCalendarService.currentMarketDate();
+        var marketStatus = marketCalendarService.getMarketStatus(marketDate);
+        if (!marketStatus.allowsScheduledEod()) {
+            log.info("[SCHED] eod skipped by market calendar | marketDate={}, marketStatus={}",
+                    marketDate,
+                    marketStatus);
+            return;
+        }
+        runEod(marketDate);
     }
 
     public void runManualEod() {
-        runEod(LocalDate.now().minusDays(1));
+        runEod(marketCalendarService.currentMarketDate());
     }
 
     private void runEod(LocalDate asOfDate) {

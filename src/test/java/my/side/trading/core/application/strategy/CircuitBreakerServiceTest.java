@@ -177,5 +177,17 @@ class CircuitBreakerServiceTest {
             // then
             assertThat(adjusted).isEqualTo(original);
         }
+
+        @Test
+        @DisplayName("VIX 트리거이지만 이전 비중이 없으면 현재 조정 비중 유지")
+        void vix_트리거여도_prevWeights가_없으면_조정비중_유지() {
+            TradingCircuitBreakerProps props = new TradingCircuitBreakerProps(true, true, new BigDecimal("35"), 200);
+            CircuitBreakerService service = new CircuitBreakerService(props);
+            WeightSet original = WeightSet.of(30, 30, 40);
+
+            WeightSet adjusted = service.adjustWeights(original, null, true, false);
+
+            assertThat(adjusted).isEqualTo(original);
+        }
     }
 }

@@ -72,7 +72,11 @@ public class CircuitBreakerService {
         }
 
         // VIX 필터: TQQQ 비중이 이전보다 높아지지 않도록 제한
-        if (vixTriggered && prevWeights != null) {
+        if (vixTriggered) {
+            if (prevWeights == null) {
+                log.warn("VIX filter triggered but previous weights are unavailable. keeping adjusted weights={}", adjusted);
+                return adjusted;
+            }
             if (adjusted.wTqqq().compareTo(prevWeights.wTqqq()) > 0) {
                 // TQQQ 비중이 늘어나려 하면 → 이전 비중으로 유지
                 adjusted = prevWeights;

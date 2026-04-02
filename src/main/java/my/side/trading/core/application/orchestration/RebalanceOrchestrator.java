@@ -45,6 +45,9 @@ public class RebalanceOrchestrator {
     public RebalanceRunResult run(LocalDateTime now, ExecutionTriggerType triggerType) {
         StrategyState state = strategyStateRepository.findLatestState()
                 .orElseThrow(() -> new IllegalStateException("StrategyState가 없습니다. EOD가 먼저 수행되어야 합니다."));
+        var prevWeights = strategyStateRepository.findPreviousState(state.asOfDate())
+                .map(StrategyState::targetWeights)
+                .orElse(null);
 
         Portfolio portfolio = portfolioService.getCurrentPortfolio();
 
@@ -53,7 +56,7 @@ public class RebalanceOrchestrator {
         BigDecimal qqqMa200 = marketDataProvider.getQqq200Ma().orElse(null);
         log.info("Circuit Breaker data: VIX={}, QQQ_200MA={}", vix, qqqMa200);
 
-        RebalanceDecision decision = decisionService.decide(state, portfolio, vix, qqqMa200);
+        RebalanceDecision decision = decisionService.decide(state, portfolio, prevWeights, vix, qqqMa200);
         if (!decision.shouldRebalance()) {
             log.info("skip rebalance: {}", decision.reason());
             return RebalanceRunResult.skipped(triggerType, executionGuard.currentMode(), decision.reason());

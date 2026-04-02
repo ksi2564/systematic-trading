@@ -41,6 +41,11 @@ kis:
   acnt-prdt-cd: ${KIS_ACNT_PRDT_CD}
 
 trading:
+  market-calendar:
+    market-zone-id: America/New_York
+    holidays: []
+    early-closes: []
+    data-uncertain-dates: []
   pricing:
     tick-size: 0.01
     initial-buy-ticks: 0

@@ -1,10 +1,16 @@
 package my.side.trading.core.application.execution;
 
-import my.side.trading.core.domain.execution.ExecutionTriggerType;
-import my.side.trading.core.domain.execution.order.*;
-import my.side.trading.core.domain.operation.OperatingMode;
-import my.side.trading.core.application.operation.OperationsKpiService;
 import my.side.trading.core.application.execution.pricing.MarketLikePricingPolicy;
+import my.side.trading.core.application.operation.OperationsKpiService;
+import my.side.trading.core.domain.execution.ExecutionTriggerType;
+import my.side.trading.core.domain.execution.order.BrokerOrderResult;
+import my.side.trading.core.domain.execution.order.ExecutionJob;
+import my.side.trading.core.domain.execution.order.ExecutionOrder;
+import my.side.trading.core.domain.execution.order.ExecutionOrderSide;
+import my.side.trading.core.domain.execution.order.ExecutionOrderStatus;
+import my.side.trading.core.domain.execution.order.ExecutionStatus;
+import my.side.trading.core.domain.execution.order.FillResult;
+import my.side.trading.core.domain.operation.OperatingMode;
 import my.side.trading.core.infrastructure.config.TradingExecutionProps;
 import my.side.trading.core.infrastructure.config.TradingOperationProps;
 import my.side.trading.testutil.FakeExecutionJobRepository;
@@ -27,190 +33,184 @@ import static org.mockito.Mockito.when;
 
 class ExecutionJobExecutorTest {
 
-        private FakeExecutionJobRepository jobRepository;
-        private FakeOrderBroker orderBroker;
-        private FakeOrderFillChecker fillChecker;
-        private FakeOrderCanceller canceller;
-        private FakeOrderInquiry orderInquiry;
-        private ExecutionGuard guard;
-        private ExecutionJobExecutor executor;
+    private FakeExecutionJobRepository jobRepository;
+    private FakeOrderBroker orderBroker;
+    private FakeOrderFillChecker fillChecker;
+    private FakeOrderCanceller canceller;
+    private FakeOrderInquiry orderInquiry;
+    private ExecutionGuard guard;
+    private ExecutionJobExecutor executor;
+    private ExecutionRiskLimitService riskLimitService;
 
-        @BeforeEach
-        void setUp() {
-                jobRepository = new FakeExecutionJobRepository();
-                orderBroker = new FakeOrderBroker();
-                fillChecker = new FakeOrderFillChecker();
-                canceller = new FakeOrderCanceller();
-                orderInquiry = new FakeOrderInquiry();
-                OperationsKpiService operationsKpiService = mock(OperationsKpiService.class);
-                when(operationsKpiService.hasAutoLiveBreach()).thenReturn(false);
-                guard = new ExecutionGuard(
-                                new TradingExecutionProps(true),
-                                new TradingOperationProps(
-                                                OperatingMode.AUTO_LIVE,
-                                                new TradingOperationProps.AutoLiveGateProps(5, true, true, true),
-                                                new TradingOperationProps.KpiProps(true, 0, 0, new BigDecimal("5.0"))),
-                                () -> false,
-                                operationsKpiService);
-                FakeRealtimePriceProvider priceProvider = FakeRealtimePriceProvider.withLastPrices(
-                                java.util.Map.of("QQQ", new BigDecimal("100.00"), "TQQQ", new BigDecimal("100.00")));
-                ExecutionOrderFactory orderFactory = new ExecutionOrderFactory(
-                                priceProvider,
-                                new MarketLikePricingPolicy(
-                                                new BigDecimal("0.01"), 0, 0, 1, 1, new BigDecimal("0.25"), 3,
-                                                2000));
+    @BeforeEach
+    void setUp() {
+        jobRepository = new FakeExecutionJobRepository();
+        orderBroker = new FakeOrderBroker();
+        fillChecker = new FakeOrderFillChecker();
+        canceller = new FakeOrderCanceller();
+        orderInquiry = new FakeOrderInquiry();
 
-                RetryableOrderExecutor retryableExecutor = new RetryableOrderExecutor(orderBroker, fillChecker,
-                                canceller, orderFactory,
-                                new MarketLikePricingPolicy(
-                                                new BigDecimal("0.01"), 0, 0, 1, 1, new BigDecimal("0.25"), 3,
-                                                2000));
-                retryableExecutor.setWaitMs(0); // 테스트에서는 대기 시간 제거
+        OperationsKpiService operationsKpiService = mock(OperationsKpiService.class);
+        when(operationsKpiService.hasAutoLiveBreach()).thenReturn(false);
 
-                executor = new ExecutionJobExecutor(jobRepository, retryableExecutor, orderInquiry, guard);
-        }
+        TradingOperationProps operationProps = new TradingOperationProps(
+                OperatingMode.AUTO_LIVE,
+                new TradingOperationProps.AutoLiveGateProps(5, true, true, true),
+                new TradingOperationProps.KpiProps(true, 0, 0, new BigDecimal("5.0")),
+                new TradingOperationProps.RiskLimitProps(
+                        BigDecimal.ZERO,
+                        BigDecimal.ZERO,
+                        BigDecimal.ZERO,
+                        BigDecimal.ZERO));
+        guard = new ExecutionGuard(new TradingExecutionProps(true), operationProps, () -> false, operationsKpiService);
+        riskLimitService = new ExecutionRiskLimitService(operationProps, jobRepository);
 
-        @Test
-        void 주문요청_성공응답_및_전량체결_시_주문을_ACCEPTED_처리() {
-                ExecutionOrder order = ExecutionOrder.rehydrate(
-                                1L,
-                                "QQQ",
-                                ExecutionOrderSide.BUY,
-                                1,
-                                new BigDecimal("100"),
-                                new BigDecimal("100"),
-                                ExecutionOrderStatus.PLANNED,
-                                null,
-                                null);
-                ExecutionJob job = ExecutionJob.rehydrate(
-                                1L,
-                                LocalDate.of(2025, 12, 21),
-                                LocalDateTime.of(2025, 12, 21, 23, 45),
-                                ExecutionStatus.PENDING,
-                                List.of(order),
-                                null,
-                                null);
+        FakeRealtimePriceProvider priceProvider = FakeRealtimePriceProvider.withLastPrices(
+                java.util.Map.of("QQQ", new BigDecimal("100.00"), "TQQQ", new BigDecimal("100.00")));
+        ExecutionOrderFactory orderFactory = new ExecutionOrderFactory(
+                priceProvider,
+                new MarketLikePricingPolicy(new BigDecimal("0.01"), 0, 0, 1, 1, new BigDecimal("0.25"), 3, 2000));
 
-                jobRepository.save(job);
-                orderBroker.willReturn(1L, BrokerOrderResult.success("0123456789", "ok"));
-                fillChecker.setFullyFilled("0123456789", 1, new BigDecimal("100"));
+        RetryableOrderExecutor retryableExecutor = new RetryableOrderExecutor(
+                orderBroker,
+                fillChecker,
+                canceller,
+                orderFactory,
+                new MarketLikePricingPolicy(new BigDecimal("0.01"), 0, 0, 1, 1, new BigDecimal("0.25"), 3, 2000),
+                riskLimitService);
+        retryableExecutor.setWaitMs(0);
 
-                LocalDateTime now = LocalDateTime.of(2025, 12, 21, 23, 45);
-                ExecutionJob executed = executor.execute(1L, now, ExecutionTriggerType.AUTOMATED);
+        executor = new ExecutionJobExecutor(jobRepository, retryableExecutor, orderInquiry, guard, riskLimitService);
+    }
 
-                ExecutionOrder executedOrder = executed.getOrders().get(0);
-                assertThat(executedOrder.getBrokerOrderId()).isEqualTo("0123456789");
-                assertThat(executedOrder.getStatus()).isEqualTo(ExecutionOrderStatus.ACCEPTED);
-                assertThat(executed.getStatus()).isEqualTo(ExecutionStatus.COMPLETED);
-        }
+    @Test
+    void 주문이_완전_체결되면_accepted로_저장한다() {
+        ExecutionJob job = singleOrderJob(order(1L, "QQQ", ExecutionOrderSide.BUY, 1));
 
-        @Test
-        void 부분체결_후_재시도로_전량체결_시_ACCEPTED_처리() {
-                ExecutionOrder order = ExecutionOrder.rehydrate(
-                                1L,
-                                "QQQ",
-                                ExecutionOrderSide.BUY,
-                                10,
-                                new BigDecimal("100"),
-                                new BigDecimal("100"),
-                                ExecutionOrderStatus.PLANNED,
-                                null,
-                                null);
-                ExecutionJob job = ExecutionJob.rehydrate(
-                                1L,
-                                LocalDate.of(2025, 12, 21),
-                                LocalDateTime.of(2025, 12, 21, 23, 45),
-                                ExecutionStatus.PENDING,
-                                List.of(order),
-                                null,
-                                null);
+        jobRepository.save(job);
+        orderBroker.willReturn(1L, BrokerOrderResult.success("0123456789", "ok"));
+        fillChecker.setFullyFilled("0123456789", 1, new BigDecimal("100"));
 
-                jobRepository.save(job);
-                // 첫 번째 시도: 7주 체결, 3주 미체결
-                orderBroker.willReturnSequence(1L,
-                                BrokerOrderResult.success("ORD001", "ok"),
-                                BrokerOrderResult.success("ORD002", "ok"));
-                fillChecker.setFillResult("ORD001", FillResult.partial(7, 3, new BigDecimal("700")));
-                fillChecker.setFullyFilled("ORD002", 3, new BigDecimal("300"));
+        ExecutionJob executed = executor.execute(1L, LocalDateTime.of(2025, 12, 21, 23, 45), ExecutionTriggerType.AUTOMATED);
 
-                LocalDateTime now = LocalDateTime.of(2025, 12, 21, 23, 45);
-                ExecutionJob executed = executor.execute(1L, now, ExecutionTriggerType.AUTOMATED);
+        assertThat(executed.getOrders().get(0).getBrokerOrderId()).isEqualTo("0123456789");
+        assertThat(executed.getOrders().get(0).getStatus()).isEqualTo(ExecutionOrderStatus.ACCEPTED);
+        assertThat(executed.getStatus()).isEqualTo(ExecutionStatus.COMPLETED);
+    }
 
-                ExecutionOrder executedOrder = executed.getOrders().get(0);
-                assertThat(executedOrder.getStatus()).isEqualTo(ExecutionOrderStatus.ACCEPTED);
-                assertThat(executed.getStatus()).isEqualTo(ExecutionStatus.COMPLETED);
-        }
+    @Test
+    void 재시도_후_체결되면_accepted로_저장한다() {
+        ExecutionJob job = singleOrderJob(order(1L, "QQQ", ExecutionOrderSide.BUY, 10));
 
-        @Test
-        void 세번_재시도_모두_실패_시_REJECTED_처리() {
-                ExecutionOrder order = ExecutionOrder.rehydrate(
-                                1L,
-                                "QQQ",
-                                ExecutionOrderSide.BUY,
-                                10,
-                                new BigDecimal("100"),
-                                new BigDecimal("100"),
-                                ExecutionOrderStatus.PLANNED,
-                                null,
-                                null);
-                ExecutionJob job = ExecutionJob.rehydrate(
-                                1L,
-                                LocalDate.of(2025, 12, 21),
-                                LocalDateTime.of(2025, 12, 21, 23, 45),
-                                ExecutionStatus.PENDING,
-                                List.of(order),
-                                null,
-                                null);
+        jobRepository.save(job);
+        orderBroker.willReturnSequence(1L,
+                BrokerOrderResult.success("ORD001", "ok"),
+                BrokerOrderResult.success("ORD002", "ok"));
+        fillChecker.setFillResult("ORD001", FillResult.partial(7, 3, new BigDecimal("700")));
+        fillChecker.setFullyFilled("ORD002", 3, new BigDecimal("300"));
 
-                jobRepository.save(job);
-                // 3회 모두 미체결
-                orderBroker.willReturnSequence(1L,
-                                BrokerOrderResult.success("ORD001", "ok"),
-                                BrokerOrderResult.success("ORD002", "ok"),
-                                BrokerOrderResult.success("ORD003", "ok"));
-                fillChecker.setFillResult("ORD001", FillResult.partial(0, 10, BigDecimal.ZERO));
-                fillChecker.setFillResult("ORD002", FillResult.partial(0, 10, BigDecimal.ZERO));
-                fillChecker.setFillResult("ORD003", FillResult.partial(0, 10, BigDecimal.ZERO));
+        ExecutionJob executed = executor.execute(1L, LocalDateTime.of(2025, 12, 21, 23, 45), ExecutionTriggerType.AUTOMATED);
 
-                LocalDateTime now = LocalDateTime.of(2025, 12, 21, 23, 45);
-                ExecutionJob executed = executor.execute(1L, now, ExecutionTriggerType.AUTOMATED);
+        assertThat(executed.getOrders().get(0).getStatus()).isEqualTo(ExecutionOrderStatus.ACCEPTED);
+        assertThat(executed.getStatus()).isEqualTo(ExecutionStatus.COMPLETED);
+    }
 
-                ExecutionOrder executedOrder = executed.getOrders().get(0);
-                assertThat(executedOrder.getStatus()).isEqualTo(ExecutionOrderStatus.REJECTED);
-                assertThat(executed.getStatus()).isEqualTo(ExecutionStatus.FAILED);
-        }
+    @Test
+    void 모든_재시도가_실패하면_rejected로_저장한다() {
+        ExecutionJob job = singleOrderJob(order(1L, "QQQ", ExecutionOrderSide.BUY, 10));
 
-        @Test
-        void SELL_주문이_BUY_주문보다_먼저_실행됨() {
-                ExecutionOrder sellOrder = ExecutionOrder.rehydrate(
-                                1L, "TQQQ", ExecutionOrderSide.SELL, 5,
-                                new BigDecimal("100"), new BigDecimal("100"),
-                                ExecutionOrderStatus.PLANNED, null, null);
-                ExecutionOrder buyOrder = ExecutionOrder.rehydrate(
-                                2L, "QQQ", ExecutionOrderSide.BUY, 10,
-                                new BigDecimal("100"), new BigDecimal("100"),
-                                ExecutionOrderStatus.PLANNED, null, null);
+        jobRepository.save(job);
+        orderBroker.willReturnSequence(1L,
+                BrokerOrderResult.success("ORD001", "ok"),
+                BrokerOrderResult.success("ORD002", "ok"),
+                BrokerOrderResult.success("ORD003", "ok"));
+        fillChecker.setFillResult("ORD001", FillResult.partial(0, 10, BigDecimal.ZERO));
+        fillChecker.setFillResult("ORD002", FillResult.partial(0, 10, BigDecimal.ZERO));
+        fillChecker.setFillResult("ORD003", FillResult.partial(0, 10, BigDecimal.ZERO));
 
-                ExecutionJob job = ExecutionJob.rehydrate(
-                                1L,
-                                LocalDate.of(2025, 12, 21),
-                                LocalDateTime.of(2025, 12, 21, 23, 45),
-                                ExecutionStatus.PENDING,
-                                List.of(buyOrder, sellOrder), // BUY가 먼저 리스트에 있지만
-                                null, null);
+        ExecutionJob executed = executor.execute(1L, LocalDateTime.of(2025, 12, 21, 23, 45), ExecutionTriggerType.AUTOMATED);
 
-                jobRepository.save(job);
-                orderBroker.willReturn(1L, BrokerOrderResult.success("SELL_ORD", "ok"));
-                orderBroker.willReturn(2L, BrokerOrderResult.success("BUY_ORD", "ok"));
-                fillChecker.setFullyFilled("SELL_ORD", 5, new BigDecimal("500"));
-                fillChecker.setFullyFilled("BUY_ORD", 10, new BigDecimal("1000"));
+        assertThat(executed.getOrders().get(0).getStatus()).isEqualTo(ExecutionOrderStatus.REJECTED);
+        assertThat(executed.getStatus()).isEqualTo(ExecutionStatus.FAILED);
+    }
 
-                LocalDateTime now = LocalDateTime.of(2025, 12, 21, 23, 45);
-                ExecutionJob executed = executor.execute(1L, now, ExecutionTriggerType.AUTOMATED);
+    @Test
+    void 리스크_한도_위반_슬리피지가_나오면_남은_주문을_skip한다() {
+        TradingOperationProps strictRiskProps = new TradingOperationProps(
+                OperatingMode.AUTO_LIVE,
+                new TradingOperationProps.AutoLiveGateProps(5, true, true, true),
+                new TradingOperationProps.KpiProps(true, 0, 0, new BigDecimal("5.0")),
+                new TradingOperationProps.RiskLimitProps(
+                        BigDecimal.ZERO,
+                        BigDecimal.ZERO,
+                        BigDecimal.ZERO,
+                        new BigDecimal("0.10")));
+        riskLimitService = new ExecutionRiskLimitService(strictRiskProps, jobRepository);
 
-                // SELL(TQQQ)과 BUY(QQQ) 모두 ACCEPTED
-                assertThat(executed.getOrders().stream()
-                                .allMatch(o -> o.getStatus() == ExecutionOrderStatus.ACCEPTED)).isTrue();
-                assertThat(executed.getStatus()).isEqualTo(ExecutionStatus.COMPLETED);
-        }
+        RetryableOrderExecutor retryableExecutor = new RetryableOrderExecutor(
+                orderBroker,
+                fillChecker,
+                canceller,
+                new ExecutionOrderFactory(
+                        FakeRealtimePriceProvider.withLastPrices(
+                                java.util.Map.of("QQQ", new BigDecimal("100.00"), "TQQQ", new BigDecimal("100.00"))),
+                        new MarketLikePricingPolicy(new BigDecimal("0.01"), 0, 0, 1, 1, new BigDecimal("0.25"), 3, 2000)),
+                new MarketLikePricingPolicy(new BigDecimal("0.01"), 0, 0, 1, 1, new BigDecimal("0.25"), 3, 2000),
+                riskLimitService);
+        retryableExecutor.setWaitMs(0);
+        executor = new ExecutionJobExecutor(jobRepository, retryableExecutor, orderInquiry, guard, riskLimitService);
+
+        ExecutionOrder sellOrder = order(1L, "TQQQ", ExecutionOrderSide.SELL, 5);
+        ExecutionOrder buyOrder = order(2L, "QQQ", ExecutionOrderSide.BUY, 10);
+        ExecutionJob job = ExecutionJob.rehydrate(
+                1L,
+                LocalDate.of(2025, 12, 21),
+                LocalDateTime.of(2025, 12, 21, 23, 45),
+                ExecutionStatus.PENDING,
+                List.of(buyOrder, sellOrder),
+                null,
+                null);
+
+        jobRepository.save(job);
+        orderBroker.willReturn(1L, BrokerOrderResult.success("SELL_ORD", "ok"));
+        fillChecker.setFullyFilled("SELL_ORD", 5, new BigDecimal("495"));
+
+        ExecutionJob executed = executor.execute(1L, LocalDateTime.of(2025, 12, 21, 23, 45), ExecutionTriggerType.AUTOMATED);
+
+        assertThat(executed.getOrders().stream()
+                .filter(o -> o.getId().equals(1L))
+                .findFirst()
+                .orElseThrow()
+                .getStatus()).isEqualTo(ExecutionOrderStatus.ACCEPTED);
+        assertThat(executed.getOrders().stream()
+                .filter(o -> o.getId().equals(2L))
+                .findFirst()
+                .orElseThrow()
+                .getStatus()).isEqualTo(ExecutionOrderStatus.SKIPPED);
+        assertThat(executed.getStatus()).isEqualTo(ExecutionStatus.COMPLETED);
+    }
+
+    private ExecutionJob singleOrderJob(ExecutionOrder order) {
+        return ExecutionJob.rehydrate(
+                1L,
+                LocalDate.of(2025, 12, 21),
+                LocalDateTime.of(2025, 12, 21, 23, 45),
+                ExecutionStatus.PENDING,
+                List.of(order),
+                null,
+                null);
+    }
+
+    private ExecutionOrder order(Long id, String symbol, ExecutionOrderSide side, long qty) {
+        return ExecutionOrder.rehydrate(
+                id,
+                symbol,
+                side,
+                qty,
+                new BigDecimal("100"),
+                new BigDecimal("100"),
+                ExecutionOrderStatus.PLANNED,
+                null,
+                null);
+    }
 }

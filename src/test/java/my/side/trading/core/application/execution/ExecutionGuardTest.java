@@ -86,7 +86,12 @@ class ExecutionGuardTest {
         TradingOperationProps operationProps = new TradingOperationProps(
                 mode,
                 new TradingOperationProps.AutoLiveGateProps(5, true, true, true),
-                new TradingOperationProps.KpiProps(true, 0, 0, new java.math.BigDecimal("5.0")));
+                new TradingOperationProps.KpiProps(true, 0, 0, new java.math.BigDecimal("5.0")),
+                new TradingOperationProps.RiskLimitProps(
+                        java.math.BigDecimal.ZERO,
+                        java.math.BigDecimal.ZERO,
+                        java.math.BigDecimal.ZERO,
+                        java.math.BigDecimal.ZERO));
         KillSwitchReader killSwitchReader = () -> killSwitchOn;
         OperationsKpiService operationsKpiService = mock(OperationsKpiService.class);
         when(operationsKpiService.hasAutoLiveBreach()).thenReturn(kpiBreached);

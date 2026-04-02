@@ -5,10 +5,17 @@
 이 문서는 2026-04-02 기준으로 `master`에 실제 반영된 구현 범위와 다음 세션에서 이어서 볼 포인트를 정리한 handoff 문서다.
 
 - 기준 브랜치: `master`
-- 기준 커밋: `abccf3c`
+- 기준 커밋: `ec2f491`
 - 검증 기준: `./gradlew test`
 
 다음 세션에서는 이 문서를 시작점으로 삼아 `master`에서 새 기능 브랜치를 만들어 진행하면 된다.
+
+우선순위 판단 기준은 handoff 자체가 아니라 아래 최신 기준 문서 묶음이다.
+
+- `docs/PRODUCT_REQUIREMENTS.md`
+- `docs/STRATEGY_SPEC.md`
+- `docs/OPERATIONS_RUNBOOK.md`
+- `docs/CURRENT_IMPLEMENTATION_SYNC.md`
 
 ## 2. 이번에 master에 통합된 브랜치
 
@@ -41,7 +48,7 @@
      - `trading.security.public-path-prefixes` 설정 기반으로 공개 범위 제어
      - 기본값은 비공개
 
-이번 세션에서 추가 반영한 기능:
+이번 흐름에서 추가 반영된 기능:
 
 4. `feature/market-calendar-policy`
    - 커밋: `fdbebd7`
@@ -68,6 +75,15 @@
      - 대시보드 요약 응답에 KPI 정보 노출
      - KPI breach 시 자동 실행을 `KPI_BREACH`로 차단하도록 실행 가드 연결
 
+7. `feature/execution-risk-limits`
+   - 커밋: `ec2f491`
+   - 내용:
+     - `trading.operation.risk-limits.*` 설정 블록 추가
+     - 1회 최대 주문 금액, 1일 최대 회전율을 주문 생성 단계에 연결
+     - 재시도 총 노출 한도를 재시도 직전 누적 금액 기준으로 연결
+     - 허용 슬리피지 상한을 체결 후 후속 주문 진행 전 검사하도록 연결
+     - 위반 시 `RISK_LIMIT_BREACH`로 표준화하고 현재 run을 보수적으로 중단 또는 잔여 주문 skip 처리
+
 ### 2.2 master 병합 커밋
 
 - `926e622`: `feature/pricing-retry-policy` 병합
@@ -75,8 +91,9 @@
 - `132acf2`: `feature/market-calendar-policy` 병합
 - `2fa2e0a`: `feature/circuit-breaker-stateful` 병합
 - `abccf3c`: `feature/ops-kpi-risk-controls` 병합
+- `ec2f491`: `feature/execution-risk-limits` 반영 기준
 
-현재 `master`에는 위 6개 기능이 모두 통합되어 있다.
+현재 `master`에는 위 7개 기능이 모두 반영된 상태로 본다.
 
 ## 3. 현재 코드 기준 핵심 변경
 
@@ -132,6 +149,33 @@
 - `src/main/java/my/side/trading/adapter/in/web/dashboard/dto/DashboardResponse.java`
 - `src/main/java/my/side/trading/core/infrastructure/config/TradingOperationProps.java`
 
+### 3.4 실행 리스크 한도
+
+- 실행 리스크 한도 4종이 `trading.operation.risk-limits.*` 설정으로 추가됐다.
+  - 1회 최대 주문 금액
+  - 1일 최대 회전율
+  - 재시도 총 노출 한도
+  - 허용 슬리피지 상한
+- 적용 시점:
+  - 1회 최대 주문 금액: 주문 생성 직전
+  - 1일 최대 회전율: 주문 생성 직전, 동일 `signalDate` 누적 주문 기준
+  - 재시도 총 노출 한도: 재시도 직전
+  - 허용 슬리피지 상한: 체결 후 후속 주문 진행 전
+- 위반 시 현재 동작:
+  - `ExecutionBlockReason.RISK_LIMIT_BREACH`
+  - 현재 run 보수적 중단 또는 잔여 주문 skip
+  - 운영 모드 자동 강등은 아직 미구현
+- 기본 설정값은 모두 `0`이며, 운영자가 값을 넣기 전까지는 비활성 상태다.
+
+관련 주요 파일:
+
+- `src/main/java/my/side/trading/core/application/execution/ExecutionRiskLimitService.java`
+- `src/main/java/my/side/trading/core/application/execution/ExecutionJobCreateService.java`
+- `src/main/java/my/side/trading/core/application/execution/RetryableOrderExecutor.java`
+- `src/main/java/my/side/trading/core/application/execution/ExecutionJobExecutor.java`
+- `src/main/java/my/side/trading/core/application/execution/ExecutionResult.java`
+- `src/main/java/my/side/trading/core/infrastructure/config/TradingOperationProps.java`
+
 ## 4. 검증 결과
 
 - 실행한 검증: `./gradlew test`
@@ -143,40 +187,59 @@
 - 테스트 로그에서 Mockito agent 경고가 보인다.
 - `TradingApplicationTests`는 로컬 MySQL에 연결한다.
 - KPI 집계는 현재 저장된 Job/Order 이력 기반의 최소 모델이며, 장기 운영용 집계 테이블이나 별도 이벤트 적재는 아직 없다.
+- 실행 리스크 한도는 현재 주문 생성/재시도/체결 후 검사까지 연결됐지만, 알림/운영 강등까지는 이어지지 않았다.
 
 ## 5. 다음 세션에서 우선 볼 항목
 
-이번 세션 전 handoff에 있던 상위 3개 기능은 모두 완료됐다. 다음 세션에서는 `docs/CURRENT_IMPLEMENTATION_SYNC.md` 기준 남은 갭 중 아래 순서를 우선 검토하는 편이 자연스럽다.
+다음 세션의 첫 작업은 `feature/minimal-ops-alerts`다.
 
-### 5.1 1순위: 실행 리스크 한도 모델 구체화
+기준 문서상 `PRODUCT_REQUIREMENTS`의 “다음 범위”, `OPERATIONS_RUNBOOK`의 “최소 장애 알림”, `CURRENT_IMPLEMENTATION_SYNC`의 잔여 갭을 종합하면, `execution-risk-limits` 다음 우선순위는 최소 장애 알림 골격이다.
 
-목표:
+이번 단계는 외부 채널 연동이 아니라 알림 이벤트 모델, 퍼블리셔 포트, 로그 구현, dedupe, 핵심 운영 이벤트 발행 연결까지를 범위로 한다.
 
-- 문서에만 있는 실행 리스크 한도(1회 최대 주문 금액, 1일 최대 회전율, 재시도 총 노출, 허용 슬리피지 상한)를 실제 정책으로 연결
-
-현재 상태:
-
-- KPI breach는 자동 실행 차단까지 연결됐지만, 주문 생성/재시도 단계의 한도 모델은 아직 없다.
-
-권장 시작 브랜치:
-
-- `git switch -c feature/execution-risk-limits`
-
-### 5.2 2순위: 최소 장애 알림 골격
+### 5.1 1순위: minimal ops alerts
 
 목표:
 
-- EOD 실패, 브로커 장애, 데이터 결측, 미정리 주문, Kill Switch 등 핵심 장애를 운영자가 비동기로 바로 인지할 수 있게 골격 추가
+- 운영자가 비동기로 즉시 인지할 수 있는 최소 장애 알림 골격 추가
 
-현재 상태:
+이번 단계 범위:
 
-- KPI/가드 모델은 들어갔지만 알림 채널 추상화와 이벤트 발행 구조는 아직 없다.
+- `OpsAlertPublisher` 포트
+- 기본 `LoggingOpsAlertPublisher`
+- 메모리 TTL dedupe
+- 알림 설정
+  - `trading.operation.alerts.enabled`
+  - `trading.operation.alerts.dedupe-ttl-minutes`
+
+우선 이벤트:
+
+- EOD 계산 실패
+- 브로커 장애 또는 주문 API 실패
+- 데이터 결측 또는 `DATA_UNCERTAIN`
+- 미정리 주문 또는 부분 체결 지속
+- Kill Switch 활성화 또는 중복 Job 정황
+- 추가로 `RISK_LIMIT_BREACH`
+
+권장 발행 지점:
+
+- `StrategyEodScheduler`
+- `ExecutionGuard`
+- `ExecutionJobCreateService`
+- 브로커/KIS adapter 계층
+- KPI breach 평가 시점
+
+비범위:
+
+- Slack/webhook 실제 외부 채널 연동
+- 알림 DB 적재
+- 대시보드 응답 변경
 
 권장 시작 브랜치:
 
 - `git switch -c feature/minimal-ops-alerts`
 
-### 5.3 3순위: 문서 동기화
+### 5.2 2순위: docs sync refresh
 
 목표:
 
@@ -184,18 +247,34 @@
 
 현재 상태:
 
-- 현재 sync 문서는 `market-calendar-policy`, `circuit-breaker-stateful`, `ops-kpi-risk-controls`가 아직 미구현인 상태로 남아 있어 최신 코드 기준과 어긋난다.
+- 현재 sync 문서는 `market-calendar-policy`, `circuit-breaker-stateful`, `ops-kpi-risk-controls`, `execution-risk-limits` 반영 상태가 최신 코드와 완전히 맞지 않는다.
 
 권장 시작 브랜치:
 
 - `git switch -c docs/implementation-sync-refresh`
 
+### 5.3 3순위: 운영 강등/승격 이력 또는 실제 알림 채널 연동
+
+목표:
+
+- `AUTO_LIVE` 승격/강등 이력 기록, 운영 감사 로그, 또는 실제 비동기 알림 채널 연동 중 하나를 제품 범위로 끌어올린다.
+
+현재 상태:
+
+- 알림 골격 전 외부 채널은 없고, 운영 강등/승격 기록도 별도 모델이 없다.
+
+권장 시작 브랜치 예시:
+
+- `git switch -c feature/operating-mode-audit`
+- `git switch -c feature/ops-alert-webhook`
+
 ## 6. 다음 세션용 체크 포인트
 
-- `master` 기준점은 `abccf3c`다.
+- `master` 기준점은 `ec2f491`이다.
 - 이번에 추가된 설정 블록:
   - `trading.market-calendar.*`
   - `trading.operation.kpi.*`
+  - `trading.operation.risk-limits.*`
 - `application.yml` 충돌 가능성은 여전히 높으므로 설정 추가는 블록 단위로 조심해서 넣는 편이 안전하다.
 - 자동 실행은 이제 아래 조건 중 하나만 걸려도 차단될 수 있다.
   - 운영 모드 미허용
@@ -203,12 +282,16 @@
   - Kill Switch 활성화
   - 시장 상태가 자동 실행 불가
   - KPI breach
-- `DashboardResponse` 응답 shape에 운영 KPI가 추가됐으므로, API 소비자가 있다면 응답 파싱 영향 여부를 먼저 확인해야 한다.
-- master에 병합 완료된 feature branch는 로컬에서 정리한 상태다.
+  - 실행 리스크 한도 breach
+- read path에서는 알림을 발행하지 않는 편이 안전하다.
+- 알림 실패가 주문 실행/EOD 본 흐름을 실패시키면 안 된다.
+- 중복 알림은 dedupe key와 TTL로 억제해야 한다.
+- `DashboardResponse` 응답 shape는 이번 단계에서 바꾸지 않는 편이 안전하다.
+- `CURRENT_IMPLEMENTATION_SYNC.md`는 별도 브랜치로 후속 정리 필요하다.
 
 ## 7. 요약
 
-현재 `master`에는 아래 범위가 통합 완료됐다.
+현재 `master`에는 아래 범위가 반영 완료된 상태로 본다.
 
 - 운영 모드 기반 실행 가드
 - 설정 기반 보안 공개 범위
@@ -216,5 +299,6 @@
 - 시장 상태 기반 자동 실행/EOD 제어
 - 직전 전략 상태 기반 Circuit Breaker 보강
 - 운영 KPI 스냅샷과 KPI breach 기반 자동 실행 차단
+- 실행 리스크 한도 4종과 `RISK_LIMIT_BREACH` 처리
 
-다음 세션의 첫 작업은 더 이상 handoff의 기존 3개 기능이 아니라, 남은 운영 완성도 갭 중 어떤 것을 먼저 제품 범위로 끌어올릴지 결정하는 것이다.
+다음 세션의 첫 작업은 `feature/minimal-ops-alerts`다. 구현자는 외부 채널 연동이 아니라 알림 이벤트 모델, 퍼블리셔 포트, 로그 구현, 메모리 dedupe, 핵심 운영 이벤트 발행 연결까지를 범위로 삼아 시작하면 된다.

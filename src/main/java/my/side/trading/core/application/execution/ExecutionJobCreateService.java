@@ -18,10 +18,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
-/**
- * 리밸런싱 결정을 기반으로 ExecutionJob 생성
- * 목표비중 + 실시간 가격으로 주문 수량 계산
- */
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -29,6 +25,7 @@ public class ExecutionJobCreateService {
 
     private final ExecutionOrderFactory orderFactory;
     private final ExecutionJobRepository jobRepository;
+    private final ExecutionRiskLimitService riskLimitService;
 
     public Optional<ExecutionJob> createJob(
             LocalDate signalDate,
@@ -36,7 +33,7 @@ public class ExecutionJobCreateService {
             RebalanceDecision decision,
             Portfolio portfolio) {
         if (!decision.shouldRebalance()) {
-            throw new IllegalArgumentException("shouldRebalance=false decision으로 job 생성 불가");
+            throw new IllegalArgumentException("shouldRebalance=false decision로 job 생성 불가");
         }
 
         WeightSet targetWeights = decision.targetWeights();
@@ -44,53 +41,56 @@ public class ExecutionJobCreateService {
             throw new IllegalArgumentException("targetWeights가 null입니다.");
         }
 
+        if (jobRepository.findBySignalDate(signalDate).isPresent()) {
+            log.warn("job already exists: signalDate={}", signalDate);
+            return Optional.empty();
+        }
+
         List<ExecutionOrder> orders = new ArrayList<>();
         BigDecimal remainingCash = portfolio.cash();
+        BigDecimal plannedNotional = BigDecimal.ZERO;
 
         for (OrderIntent intent : decision.intents()) {
-            OrderAndCashDelta ocd = orderFactory.fromTargetWeight(
+            OrderAndCashDelta planned = orderFactory.fromTargetWeight(
                     intent.symbol(),
                     intent.side(),
                     targetWeights,
                     portfolio,
                     remainingCash).orElse(null);
 
-            if (ocd == null)
+            if (planned == null) {
                 continue;
+            }
 
-            orders.add(ocd.order());
-            remainingCash = remainingCash.add(ocd.cashDelta());
+            riskLimitService.validatePlannedOrder(signalDate, portfolio, planned.order(), plannedNotional);
+
+            orders.add(planned.order());
+            remainingCash = remainingCash.add(planned.cashDelta());
+            plannedNotional = plannedNotional.add(riskLimitService.orderNotional(planned.order()));
 
             if (remainingCash.signum() < 0) {
-                log.warn("remainingCash 0 이하로 떨어짐. 0으로 변환 후 진행 | " +
-                        "symbol={}, side={}, qty={}, limitPrice={}, cashDelta={}, cashBefore={}",
-                        ocd.order().getSymbol(),
-                        ocd.order().getSide(),
-                        ocd.order().getQuantity(),
-                        ocd.order().getLimitPrice(),
-                        ocd.cashDelta(),
-                        remainingCash.subtract(ocd.cashDelta()));
+                log.warn("remainingCash below zero; clamp to zero. symbol={}, side={}, qty={}, limitPrice={}, cashDelta={}, cashBefore={}",
+                        planned.order().getSymbol(),
+                        planned.order().getSide(),
+                        planned.order().getQuantity(),
+                        planned.order().getLimitPrice(),
+                        planned.cashDelta(),
+                        remainingCash.subtract(planned.cashDelta()));
                 remainingCash = BigDecimal.ZERO;
             }
 
             log.info("planned order: sym={}, side={}, qty={}, limit={}, cashDelta={}, remainingCash={}",
-                    ocd.order().getSymbol(),
-                    ocd.order().getSide(),
-                    ocd.order().getQuantity(),
-                    ocd.order().getLimitPrice(),
-                    ocd.cashDelta(),
+                    planned.order().getSymbol(),
+                    planned.order().getSide(),
+                    planned.order().getQuantity(),
+                    planned.order().getLimitPrice(),
+                    planned.cashDelta(),
                     remainingCash);
         }
 
         if (orders.isEmpty()) {
-            log.info("skip job creation: 실행 가능한 주문이 없습니다. intents={}, reason={}",
+            log.info("skip job creation: no executable orders. intents={}, reason={}",
                     decision.intents().size(), decision.reason());
-            return Optional.empty();
-        }
-
-        Optional<ExecutionJob> existing = jobRepository.findBySignalDate(signalDate);
-        if (existing.isPresent()) {
-            log.warn("job이 이미 존재합니다: signalDate={}, orders={}", signalDate, orders.size());
             return Optional.empty();
         }
 

@@ -4,7 +4,11 @@ public class ExecutionBlockedException extends RuntimeException {
     private final ExecutionBlockReason reason;
 
     public ExecutionBlockedException(ExecutionBlockReason reason) {
-        super(reason.code());
+        this(reason, reason.code());
+    }
+
+    public ExecutionBlockedException(ExecutionBlockReason reason, String message) {
+        super(message == null || message.isBlank() ? reason.code() : message);
         this.reason = reason;
     }
 

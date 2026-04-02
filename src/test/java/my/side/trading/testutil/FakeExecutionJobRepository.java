@@ -46,6 +46,13 @@ public final class FakeExecutionJobRepository implements ExecutionJobRepository 
     }
 
     @Override
+    public java.util.List<ExecutionJob> findAllBySignalDate(LocalDate signalDate) {
+        return store.values().stream()
+                .filter(j -> j.getSignalDate().equals(signalDate))
+                .toList();
+    }
+
+    @Override
     public java.util.List<ExecutionJob> findAll() {
         return new java.util.ArrayList<>(store.values());
     }

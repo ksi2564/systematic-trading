@@ -10,5 +10,7 @@ public interface ExecutionJobRepository {
 
     Optional<ExecutionJob> findBySignalDate(LocalDate signalDate);
 
+    java.util.List<ExecutionJob> findAllBySignalDate(LocalDate signalDate);
+
     java.util.List<ExecutionJob> findAll();
 }

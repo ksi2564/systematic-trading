@@ -3,17 +3,18 @@ package my.side.trading.core.application.execution;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import my.side.trading.core.application.execution.pricing.MarketLikePricingPolicy;
-import my.side.trading.core.domain.execution.order.*;
+import my.side.trading.core.domain.execution.order.BrokerOrderResult;
+import my.side.trading.core.domain.execution.order.CancelResult;
+import my.side.trading.core.domain.execution.order.ExecutionOrder;
+import my.side.trading.core.domain.execution.order.ExecutionOrderSide;
+import my.side.trading.core.domain.execution.order.FillResult;
+import my.side.trading.core.domain.execution.order.OrderBroker;
+import my.side.trading.core.domain.execution.order.OrderCanceller;
+import my.side.trading.core.domain.execution.order.OrderFillChecker;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 
-/**
- * 재시도 정책을 포함한 주문 실행기
- * - 10초 체결 대기
- * - 부분 체결 시 미체결 수량만 재시도
- * - 최대 3회 시도, 버퍼 점진적 증가 (0.3% → 0.5% → 0.8%)
- */
 @Slf4j
 @Service
 public class RetryableOrderExecutor {
@@ -23,6 +24,7 @@ public class RetryableOrderExecutor {
     private final OrderCanceller canceller;
     private final ExecutionOrderFactory orderFactory;
     private final MarketLikePricingPolicy pricingPolicy;
+    private final ExecutionRiskLimitService riskLimitService;
 
     @Setter
     private long waitMs;
@@ -32,23 +34,17 @@ public class RetryableOrderExecutor {
             OrderFillChecker fillChecker,
             OrderCanceller canceller,
             ExecutionOrderFactory orderFactory,
-            MarketLikePricingPolicy pricingPolicy) {
+            MarketLikePricingPolicy pricingPolicy,
+            ExecutionRiskLimitService riskLimitService) {
         this.orderBroker = orderBroker;
         this.fillChecker = fillChecker;
         this.canceller = canceller;
         this.orderFactory = orderFactory;
         this.pricingPolicy = pricingPolicy;
+        this.riskLimitService = riskLimitService;
         this.waitMs = pricingPolicy.retryWaitMs();
     }
 
-    /**
-     * 재시도 로직을 포함한 주문 실행
-     * - 부분 체결 시: 미체결 수량만 다음 시도에서 재주문
-     * - 체결 수량 누적하여 최종 결과 반환
-     *
-     * @param order 실행할 주문
-     * @return 체결 결과 (총 체결 수량 포함)
-     */
     public ExecutionResult executeWithRetry(ExecutionOrder order) {
         String symbol = order.getSymbol();
         long originalQty = order.getQuantity();
@@ -57,9 +53,18 @@ public class RetryableOrderExecutor {
         long remainingQty = originalQty;
         String lastBrokerOrderId = null;
         int maxAttempts = pricingPolicy.maxAttempts();
+        BigDecimal cumulativeExposure = BigDecimal.ZERO;
 
         for (int attempt = 1; attempt <= maxAttempts && remainingQty > 0; attempt++) {
             ExecutionOrder retryOrder = orderFactory.repriceForRetry(order, remainingQty, attempt);
+            BigDecimal projectedExposure = cumulativeExposure.add(riskLimitService.orderNotional(retryOrder));
+            var retryExposureViolation = riskLimitService.retryExposureViolation(projectedExposure);
+            if (retryExposureViolation.isPresent()) {
+                String detail = retryExposureViolation.get().summary();
+                log.warn("[RETRY] retry exposure limit breached: symbol={}, detail={}", symbol, detail);
+                return currentResultOnBlock(symbol, totalFilledQty, totalFilledAmount, lastBrokerOrderId, detail);
+            }
+
             log.info("[RETRY] 시도 {}/{}: symbol={}, side={}, remainingQty={}, ticks={}, refPrice={}, limitPrice={}",
                     attempt,
                     maxAttempts,
@@ -69,22 +74,21 @@ public class RetryableOrderExecutor {
                     pricingPolicy.priceTicksForAttempt(order.getSide(), attempt),
                     retryOrder.getRefPrice(),
                     retryOrder.getLimitPrice());
+
             BrokerOrderResult placeResult = orderBroker.place(retryOrder);
+            cumulativeExposure = projectedExposure;
 
             if (!placeResult.success()) {
                 log.warn("[RETRY] 주문 실패: symbol={}, message={}", symbol, placeResult.message());
-                continue; // 다음 시도
+                continue;
             }
 
             String brokerOrderId = placeResult.brokerOrderId();
             lastBrokerOrderId = brokerOrderId;
-            log.info("[RETRY] 주문 접수됨: symbol={}, brokerOrderId={}, qty={}",
-                    symbol, brokerOrderId, remainingQty);
+            log.info("[RETRY] 주문 접수: symbol={}, brokerOrderId={}, qty={}", symbol, brokerOrderId, remainingQty);
 
-            // 체결 대기
             waitForFill();
 
-            // 체결 확인
             FillResult fillResult = fillChecker.checkFill(brokerOrderId, symbol);
             long filledQty = fillResult.filledQty();
             long unfilledQty = fillResult.unfilledQty();
@@ -98,13 +102,11 @@ public class RetryableOrderExecutor {
                         symbol, filledQty, totalFilledQty, remainingQty);
             }
 
-            // 전량 체결 완료
             if (fillResult.fullyFilled() || remainingQty <= 0) {
-                log.info("[RETRY] 전량 체결 완료: symbol={}, totalFilledQty={}", symbol, totalFilledQty);
+                log.info("[RETRY] 완전 체결 종료: symbol={}, totalFilledQty={}", symbol, totalFilledQty);
                 return ExecutionResult.success(lastBrokerOrderId, totalFilledQty, totalFilledAmount);
             }
 
-            // 미체결분 취소 후 재시도
             if (unfilledQty > 0) {
                 log.info("[RETRY] 미체결분 취소 시도: symbol={}, unfilledQty={}", symbol, unfilledQty);
                 CancelResult cancelResult = canceller.cancel(brokerOrderId, symbol);
@@ -114,20 +116,29 @@ public class RetryableOrderExecutor {
             }
         }
 
-        // 최종 결과 반환
         if (totalFilledQty > 0) {
             if (totalFilledQty >= originalQty) {
-                log.info("[RETRY] 전량 체결: symbol={}, totalFilledQty={}", symbol, totalFilledQty);
+                log.info("[RETRY] 완전 체결: symbol={}, totalFilledQty={}", symbol, totalFilledQty);
                 return ExecutionResult.success(lastBrokerOrderId, totalFilledQty, totalFilledAmount);
-            } else {
-                log.info("[RETRY] 부분 체결 종료: symbol={}, totalFilledQty={}/{}",
-                        symbol, totalFilledQty, originalQty);
-                return ExecutionResult.partial(lastBrokerOrderId, totalFilledQty, totalFilledAmount);
             }
+            log.info("[RETRY] 부분 체결 종료: symbol={}, totalFilledQty={}/{}", symbol, totalFilledQty, originalQty);
+            return ExecutionResult.partial(lastBrokerOrderId, totalFilledQty, totalFilledAmount);
         }
 
-        log.error("[RETRY] {} 시도 모두 실패: symbol={}", maxAttempts, symbol);
+        log.error("[RETRY] {}회 시도 모두 실패: symbol={}", maxAttempts, symbol);
         return ExecutionResult.failed(symbol);
+    }
+
+    private ExecutionResult currentResultOnBlock(
+            String symbol,
+            long totalFilledQty,
+            BigDecimal totalFilledAmount,
+            String lastBrokerOrderId,
+            String detail) {
+        ExecutionResult base = totalFilledQty > 0
+                ? ExecutionResult.partial(lastBrokerOrderId, totalFilledQty, totalFilledAmount)
+                : ExecutionResult.failed(symbol);
+        return base.withBlock(ExecutionBlockReason.RISK_LIMIT_BREACH, detail);
     }
 
     private void waitForFill() {

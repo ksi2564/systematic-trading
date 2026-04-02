@@ -1,16 +1,22 @@
 package my.side.trading.core.application.execution;
 
 import my.side.trading.core.application.execution.pricing.MarketLikePricingPolicy;
-import my.side.trading.core.domain.execution.order.*;
-import my.side.trading.testutil.FakeRealtimePriceProvider;
+import my.side.trading.core.domain.execution.order.BrokerOrderResult;
+import my.side.trading.core.domain.execution.order.ExecutionOrder;
+import my.side.trading.core.domain.execution.order.ExecutionOrderSide;
+import my.side.trading.core.domain.execution.order.FillResult;
+import my.side.trading.core.domain.execution.order.OrderBroker;
+import my.side.trading.core.domain.operation.OperatingMode;
+import my.side.trading.core.infrastructure.config.TradingOperationProps;
+import my.side.trading.testutil.FakeExecutionJobRepository;
 import my.side.trading.testutil.FakeOrderCanceller;
 import my.side.trading.testutil.FakeOrderFillChecker;
+import my.side.trading.testutil.FakeRealtimePriceProvider;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
-import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -28,23 +34,15 @@ class RetryableOrderExecutorTest {
         fillChecker = new FakeOrderFillChecker();
         canceller = new FakeOrderCanceller();
         priceProvider = new SequencedPriceProvider();
-        ExecutionOrderFactory orderFactory = new ExecutionOrderFactory(
-                priceProvider,
-                new MarketLikePricingPolicy(new BigDecimal("0.01"), 0, 0, 1, 1, new BigDecimal("0.25"), 3, 2000));
-        executor = new RetryableOrderExecutor(
-                broker,
-                fillChecker,
-                canceller,
-                orderFactory,
-                new MarketLikePricingPolicy(new BigDecimal("0.01"), 0, 0, 1, 1, new BigDecimal("0.25"), 3, 2000));
-        executor.setWaitMs(0); // 테스트에서는 대기 시간 제거
+        executor = createExecutor(BigDecimal.ZERO);
+        executor.setWaitMs(0);
         priceProvider.updateQuote("QQQ", new BigDecimal("100.00"), new BigDecimal("99.90"), new BigDecimal("100.10"));
         priceProvider.updateQuote("TQQQ", new BigDecimal("100.00"), new BigDecimal("99.90"), new BigDecimal("100.10"));
     }
 
     @Test
-    @DisplayName("첫 번째 시도에서 체결되면 성공 반환")
-    void 첫_시도_체결_성공() {
+    @DisplayName("첫 시도에서 체결되면 성공을 반환한다")
+    void firstAttemptFilled() {
         ExecutionOrder order = createOrder("QQQ", ExecutionOrderSide.BUY, 10);
         broker.setNextOrderId("ORD001");
         fillChecker.setFullyFilled("ORD001", 10, new BigDecimal("1000"));
@@ -57,17 +55,15 @@ class RetryableOrderExecutorTest {
     }
 
     @Test
-    @DisplayName("미체결 후 재시도하여 두 번째에서 체결")
-    void 재시도_후_체결() {
+    @DisplayName("미체결분은 재시도하면서 최신 호가로 재계산한다")
+    void repricesOnRetry() {
         ExecutionOrder order = createOrder("QQQ", ExecutionOrderSide.SELL, 5);
         broker.setOrderIds("ORD001", "ORD002");
         priceProvider.setQuoteSequence("QQQ",
                 new BigDecimal("100.00"), new BigDecimal("99.90"), new BigDecimal("100.10"),
                 new BigDecimal("101.00"), new BigDecimal("100.80"), new BigDecimal("101.20"));
 
-        // 첫 번째: 미체결
         fillChecker.setFillResult("ORD001", FillResult.partial(0, 5, BigDecimal.ZERO));
-        // 두 번째: 체결
         fillChecker.setFullyFilled("ORD002", 5, new BigDecimal("500"));
 
         ExecutionResult result = executor.executeWithRetry(order);
@@ -80,12 +76,11 @@ class RetryableOrderExecutorTest {
     }
 
     @Test
-    @DisplayName("3회 모두 실패하면 FAILED 반환")
-    void 세번_모두_실패() {
+    @DisplayName("모든 재시도가 실패하면 failed를 반환한다")
+    void allAttemptsFailed() {
         ExecutionOrder order = createOrder("TQQQ", ExecutionOrderSide.BUY, 3);
         broker.setOrderIds("ORD001", "ORD002", "ORD003");
 
-        // 모두 미체결
         fillChecker.setFillResult("ORD001", FillResult.partial(0, 3, BigDecimal.ZERO));
         fillChecker.setFillResult("ORD002", FillResult.partial(0, 3, BigDecimal.ZERO));
         fillChecker.setFillResult("ORD003", FillResult.partial(0, 3, BigDecimal.ZERO));
@@ -97,42 +92,57 @@ class RetryableOrderExecutorTest {
     }
 
     @Test
-    @DisplayName("부분체결이 연속 발생해도 최대 3회만 주문")
-    void 부분체결_연속_발생_시_최대_3회_제한() {
-        ExecutionOrder order = createOrder("QQQ", ExecutionOrderSide.BUY, 10);
-        broker.setOrderIds("ORD001", "ORD002", "ORD003");
+    @DisplayName("재시도 총 노출 한도를 넘기면 block 플래그와 함께 종료한다")
+    void blocksWhenRetryExposureExceeded() {
+        executor = createExecutor(new BigDecimal("250.00"));
+        executor.setWaitMs(0);
 
-        // 1차: 10주 → 7주 체결, 3주 미체결
-        fillChecker.setFillResult("ORD001", FillResult.partial(7, 3, new BigDecimal("700")));
-        // 2차: 3주 → 2주 체결, 1주 미체결
-        fillChecker.setFillResult("ORD002", FillResult.partial(2, 1, new BigDecimal("200")));
-        // 3차: 1주 → 0주 체결, 1주 미체결 (3번째 시도에서 실패)
-        fillChecker.setFillResult("ORD003", FillResult.partial(0, 1, BigDecimal.ZERO));
+        ExecutionOrder order = createOrder("QQQ", ExecutionOrderSide.BUY, 2);
 
         ExecutionResult result = executor.executeWithRetry(order);
 
-        // 총 9주 체결 (7 + 2 + 0)
-        assertThat(result.isPartial()).isTrue();
-        assertThat(result.filledQty()).isEqualTo(9);
-
-        // 중요: broker.setOrderIds에 3개만 설정했으므로,
-        // 4번째 주문이 시도되면 예외 발생했을 것
-        // 예외 없이 여기까지 왔다 = 최대 3회만 주문됨 ✅
+        assertThat(result.isFailed()).isTrue();
+        assertThat(result.isBlocked()).isTrue();
+        assertThat(result.blockReason()).isEqualTo(ExecutionBlockReason.RISK_LIMIT_BREACH);
+        assertThat(result.detailMessage()).contains("RETRY_EXPOSURE");
     }
 
     @Test
-    @DisplayName("버퍼 퍼센트는 시도 횟수에 따라 증가")
-    void 버퍼_증가_확인() {
+    @DisplayName("버퍼 tick 시퀀스는 시도 횟수에 따라 증가한다")
+    void bufferSequence() {
         assertThat(executor.getRetryTickOffset(1, ExecutionOrderSide.BUY)).isEqualTo(0);
         assertThat(executor.getRetryTickOffset(2, ExecutionOrderSide.BUY)).isEqualTo(1);
         assertThat(executor.getRetryTickOffset(3, ExecutionOrderSide.BUY)).isEqualTo(2);
+    }
+
+    private RetryableOrderExecutor createExecutor(BigDecimal maxRetryExposureUsd) {
+        ExecutionOrderFactory orderFactory = new ExecutionOrderFactory(
+                priceProvider,
+                new MarketLikePricingPolicy(new BigDecimal("0.01"), 0, 0, 1, 1, new BigDecimal("0.25"), 3, 2000));
+        ExecutionRiskLimitService riskLimitService = new ExecutionRiskLimitService(
+                new TradingOperationProps(
+                        OperatingMode.AUTO_LIVE,
+                        new TradingOperationProps.AutoLiveGateProps(5, true, true, true),
+                        new TradingOperationProps.KpiProps(true, 0, 0, new BigDecimal("5.0")),
+                        new TradingOperationProps.RiskLimitProps(
+                                BigDecimal.ZERO,
+                                BigDecimal.ZERO,
+                                maxRetryExposureUsd,
+                                BigDecimal.ZERO)),
+                new FakeExecutionJobRepository());
+        return new RetryableOrderExecutor(
+                broker,
+                fillChecker,
+                canceller,
+                orderFactory,
+                new MarketLikePricingPolicy(new BigDecimal("0.01"), 0, 0, 1, 1, new BigDecimal("0.25"), 3, 2000),
+                riskLimitService);
     }
 
     private ExecutionOrder createOrder(String symbol, ExecutionOrderSide side, long qty) {
         return ExecutionOrder.create(symbol, side, qty, new BigDecimal("100"), new BigDecimal("100.50"));
     }
 
-    // 테스트용 FakeBroker
     private static class FakeBroker implements OrderBroker {
         private String[] orderIds = { "ORD001" };
         private int callCount = 0;

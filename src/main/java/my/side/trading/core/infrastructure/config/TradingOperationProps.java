@@ -9,12 +9,14 @@ import java.math.BigDecimal;
 public record TradingOperationProps(
         OperatingMode mode,
         AutoLiveGateProps autoLiveGate,
-        KpiProps kpi
+        KpiProps kpi,
+        RiskLimitProps riskLimits
 ) {
     public TradingOperationProps {
         mode = mode == null ? OperatingMode.PAPER : mode;
         autoLiveGate = autoLiveGate == null ? new AutoLiveGateProps(5, true, true, true) : autoLiveGate;
         kpi = kpi == null ? new KpiProps(true, 0, 0, new BigDecimal("5.0")) : kpi;
+        riskLimits = riskLimits == null ? new RiskLimitProps(BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO) : riskLimits;
     }
 
     public record AutoLiveGateProps(
@@ -42,6 +44,27 @@ public record TradingOperationProps(
             maxOrderFailureRatePct = maxOrderFailureRatePct == null
                     ? new BigDecimal("5.0")
                     : maxOrderFailureRatePct;
+        }
+    }
+
+    public record RiskLimitProps(
+            BigDecimal maxOrderNotionalUsd,
+            BigDecimal maxDailyTurnoverPct,
+            BigDecimal maxRetryExposureUsd,
+            BigDecimal maxSlippagePct
+    ) {
+        public RiskLimitProps {
+            maxOrderNotionalUsd = normalize(maxOrderNotionalUsd);
+            maxDailyTurnoverPct = normalize(maxDailyTurnoverPct);
+            maxRetryExposureUsd = normalize(maxRetryExposureUsd);
+            maxSlippagePct = normalize(maxSlippagePct);
+        }
+
+        private static BigDecimal normalize(BigDecimal value) {
+            if (value == null || value.signum() < 0) {
+                return BigDecimal.ZERO;
+            }
+            return value;
         }
     }
 }

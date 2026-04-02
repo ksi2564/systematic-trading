@@ -44,7 +44,8 @@ class OperationsKpiServiceTest {
                 new TradingOperationProps(
                         my.side.trading.core.domain.operation.OperatingMode.AUTO_LIVE,
                         new TradingOperationProps.AutoLiveGateProps(5, true, true, true),
-                        new TradingOperationProps.KpiProps(true, 0, 0, new BigDecimal("5.0"))));
+                        new TradingOperationProps.KpiProps(true, 0, 0, new BigDecimal("5.0")),
+                        new TradingOperationProps.RiskLimitProps(BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO)));
 
         OperationsKpiSnapshot snapshot = service.snapshot();
 
@@ -76,7 +77,8 @@ class OperationsKpiServiceTest {
                 new TradingOperationProps(
                         my.side.trading.core.domain.operation.OperatingMode.AUTO_LIVE,
                         new TradingOperationProps.AutoLiveGateProps(5, true, true, true),
-                        new TradingOperationProps.KpiProps(true, 0, 0, new BigDecimal("5.0"))));
+                        new TradingOperationProps.KpiProps(true, 0, 0, new BigDecimal("5.0")),
+                        new TradingOperationProps.RiskLimitProps(BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO)));
 
         OperationsKpiSnapshot snapshot = service.snapshot();
 

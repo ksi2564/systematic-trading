@@ -69,6 +69,20 @@ public class ExecutionJobRepositoryImpl implements ExecutionJobRepository {
 
     @Override
     @Transactional(readOnly = true)
+    public List<ExecutionJob> findAllBySignalDate(LocalDate signalDate) {
+        return jobJpaRepository.findAllBySignalDate(signalDate).stream()
+                .map(jobEntity -> {
+                    List<ExecutionOrder> orders = orderJpaRepository.findAllByJobId(jobEntity.getId())
+                            .stream()
+                            .map(ExecutionOrderEntity::toDomain)
+                            .toList();
+                    return jobEntity.toDomain(orders);
+                })
+                .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public List<ExecutionJob> findAll() {
         return jobJpaRepository.findAll().stream()
                 .map(jobEntity -> {

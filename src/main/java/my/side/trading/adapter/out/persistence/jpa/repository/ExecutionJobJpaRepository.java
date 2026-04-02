@@ -8,4 +8,6 @@ import java.util.Optional;
 
 public interface ExecutionJobJpaRepository extends JpaRepository<ExecutionJobEntity, Long> {
     Optional<ExecutionJobEntity> findBySignalDate(LocalDate signalDate);
+
+    java.util.List<ExecutionJobEntity> findAllBySignalDate(LocalDate signalDate);
 }

@@ -3,13 +3,16 @@ package my.side.trading.core.application.execution;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import my.side.trading.core.domain.execution.ExecutionTriggerType;
-import my.side.trading.core.domain.execution.order.*;
+import my.side.trading.core.domain.execution.order.ExecutionJob;
+import my.side.trading.core.domain.execution.order.ExecutionJobRepository;
+import my.side.trading.core.domain.execution.order.ExecutionOrder;
+import my.side.trading.core.domain.execution.order.ExecutionOrderSide;
+import my.side.trading.core.domain.execution.order.OrderInquiry;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.util.Comparator;
 import java.util.List;
-import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -20,17 +23,13 @@ public class ExecutionJobExecutor {
     private final RetryableOrderExecutor orderExecutor;
     private final OrderInquiry orderInquiry;
     private final ExecutionGuard guard;
+    private final ExecutionRiskLimitService riskLimitService;
 
-    /**
-     * Job 실행 – 외부 I/O(주문/체결/취소)를 포함하므로 @Transactional 미적용
-     * DB 저장은 개별 시점에서 짧은 트랜잭션으로 처리 (jobRepository.save 호출)
-     */
     public ExecutionJob execute(Long jobId, LocalDateTime now) {
         return execute(jobId, now, ExecutionTriggerType.MANUAL);
     }
 
     public ExecutionJob execute(Long jobId, LocalDateTime now, ExecutionTriggerType triggerType) {
-        // 1. 실행 권한 체크 (Kill Switch 등)
         guard.requireExecutionAllowed(triggerType);
 
         ExecutionJob job = jobRepository.findById(jobId)
@@ -40,15 +39,16 @@ public class ExecutionJobExecutor {
             job.start(now);
             jobRepository.save(job);
 
-            // 2. 주문 정렬: SELL 먼저, 그 다음 BUY
-            // (현금 확보를 위해 매도 먼저 실행)
             List<ExecutionOrder> sortedOrders = job.getOrders().stream()
                     .sorted(Comparator.comparing((ExecutionOrder o) -> o.getSide() == ExecutionOrderSide.SELL ? 0 : 1)
                             .thenComparing(ExecutionOrder::getSymbol))
-                    .collect(Collectors.toList());
+                    .toList();
 
             for (ExecutionOrder order : sortedOrders) {
-                processOrder(job, order, now);
+                if (processOrder(job, order, now)) {
+                    skipRemainingOrders(job, order.getId(), now, "Blocked by RISK_LIMIT_BREACH");
+                    break;
+                }
             }
 
             job.completeIfAllTerminal(now);
@@ -59,20 +59,45 @@ public class ExecutionJobExecutor {
         }
     }
 
-    private void processOrder(ExecutionJob job, ExecutionOrder order, LocalDateTime now) {
+    private boolean processOrder(ExecutionJob job, ExecutionOrder order, LocalDateTime now) {
         try {
             job.markOrderRequested(order.getId(), "Starting execution");
 
             ExecutionResult result = orderExecutor.executeWithRetry(order);
+            result = applySlippageGuard(order, result);
 
             if (result.isSuccess() || result.isPartial()) {
-                job.acceptOrder(order.getId(), result.brokerOrderId(), "Success", now);
+                job.acceptOrder(order.getId(), result.brokerOrderId(), orderMessage("Success", result), now);
             } else {
-                job.rejectOrder(order.getId(), result.brokerOrderId(), "Failed", now);
+                job.rejectOrder(order.getId(), result.brokerOrderId(), orderMessage("Failed", result), now);
             }
+            return result.isBlocked();
         } catch (Exception e) {
             log.error("Order processing error: orderId={}", order.getId(), e);
             job.rejectOrder(order.getId(), null, "Error: " + e.getMessage(), now);
+            return false;
         }
+    }
+
+    private ExecutionResult applySlippageGuard(ExecutionOrder order, ExecutionResult result) {
+        if (!result.isSuccess() && !result.isPartial()) {
+            return result;
+        }
+        return riskLimitService.slippageViolation(order, result)
+                .map(violation -> result.withBlock(ExecutionBlockReason.RISK_LIMIT_BREACH, violation.summary()))
+                .orElse(result);
+    }
+
+    private String orderMessage(String defaultMessage, ExecutionResult result) {
+        return result.detailMessage() == null || result.detailMessage().isBlank()
+                ? defaultMessage
+                : defaultMessage + " | " + result.detailMessage();
+    }
+
+    private void skipRemainingOrders(ExecutionJob job, Long processedOrderId, LocalDateTime now, String message) {
+        job.getOrders().stream()
+                .filter(order -> !order.isTerminal())
+                .filter(order -> !order.getId().equals(processedOrderId))
+                .forEach(order -> job.skipOrder(order.getId(), message, now));
     }
 }

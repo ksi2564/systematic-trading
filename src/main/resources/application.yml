@@ -67,6 +67,11 @@ trading:
       max-duplicate-signal-jobs: 0
       max-unresolved-orders: 0
       max-order-failure-rate-pct: 5.0
+    risk-limits:
+      max-order-notional-usd: 0
+      max-daily-turnover-pct: 0
+      max-retry-exposure-usd: 0
+      max-slippage-pct: 0
   security:
     api-key: ${TRADING_API_KEY:change-me}
     public-path-prefixes: []

@@ -11,12 +11,14 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
+import java.util.List;
 
 @Slf4j
 @RequiredArgsConstructor
 public class ApiKeyAuthFilter implements Filter {
 
     private final String validApiKey;
+    private final List<String> publicPathPrefixes;
     private static final String API_KEY_HEADER = "X-API-KEY";
 
     @Override
@@ -45,9 +47,6 @@ public class ApiKeyAuthFilter implements Filter {
     }
 
     private boolean isPublicPath(String path) {
-        return path.startsWith("/api/dashboard") ||
-                path.startsWith("/swagger-ui") ||
-                path.startsWith("/v3/api-docs") ||
-                path.startsWith("/actuator");
+        return publicPathPrefixes.stream().anyMatch(path::startsWith);
     }
 }

@@ -10,3 +10,7 @@ logging:
     # 운영 환경에서는 SQL 로그를 줄이거나 INFO로 변경
     org.hibernate.SQL: INFO
     my.side.trading: INFO
+
+trading:
+  security:
+    public-path-prefixes: []

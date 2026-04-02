@@ -15,17 +15,20 @@ import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 import java.time.Duration;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 @Slf4j
 public class RateLimitFilter implements Filter {
 
     private final Cache<String, Bucket> buckets;
+    private final List<String> publicPathPrefixes;
 
-    public RateLimitFilter() {
+    public RateLimitFilter(List<String> publicPathPrefixes) {
         this.buckets = Caffeine.newBuilder()
                 .expireAfterAccess(1, TimeUnit.HOURS)
                 .build();
+        this.publicPathPrefixes = publicPathPrefixes == null ? List.of() : List.copyOf(publicPathPrefixes);
     }
 
     @Override
@@ -55,10 +58,7 @@ public class RateLimitFilter implements Filter {
      * 레이트리밋 적용 제외 대상인 공개 경로 여부 확인
      */
     private boolean isPublicPath(String path) {
-        return path.startsWith("/api/dashboard") ||
-                path.startsWith("/swagger-ui") ||
-                path.startsWith("/v3/api-docs") ||
-                path.startsWith("/actuator");
+        return publicPathPrefixes.stream().anyMatch(path::startsWith);
     }
 
     private Bucket createNewBucket() {

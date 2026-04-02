@@ -57,6 +57,9 @@ trading:
       require-zero-pending-orders: true
       require-zero-duplicate-signal-jobs: true
       require-manual-approval-record: true
+  security:
+    api-key: ${TRADING_API_KEY:change-me}
+    public-path-prefixes: []
   scheduling:
     enabled: false
   execution:

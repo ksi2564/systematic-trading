@@ -1,9 +1,16 @@
-# 🗺️ 개발 로드맵 및 가이드 (Developer Roadmap)
+# 개발 로드맵 및 가이드
 
-> 주의: 이 문서는 초기 구현 단계의 로드맵 기록입니다.
-> 현재 제품 기준 기획은 `docs/QQQ_AutoTrading_FullPlan.md`를 우선합니다.
+> 상태: Active
+> 
+> 이 문서는 구현 우선순위와 후속 작업 정리를 위한 로드맵 문서입니다.
+> 현재 기준 문서는 아래 4개를 우선합니다.
+> 
+> - `docs/PRODUCT_REQUIREMENTS.md`
+> - `docs/STRATEGY_SPEC.md`
+> - `docs/OPERATIONS_RUNBOOK.md`
+> - `docs/CURRENT_IMPLEMENTATION_SYNC.md`
 
-기획서(`QQQ_AutoTrading_FullPlan.md`)에 정의된 시스템을 완성하기 위한 단계별 개발 계획입니다.
+이 문서는 기준 문서에 정의된 제품, 전략, 운영, 구현 갭을 실제 개발 일정과 작업 단위로 연결하기 위한 문서입니다.
 
 ---
 

@@ -148,4 +148,126 @@ class RebalanceDecisionServiceTest {
                 assertThat(decision.shouldRebalance()).isFalse();
                 assertThat(decision.reason()).contains("허용범위(±10.0%) 이내");
         }
+
+        @Test
+        void vix_트리거시_이전비중보다_tqqq가_늘어나면_이전비중으로_제한한다() {
+                TradingStrategyProps props = new TradingStrategyProps(
+                                new BigDecimal("5.0"),
+                                List.of("QQQ", "QLD", "TQQQ"),
+                                List.of("TQQQ", "QLD", "QQQ"),
+                                List.of("QQQ", "QLD", "TQQQ"));
+                TradingCircuitBreakerProps cbProps = new TradingCircuitBreakerProps(true, true, new BigDecimal("35"), 200);
+                RebalanceDecisionService customService = new RebalanceDecisionService(props, new CircuitBreakerService(cbProps));
+
+                StrategyState state = new StrategyState(
+                                LocalDate.of(2026, 4, 1),
+                                new BigDecimal("500"),
+                                new BigDecimal("420"),
+                                new BigDecimal("16.0000"),
+                                new BigDecimal("20.0000"),
+                                DdBucket.FROM_15_TO_25,
+                                StrategyPhase.DRAWDOWN,
+                                WeightSet.of(30, 30, 40),
+                                true,
+                                1);
+                Portfolio portfolio = new Portfolio(
+                                BigDecimal.ZERO,
+                                List.of(
+                                                new Position("QQQ", new BigDecimal("4"), BigDecimal.ZERO, new BigDecimal("100")),
+                                                new Position("QLD", new BigDecimal("4"), BigDecimal.ZERO, new BigDecimal("100")),
+                                                new Position("TQQQ", new BigDecimal("2"), BigDecimal.ZERO, new BigDecimal("100"))));
+                WeightSet prevWeights = WeightSet.of(60, 30, 10);
+
+                RebalanceDecision decision = customService.decide(
+                                state,
+                                portfolio,
+                                prevWeights,
+                                new BigDecimal("40"),
+                                new BigDecimal("400"));
+
+                assertThat(decision.shouldRebalance()).isTrue();
+                assertThat(decision.targetWeights()).isEqualTo(prevWeights);
+                assertThat(decision.reason()).contains("VIX Circuit Breaker 활성");
+        }
+
+        @Test
+        void ma와_vix가_동시에_트리거되면_ma를_먼저_적용한_후_vix를_적용한다() {
+                TradingStrategyProps props = new TradingStrategyProps(
+                                new BigDecimal("5.0"),
+                                List.of("QQQ", "QLD", "TQQQ"),
+                                List.of("TQQQ", "QLD", "QQQ"),
+                                List.of("QQQ", "QLD", "TQQQ"));
+                TradingCircuitBreakerProps cbProps = new TradingCircuitBreakerProps(true, true, new BigDecimal("35"), 200);
+                RebalanceDecisionService customService = new RebalanceDecisionService(props, new CircuitBreakerService(cbProps));
+
+                StrategyState state = new StrategyState(
+                                LocalDate.of(2026, 4, 1),
+                                new BigDecimal("500"),
+                                new BigDecimal("390"),
+                                new BigDecimal("22.0000"),
+                                new BigDecimal("30.0000"),
+                                DdBucket.FROM_25_TO_35,
+                                StrategyPhase.DRAWDOWN,
+                                WeightSet.of(20, 20, 60),
+                                true,
+                                1);
+                Portfolio portfolio = new Portfolio(
+                                BigDecimal.ZERO,
+                                List.of(
+                                                new Position("QQQ", new BigDecimal("4"), BigDecimal.ZERO, new BigDecimal("100")),
+                                                new Position("QLD", new BigDecimal("4"), BigDecimal.ZERO, new BigDecimal("100")),
+                                                new Position("TQQQ", new BigDecimal("2"), BigDecimal.ZERO, new BigDecimal("100"))));
+                WeightSet prevWeights = WeightSet.of(30, 30, 40);
+
+                RebalanceDecision decision = customService.decide(
+                                state,
+                                portfolio,
+                                prevWeights,
+                                new BigDecimal("38"),
+                                new BigDecimal("400"));
+
+                assertThat(decision.shouldRebalance()).isTrue();
+                assertThat(decision.targetWeights()).isEqualTo(prevWeights);
+                assertThat(decision.reason()).contains("VIX Circuit Breaker 활성");
+                assertThat(decision.reason()).contains("200MA Circuit Breaker 활성");
+        }
+
+        @Test
+        void 이전비중이_없어도_vix_트리거만으로_실패하지_않고_원래목표비중을_사용한다() {
+                TradingStrategyProps props = new TradingStrategyProps(
+                                new BigDecimal("5.0"),
+                                List.of("QQQ", "QLD", "TQQQ"),
+                                List.of("TQQQ", "QLD", "QQQ"),
+                                List.of("QQQ", "QLD", "TQQQ"));
+                TradingCircuitBreakerProps cbProps = new TradingCircuitBreakerProps(true, true, new BigDecimal("35"), 200);
+                RebalanceDecisionService customService = new RebalanceDecisionService(props, new CircuitBreakerService(cbProps));
+
+                StrategyState state = new StrategyState(
+                                LocalDate.of(2026, 4, 1),
+                                new BigDecimal("500"),
+                                new BigDecimal("420"),
+                                new BigDecimal("16.0000"),
+                                new BigDecimal("20.0000"),
+                                DdBucket.FROM_15_TO_25,
+                                StrategyPhase.DRAWDOWN,
+                                WeightSet.of(30, 30, 40),
+                                true,
+                                1);
+                Portfolio portfolio = new Portfolio(
+                                BigDecimal.ZERO,
+                                List.of(
+                                                new Position("QQQ", new BigDecimal("4"), BigDecimal.ZERO, new BigDecimal("100")),
+                                                new Position("QLD", new BigDecimal("4"), BigDecimal.ZERO, new BigDecimal("100")),
+                                                new Position("TQQQ", new BigDecimal("2"), BigDecimal.ZERO, new BigDecimal("100"))));
+
+                RebalanceDecision decision = customService.decide(
+                                state,
+                                portfolio,
+                                null,
+                                new BigDecimal("40"),
+                                new BigDecimal("400"));
+
+                assertThat(decision.shouldRebalance()).isTrue();
+                assertThat(decision.targetWeights()).isEqualTo(state.targetWeights());
+        }
 }

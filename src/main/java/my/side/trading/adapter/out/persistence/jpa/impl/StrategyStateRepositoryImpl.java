@@ -7,6 +7,7 @@ import my.side.trading.adapter.out.persistence.jpa.entity.StrategyStateEntity;
 import my.side.trading.adapter.out.persistence.jpa.repository.StrategyStateJpaRepository;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDate;
 import java.util.Optional;
 
 @Repository
@@ -18,6 +19,12 @@ public class StrategyStateRepositoryImpl implements StrategyStateRepository {
     @Override
     public Optional<StrategyState> findLatestState() {
         return jpaRepository.findTopByOrderByAsOfDateDesc()
+                .map(StrategyStateEntity::toDomain);
+    }
+
+    @Override
+    public Optional<StrategyState> findPreviousState(LocalDate asOfDate) {
+        return jpaRepository.findFirstByAsOfDateLessThanOrderByAsOfDateDesc(asOfDate)
                 .map(StrategyStateEntity::toDomain);
     }
 

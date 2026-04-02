@@ -39,6 +39,15 @@ public class RebalanceDecisionService {
      * @param qqqMa200  QQQ 200MA (없으면 null)
      */
     public RebalanceDecision decide(StrategyState state, Portfolio portfolio, BigDecimal vix, BigDecimal qqqMa200) {
+        return decide(state, portfolio, null, vix, qqqMa200);
+    }
+
+    public RebalanceDecision decide(
+            StrategyState state,
+            Portfolio portfolio,
+            WeightSet prevWeights,
+            BigDecimal vix,
+            BigDecimal qqqMa200) {
 
         // 전략 OFF면 리밸런싱 판단 자체를 하지 않음
         if (!state.strategyOn()) {
@@ -58,7 +67,7 @@ public class RebalanceDecisionService {
         boolean vixTriggered = circuitBreakerService.isVixTriggered(vix);
         boolean maTriggered = circuitBreakerService.isMaTriggered(state.lastClose(), qqqMa200);
         WeightSet target = circuitBreakerService.adjustWeights(
-                originalTarget, null, vixTriggered, maTriggered);
+                originalTarget, prevWeights, vixTriggered, maTriggered);
 
         // 실제 비중이 목표 비중 대비 ±tolerancePct% 이상 이탈
         boolean exceeds = symbols.stream().anyMatch(sym -> {

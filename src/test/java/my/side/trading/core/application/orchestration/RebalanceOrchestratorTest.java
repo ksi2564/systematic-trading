@@ -57,10 +57,11 @@ class RebalanceOrchestratorTest {
         ExecutionJob job = sampleJob();
 
         when(stateRepository.findLatestState()).thenReturn(Optional.of(state));
+        when(stateRepository.findPreviousState(state.asOfDate())).thenReturn(Optional.empty());
         when(portfolioService.getCurrentPortfolio()).thenReturn(portfolio);
         when(marketDataProvider.getVixPrice()).thenReturn(Optional.empty());
         when(marketDataProvider.getQqq200Ma()).thenReturn(Optional.empty());
-        when(decisionService.decide(state, portfolio, null, null)).thenReturn(decision);
+        when(decisionService.decide(state, portfolio, null, null, null)).thenReturn(decision);
         when(jobCreateService.createJob(eq(state.asOfDate()), any(), eq(decision), eq(portfolio)))
                 .thenReturn(Optional.of(job));
         when(executionGuard.getExecutionBlockReason(ExecutionTriggerType.MANUAL))
@@ -105,10 +106,11 @@ class RebalanceOrchestratorTest {
         LocalDateTime now = LocalDateTime.of(2026, 4, 2, 23, 45);
 
         when(stateRepository.findLatestState()).thenReturn(Optional.of(state));
+        when(stateRepository.findPreviousState(state.asOfDate())).thenReturn(Optional.empty());
         when(portfolioService.getCurrentPortfolio()).thenReturn(portfolio);
         when(marketDataProvider.getVixPrice()).thenReturn(Optional.empty());
         when(marketDataProvider.getQqq200Ma()).thenReturn(Optional.empty());
-        when(decisionService.decide(state, portfolio, null, null)).thenReturn(decision);
+        when(decisionService.decide(state, portfolio, null, null, null)).thenReturn(decision);
         when(jobCreateService.createJob(state.asOfDate(), now, decision, portfolio)).thenReturn(Optional.of(job));
         when(executionGuard.getExecutionBlockReason(ExecutionTriggerType.AUTOMATED)).thenReturn(Optional.empty());
         when(executionGuard.currentMode()).thenReturn(OperatingMode.AUTO_LIVE);
@@ -128,6 +130,54 @@ class RebalanceOrchestratorTest {
         assertThat(result.executed()).isTrue();
         assertThat(result.executionBlockReason()).isNull();
         verify(jobExecutor).execute(job.getId(), now, ExecutionTriggerType.AUTOMATED);
+    }
+
+    @Test
+    void 이전_전략상태가_있으면_prevWeights를_결정서비스로_전달한다() {
+        StrategyStateRepository stateRepository = mock(StrategyStateRepository.class);
+        PortfolioService portfolioService = mock(PortfolioService.class);
+        RebalanceDecisionService decisionService = mock(RebalanceDecisionService.class);
+        ExecutionJobCreateService jobCreateService = mock(ExecutionJobCreateService.class);
+        ExecutionJobExecutor jobExecutor = mock(ExecutionJobExecutor.class);
+        MarketDataProvider marketDataProvider = mock(MarketDataProvider.class);
+        ExecutionGuard executionGuard = mock(ExecutionGuard.class);
+
+        StrategyState previousState = new StrategyState(
+                LocalDate.of(2026, 3, 31),
+                new BigDecimal("500"),
+                new BigDecimal("470"),
+                new BigDecimal("6"),
+                new BigDecimal("12"),
+                DdBucket.LESS_THAN_15,
+                StrategyPhase.NORMAL,
+                WeightSet.of(60, 30, 10),
+                true,
+                1);
+        StrategyState state = sampleState();
+        Portfolio portfolio = new Portfolio(new BigDecimal("1000"), List.of());
+        RebalanceDecision decision = RebalanceDecision.no("within tolerance");
+
+        when(stateRepository.findLatestState()).thenReturn(Optional.of(state));
+        when(stateRepository.findPreviousState(state.asOfDate())).thenReturn(Optional.of(previousState));
+        when(portfolioService.getCurrentPortfolio()).thenReturn(portfolio);
+        when(marketDataProvider.getVixPrice()).thenReturn(Optional.empty());
+        when(marketDataProvider.getQqq200Ma()).thenReturn(Optional.empty());
+        when(decisionService.decide(state, portfolio, previousState.targetWeights(), null, null)).thenReturn(decision);
+        when(executionGuard.currentMode()).thenReturn(OperatingMode.AUTO_LIVE);
+
+        RebalanceOrchestrator orchestrator = new RebalanceOrchestrator(
+                stateRepository,
+                portfolioService,
+                decisionService,
+                jobCreateService,
+                jobExecutor,
+                marketDataProvider,
+                executionGuard);
+
+        RebalanceRunResult result = orchestrator.run(LocalDateTime.of(2026, 4, 2, 23, 45), ExecutionTriggerType.AUTOMATED);
+
+        assertThat(result.jobCreated()).isFalse();
+        verify(decisionService).decide(state, portfolio, previousState.targetWeights(), null, null);
     }
 
     private StrategyState sampleState() {

@@ -27,8 +27,6 @@ import java.util.Optional;
 @RequiredArgsConstructor
 public class ExecutionJobCreateService {
 
-    private static final BigDecimal DEFAULT_BUFFER_PCT = new BigDecimal("0.3");
-
     private final ExecutionOrderFactory orderFactory;
     private final ExecutionJobRepository jobRepository;
 
@@ -37,15 +35,6 @@ public class ExecutionJobCreateService {
             LocalDateTime executeAfter,
             RebalanceDecision decision,
             Portfolio portfolio) {
-        return createJob(signalDate, executeAfter, decision, portfolio, DEFAULT_BUFFER_PCT);
-    }
-
-    public Optional<ExecutionJob> createJob(
-            LocalDate signalDate,
-            LocalDateTime executeAfter,
-            RebalanceDecision decision,
-            Portfolio portfolio,
-            BigDecimal bufferPct) {
         if (!decision.shouldRebalance()) {
             throw new IllegalArgumentException("shouldRebalance=false decision으로 job 생성 불가");
         }
@@ -64,8 +53,7 @@ public class ExecutionJobCreateService {
                     intent.side(),
                     targetWeights,
                     portfolio,
-                    remainingCash,
-                    bufferPct).orElse(null);
+                    remainingCash).orElse(null);
 
             if (ocd == null)
                 continue;

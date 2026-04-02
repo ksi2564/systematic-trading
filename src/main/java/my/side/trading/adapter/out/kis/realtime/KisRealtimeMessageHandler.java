@@ -10,6 +10,7 @@ import my.side.trading.adapter.out.realtime.InMemoryRealtimePriceProvider;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 
 /**
  * 해당 코드는 수도 코드를 포함하고 있음
@@ -176,7 +177,11 @@ public class KisRealtimeMessageHandler {
                 askVolumeChange1);
 
         // 여기서 서비스/캐시/이벤트 퍼블리시 등으로 넘기기
-        priceProvider.updatePrice(quote.symbol(), BigDecimal.valueOf(quote.bidPrice1()));
+        BigDecimal bestBid = BigDecimal.valueOf(quote.bidPrice1());
+        BigDecimal bestAsk = BigDecimal.valueOf(quote.askPrice1());
+        BigDecimal lastPrice = bestBid.add(bestAsk)
+                .divide(new BigDecimal("2"), 4, RoundingMode.HALF_UP);
+        priceProvider.updateQuote(quote.symbol(), lastPrice, bestBid, bestAsk);
     }
 
     /**

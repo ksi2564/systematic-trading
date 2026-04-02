@@ -18,12 +18,10 @@ class ExecutionOrderFactoryTest {
 
         @Test
         void 매도수량이_보유수량_초과_시_보유수량_상한_처리되고_현금변화량은_양수() {
-                FakeRealtimePriceProvider priceProvider = new FakeRealtimePriceProvider(
+                FakeRealtimePriceProvider priceProvider = FakeRealtimePriceProvider.withLastPrices(
                                 Map.of("QQQ", new BigDecimal("100.00")));
                 MarketLikePricingPolicy pricing = new MarketLikePricingPolicy(
-                                new BigDecimal("0.5"),
-                                new BigDecimal("0.5"),
-                                new BigDecimal("0.25"));
+                                new BigDecimal("0.01"), 0, 0, 1, 1, new BigDecimal("0.25"), 3, 2000);
 
                 ExecutionOrderFactory factory = new ExecutionOrderFactory(priceProvider, pricing);
 
@@ -41,8 +39,7 @@ class ExecutionOrderFactoryTest {
                                 ExecutionOrderSide.SELL,
                                 targetWeights,
                                 portfolio,
-                                BigDecimal.ZERO,
-                                new BigDecimal("0.3")).orElseThrow();
+                                BigDecimal.ZERO).orElseThrow();
 
                 assertThat(ocd.order().getQuantity()).isEqualTo(1);
                 assertThat(ocd.cashDelta().signum()).isPositive();
@@ -50,12 +47,10 @@ class ExecutionOrderFactoryTest {
 
         @Test
         void 매수수량이_잔여현금_초과_시_매수가능한_수량만큼_상한_처리되고_현금변화량은_음수() {
-                FakeRealtimePriceProvider priceProvider = new FakeRealtimePriceProvider(
+                FakeRealtimePriceProvider priceProvider = FakeRealtimePriceProvider.withLastPrices(
                                 Map.of("QQQ", new BigDecimal("100.00")));
                 MarketLikePricingPolicy pricing = new MarketLikePricingPolicy(
-                                new BigDecimal("0.5"),
-                                new BigDecimal("0.5"),
-                                new BigDecimal("0.25"));
+                                new BigDecimal("0.01"), 0, 0, 1, 1, new BigDecimal("0.25"), 3, 2000);
 
                 ExecutionOrderFactory factory = new ExecutionOrderFactory(priceProvider, pricing);
 
@@ -70,8 +65,7 @@ class ExecutionOrderFactoryTest {
                                 ExecutionOrderSide.BUY,
                                 targetWeights,
                                 portfolio,
-                                new BigDecimal("200.00"),
-                                new BigDecimal("0.3")).orElseThrow();
+                                new BigDecimal("200.00")).orElseThrow();
 
                 assertThat(ocd.order().getSide()).isEqualTo(ExecutionOrderSide.BUY);
                 assertThat(ocd.order().getQuantity()).isGreaterThanOrEqualTo(1);
@@ -80,12 +74,10 @@ class ExecutionOrderFactoryTest {
 
         @Test
         void 수량이_0이면_빈_결과_반환() {
-                FakeRealtimePriceProvider priceProvider = new FakeRealtimePriceProvider(
+                FakeRealtimePriceProvider priceProvider = FakeRealtimePriceProvider.withLastPrices(
                                 Map.of("QQQ", new BigDecimal("100.00")));
                 MarketLikePricingPolicy pricing = new MarketLikePricingPolicy(
-                                new BigDecimal("0.5"),
-                                new BigDecimal("0.5"),
-                                new BigDecimal("0.25"));
+                                new BigDecimal("0.01"), 0, 0, 1, 1, new BigDecimal("0.25"), 3, 2000);
 
                 ExecutionOrderFactory factory = new ExecutionOrderFactory(priceProvider, pricing);
 
@@ -102,7 +94,39 @@ class ExecutionOrderFactoryTest {
                                 ExecutionOrderSide.BUY,
                                 targetWeights,
                                 portfolio,
-                                BigDecimal.ZERO,
-                                new BigDecimal("0.3"))).isEmpty();
+                                BigDecimal.ZERO)).isEmpty();
+        }
+
+        @Test
+        void 매수는_bestAsk_매도는_bestBid를_기준가격으로_사용한다() {
+                FakeRealtimePriceProvider priceProvider = FakeRealtimePriceProvider.withLastPrices(
+                                Map.of("QQQ", new BigDecimal("100.00")));
+                priceProvider.updateQuote("QQQ", new BigDecimal("100.00"), new BigDecimal("99.80"),
+                                new BigDecimal("100.20"));
+                MarketLikePricingPolicy pricing = new MarketLikePricingPolicy(
+                                new BigDecimal("0.01"), 0, 0, 1, 1, new BigDecimal("0.25"), 3, 2000);
+
+                ExecutionOrderFactory factory = new ExecutionOrderFactory(priceProvider, pricing);
+
+                OrderAndCashDelta buy = factory.fromTargetWeight(
+                                "QQQ",
+                                ExecutionOrderSide.BUY,
+                                new WeightSet(new BigDecimal("100"), BigDecimal.ZERO, BigDecimal.ZERO),
+                                new Portfolio(new BigDecimal("1000"), List.of()),
+                                new BigDecimal("1000")).orElseThrow();
+
+                OrderAndCashDelta sell = factory.fromTargetWeight(
+                                "QQQ",
+                                ExecutionOrderSide.SELL,
+                                new WeightSet(BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO),
+                                new Portfolio(new BigDecimal("0"), List.of(
+                                                new Position("QQQ", new BigDecimal("1"), new BigDecimal("90"),
+                                                                new BigDecimal("100")))),
+                                BigDecimal.ZERO).orElseThrow();
+
+                assertThat(buy.order().getRefPrice()).isEqualByComparingTo("100.20");
+                assertThat(buy.order().getLimitPrice()).isEqualByComparingTo("100.20");
+                assertThat(sell.order().getRefPrice()).isEqualByComparingTo("99.80");
+                assertThat(sell.order().getLimitPrice()).isEqualByComparingTo("99.80");
         }
 }

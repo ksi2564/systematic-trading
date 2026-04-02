@@ -24,10 +24,10 @@ class ExecutionJobCreateServiceTest {
 
         @Test
         void 계획_가능한_주문이_하나라도_있으면_Job_생성() {
-                FakeRealtimePriceProvider priceProvider = new FakeRealtimePriceProvider(Map.of(
+                FakeRealtimePriceProvider priceProvider = FakeRealtimePriceProvider.withLastPrices(Map.of(
                                 "QQQ", new BigDecimal("100.00")));
                 MarketLikePricingPolicy pricing = new MarketLikePricingPolicy(
-                                new BigDecimal("0.5"), new BigDecimal("0.5"), new BigDecimal("0.25"));
+                                new BigDecimal("0.01"), 0, 0, 1, 1, new BigDecimal("0.25"), 3, 2000);
                 ExecutionOrderFactory factory = new ExecutionOrderFactory(priceProvider, pricing);
 
                 FakeExecutionJobRepository repo = new FakeExecutionJobRepository();
@@ -57,10 +57,10 @@ class ExecutionJobCreateServiceTest {
 
         @Test
         void 계획_가능한_주문이_없으면_Job_생성_안함() {
-                FakeRealtimePriceProvider priceProvider = new FakeRealtimePriceProvider(Map.of(
+                FakeRealtimePriceProvider priceProvider = FakeRealtimePriceProvider.withLastPrices(Map.of(
                                 "QQQ", new BigDecimal("100.00")));
                 MarketLikePricingPolicy pricing = new MarketLikePricingPolicy(
-                                new BigDecimal("0.5"), new BigDecimal("0.5"), new BigDecimal("0.25"));
+                                new BigDecimal("0.01"), 0, 0, 1, 1, new BigDecimal("0.25"), 3, 2000);
                 ExecutionOrderFactory factory = new ExecutionOrderFactory(priceProvider, pricing);
 
                 FakeExecutionJobRepository repo = new FakeExecutionJobRepository();
@@ -89,10 +89,10 @@ class ExecutionJobCreateServiceTest {
 
         @Test
         void 같은_signalDate_Job이_이미_있으면_새로_생성_안함() {
-                FakeRealtimePriceProvider priceProvider = new FakeRealtimePriceProvider(Map.of(
+                FakeRealtimePriceProvider priceProvider = FakeRealtimePriceProvider.withLastPrices(Map.of(
                                 "QQQ", new BigDecimal("100.00")));
                 MarketLikePricingPolicy pricing = new MarketLikePricingPolicy(
-                                new BigDecimal("0.5"), new BigDecimal("0.5"), new BigDecimal("0.25"));
+                                new BigDecimal("0.01"), 0, 0, 1, 1, new BigDecimal("0.25"), 3, 2000);
                 ExecutionOrderFactory factory = new ExecutionOrderFactory(priceProvider, pricing);
 
                 FakeExecutionJobRepository repo = new FakeExecutionJobRepository();

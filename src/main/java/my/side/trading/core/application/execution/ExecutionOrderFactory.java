@@ -7,6 +7,7 @@ import my.side.trading.core.domain.execution.order.ExecutionOrderSide;
 import my.side.trading.core.domain.portfolio.Portfolio;
 import my.side.trading.core.domain.portfolio.Position;
 import my.side.trading.core.domain.portfolio.RealtimePriceProvider;
+import my.side.trading.core.domain.portfolio.RealtimeQuote;
 import my.side.trading.core.domain.strategy.WeightSet;
 import org.springframework.stereotype.Component;
 
@@ -36,7 +37,6 @@ public class ExecutionOrderFactory {
      * @param targetWeights    목표 비중
      * @param portfolio        현재 포트폴리오
      * @param remainingCashUsd 사용 가능한 현금 (매수 시)
-     * @param bufferPct        버퍼 퍼센트 (예: 0.3 = 0.3%)
      * @return 생성된 주문과 예상 현금 변동
      */
     public Optional<OrderAndCashDelta> fromTargetWeight(
@@ -44,12 +44,11 @@ public class ExecutionOrderFactory {
             ExecutionOrderSide side,
             WeightSet targetWeights,
             Portfolio portfolio,
-            BigDecimal remainingCashUsd,
-            BigDecimal bufferPct) {
-        BigDecimal refPrice = priceProvider.getLastPrice(symbol)
-                .orElseThrow(() -> new IllegalStateException("price cache miss: " + symbol));
-
-        BigDecimal limitPrice = computeLimitPrice(side, refPrice, bufferPct);
+            BigDecimal remainingCashUsd) {
+        RealtimeQuote quote = priceProvider.getQuote(symbol)
+                .orElseThrow(() -> new IllegalStateException("quote cache miss: " + symbol));
+        BigDecimal refPrice = resolveReferencePrice(side, quote);
+        BigDecimal limitPrice = computeLimitPrice(side, refPrice, 1);
         BigDecimal totalValue = portfolio.totalValue();
 
         // 목표 금액과 현재 보유 금액 계산
@@ -78,15 +77,27 @@ public class ExecutionOrderFactory {
         if (finalQty <= 0)
             return Optional.empty();
 
-        ExecutionOrder order = ExecutionOrder.create(
-                symbol,
-                side,
-                finalQty,
-                refPrice,
-                limitPrice);
+        ExecutionOrder order = createOrder(symbol, side, finalQty, quote, 1);
 
         BigDecimal cashDelta = estimateCashDelta(order);
         return Optional.of(new OrderAndCashDelta(order, cashDelta));
+    }
+
+    public ExecutionOrder repriceForRetry(ExecutionOrder original, long newQty, int attempt) {
+        RealtimeQuote quote = priceProvider.getQuote(original.getSymbol())
+                .orElseThrow(() -> new IllegalStateException("quote cache miss: " + original.getSymbol()));
+        BigDecimal refPrice = resolveReferencePrice(original.getSide(), quote);
+        BigDecimal limitPrice = computeLimitPrice(original.getSide(), refPrice, attempt);
+        return ExecutionOrder.rehydrate(
+                original.getId(),
+                original.getSymbol(),
+                original.getSide(),
+                newQty,
+                refPrice,
+                limitPrice,
+                original.getStatus(),
+                null,
+                null);
     }
 
     private BigDecimal getWeightForSymbol(WeightSet weights, String symbol) {
@@ -105,12 +116,35 @@ public class ExecutionOrderFactory {
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
-    private BigDecimal computeLimitPrice(ExecutionOrderSide side, BigDecimal refPrice, BigDecimal bufferPct) {
-        BigDecimal bufferRate = bufferPct.multiply(new BigDecimal("0.01"));
-        BigDecimal multiplier = (side == ExecutionOrderSide.BUY)
-                ? BigDecimal.ONE.add(bufferRate)
-                : BigDecimal.ONE.subtract(bufferRate);
-        return refPrice.multiply(multiplier).setScale(2, RoundingMode.HALF_UP);
+    private ExecutionOrder createOrder(
+            String symbol,
+            ExecutionOrderSide side,
+            long quantity,
+            RealtimeQuote quote,
+            int attempt) {
+        BigDecimal refPrice = resolveReferencePrice(side, quote);
+        BigDecimal limitPrice = computeLimitPrice(side, refPrice, attempt);
+        return ExecutionOrder.create(symbol, side, quantity, refPrice, limitPrice);
+    }
+
+    private BigDecimal resolveReferencePrice(ExecutionOrderSide side, RealtimeQuote quote) {
+        BigDecimal preferred = side == ExecutionOrderSide.BUY ? quote.bestAskPrice() : quote.bestBidPrice();
+        if (preferred != null && preferred.signum() > 0) {
+            return preferred.setScale(2, RoundingMode.HALF_UP);
+        }
+        if (quote.lastPrice() != null && quote.lastPrice().signum() > 0) {
+            return quote.lastPrice().setScale(2, RoundingMode.HALF_UP);
+        }
+        throw new IllegalStateException("주문 기준 가격을 계산할 수 없습니다.");
+    }
+
+    private BigDecimal computeLimitPrice(ExecutionOrderSide side, BigDecimal refPrice, int attempt) {
+        int ticks = pricingPolicy.priceTicksForAttempt(side, attempt);
+        BigDecimal adjustment = pricingPolicy.tickSize().multiply(BigDecimal.valueOf(ticks));
+        BigDecimal limitPrice = side == ExecutionOrderSide.BUY
+                ? refPrice.add(adjustment)
+                : refPrice.subtract(adjustment);
+        return limitPrice.setScale(2, RoundingMode.HALF_UP);
     }
 
     private long computeMaxBuyQty(BigDecimal remainingCashUsd, BigDecimal limitPrice) {

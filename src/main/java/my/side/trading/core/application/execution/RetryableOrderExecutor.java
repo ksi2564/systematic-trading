@@ -1,8 +1,8 @@
 package my.side.trading.core.application.execution;
 
-import lombok.RequiredArgsConstructor;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
+import my.side.trading.core.application.execution.pricing.MarketLikePricingPolicy;
 import my.side.trading.core.domain.execution.order.*;
 import org.springframework.stereotype.Service;
 
@@ -16,23 +16,30 @@ import java.math.BigDecimal;
  */
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class RetryableOrderExecutor {
-
-    private static final int MAX_ATTEMPTS = 3;
-    private static final long DEFAULT_WAIT_MS = 10_000; // 10초
-    private static final BigDecimal[] BUFFER_PERCENTS = {
-            new BigDecimal("0.3"),
-            new BigDecimal("0.5"),
-            new BigDecimal("0.8")
-    };
 
     private final OrderBroker orderBroker;
     private final OrderFillChecker fillChecker;
     private final OrderCanceller canceller;
+    private final ExecutionOrderFactory orderFactory;
+    private final MarketLikePricingPolicy pricingPolicy;
 
     @Setter
-    private long waitMs = DEFAULT_WAIT_MS;
+    private long waitMs;
+
+    public RetryableOrderExecutor(
+            OrderBroker orderBroker,
+            OrderFillChecker fillChecker,
+            OrderCanceller canceller,
+            ExecutionOrderFactory orderFactory,
+            MarketLikePricingPolicy pricingPolicy) {
+        this.orderBroker = orderBroker;
+        this.fillChecker = fillChecker;
+        this.canceller = canceller;
+        this.orderFactory = orderFactory;
+        this.pricingPolicy = pricingPolicy;
+        this.waitMs = pricingPolicy.retryWaitMs();
+    }
 
     /**
      * 재시도 로직을 포함한 주문 실행
@@ -49,14 +56,19 @@ public class RetryableOrderExecutor {
         BigDecimal totalFilledAmount = BigDecimal.ZERO;
         long remainingQty = originalQty;
         String lastBrokerOrderId = null;
+        int maxAttempts = pricingPolicy.maxAttempts();
 
-        for (int attempt = 1; attempt <= MAX_ATTEMPTS && remainingQty > 0; attempt++) {
-            BigDecimal buffer = BUFFER_PERCENTS[attempt - 1];
-            log.info("[RETRY] 시도 {}/{}: symbol={}, side={}, remainingQty={}, buffer={}%",
-                    attempt, MAX_ATTEMPTS, symbol, order.getSide(), remainingQty, buffer);
-
-            // 주문 제출 (미체결 수량만큼)
-            ExecutionOrder retryOrder = createRetryOrder(order, remainingQty);
+        for (int attempt = 1; attempt <= maxAttempts && remainingQty > 0; attempt++) {
+            ExecutionOrder retryOrder = orderFactory.repriceForRetry(order, remainingQty, attempt);
+            log.info("[RETRY] 시도 {}/{}: symbol={}, side={}, remainingQty={}, ticks={}, refPrice={}, limitPrice={}",
+                    attempt,
+                    maxAttempts,
+                    symbol,
+                    order.getSide(),
+                    remainingQty,
+                    pricingPolicy.priceTicksForAttempt(order.getSide(), attempt),
+                    retryOrder.getRefPrice(),
+                    retryOrder.getLimitPrice());
             BrokerOrderResult placeResult = orderBroker.place(retryOrder);
 
             if (!placeResult.success()) {
@@ -114,21 +126,8 @@ public class RetryableOrderExecutor {
             }
         }
 
-        log.error("[RETRY] {} 시도 모두 실패: symbol={}", MAX_ATTEMPTS, symbol);
+        log.error("[RETRY] {} 시도 모두 실패: symbol={}", maxAttempts, symbol);
         return ExecutionResult.failed(symbol);
-    }
-
-    private ExecutionOrder createRetryOrder(ExecutionOrder original, long newQty) {
-        return ExecutionOrder.rehydrate(
-                original.getId(),
-                original.getSymbol(),
-                original.getSide(),
-                newQty,
-                original.getRefPrice(),
-                original.getLimitPrice(),
-                ExecutionOrderStatus.PLANNED,
-                null,
-                null);
     }
 
     private void waitForFill() {
@@ -142,10 +141,7 @@ public class RetryableOrderExecutor {
         }
     }
 
-    public BigDecimal getBufferPercent(int attempt) {
-        if (attempt < 1 || attempt > MAX_ATTEMPTS) {
-            throw new IllegalArgumentException("attempt must be 1-" + MAX_ATTEMPTS);
-        }
-        return BUFFER_PERCENTS[attempt - 1];
+    public int getRetryTickOffset(int attempt, ExecutionOrderSide side) {
+        return pricingPolicy.priceTicksForAttempt(side, attempt);
     }
 }

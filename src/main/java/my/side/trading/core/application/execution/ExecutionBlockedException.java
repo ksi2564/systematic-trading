@@ -1,7 +1,14 @@
 package my.side.trading.core.application.execution;
 
 public class ExecutionBlockedException extends RuntimeException {
-    public ExecutionBlockedException(String reason) {
-        super(reason);
+    private final ExecutionBlockReason reason;
+
+    public ExecutionBlockedException(ExecutionBlockReason reason) {
+        super(reason.code());
+        this.reason = reason;
+    }
+
+    public ExecutionBlockReason getReason() {
+        return reason;
     }
 }

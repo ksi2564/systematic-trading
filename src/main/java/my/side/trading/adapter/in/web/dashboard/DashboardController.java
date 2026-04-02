@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import my.side.trading.adapter.in.scheduler.StrategyEodScheduler;
 import my.side.trading.adapter.in.web.dashboard.dto.DashboardResponse;
 import my.side.trading.core.adapter.in.web.common.ApiResponse;
+import my.side.trading.core.application.execution.ExecutionGuard;
 import my.side.trading.core.application.portfolio.PortfolioService;
 import my.side.trading.core.domain.execution.order.ExecutionJob;
 import my.side.trading.core.domain.execution.order.ExecutionJobRepository;
@@ -25,6 +26,7 @@ public class DashboardController {
     private final StrategyStateRepository strategyStateRepository;
     private final StrategyEodScheduler scheduler; // VIX, 200MA 조회용
     private final ExecutionJobRepository jobRepository;
+    private final ExecutionGuard executionGuard;
 
     @GetMapping("/summary")
     public ApiResponse<DashboardResponse> getSummary() {
@@ -45,7 +47,13 @@ public class DashboardController {
                 .limit(5)
                 .toList();
 
-        return ApiResponse.success(DashboardResponse.of(portfolio, state, vix, qqq200Ma, recentJobs));
+        return ApiResponse.success(DashboardResponse.of(
+                portfolio,
+                state,
+                vix,
+                qqq200Ma,
+                executionGuard.snapshot(),
+                recentJobs));
     }
 
     @GetMapping("/history")

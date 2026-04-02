@@ -2,6 +2,7 @@ package my.side.trading.core.application.execution;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import my.side.trading.core.domain.execution.ExecutionTriggerType;
 import my.side.trading.core.domain.execution.order.*;
 import org.springframework.stereotype.Service;
 
@@ -25,8 +26,12 @@ public class ExecutionJobExecutor {
      * DB 저장은 개별 시점에서 짧은 트랜잭션으로 처리 (jobRepository.save 호출)
      */
     public ExecutionJob execute(Long jobId, LocalDateTime now) {
+        return execute(jobId, now, ExecutionTriggerType.MANUAL);
+    }
+
+    public ExecutionJob execute(Long jobId, LocalDateTime now, ExecutionTriggerType triggerType) {
         // 1. 실행 권한 체크 (Kill Switch 등)
-        guard.requireExecutionAllowed();
+        guard.requireExecutionAllowed(triggerType);
 
         ExecutionJob job = jobRepository.findById(jobId)
                 .orElseThrow(() -> new IllegalArgumentException("Job not found: " + jobId));

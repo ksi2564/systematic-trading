@@ -1,6 +1,8 @@
 package my.side.trading.core.application.execution;
 
+import my.side.trading.core.application.execution.pricing.MarketLikePricingPolicy;
 import my.side.trading.core.domain.execution.order.*;
+import my.side.trading.testutil.FakeRealtimePriceProvider;
 import my.side.trading.testutil.FakeOrderCanceller;
 import my.side.trading.testutil.FakeOrderFillChecker;
 import org.junit.jupiter.api.BeforeEach;
@@ -8,6 +10,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -16,6 +19,7 @@ class RetryableOrderExecutorTest {
     private FakeBroker broker;
     private FakeOrderFillChecker fillChecker;
     private FakeOrderCanceller canceller;
+    private SequencedPriceProvider priceProvider;
     private RetryableOrderExecutor executor;
 
     @BeforeEach
@@ -23,8 +27,19 @@ class RetryableOrderExecutorTest {
         broker = new FakeBroker();
         fillChecker = new FakeOrderFillChecker();
         canceller = new FakeOrderCanceller();
-        executor = new RetryableOrderExecutor(broker, fillChecker, canceller);
+        priceProvider = new SequencedPriceProvider();
+        ExecutionOrderFactory orderFactory = new ExecutionOrderFactory(
+                priceProvider,
+                new MarketLikePricingPolicy(new BigDecimal("0.01"), 0, 0, 1, 1, new BigDecimal("0.25"), 3, 2000));
+        executor = new RetryableOrderExecutor(
+                broker,
+                fillChecker,
+                canceller,
+                orderFactory,
+                new MarketLikePricingPolicy(new BigDecimal("0.01"), 0, 0, 1, 1, new BigDecimal("0.25"), 3, 2000));
         executor.setWaitMs(0); // 테스트에서는 대기 시간 제거
+        priceProvider.updateQuote("QQQ", new BigDecimal("100.00"), new BigDecimal("99.90"), new BigDecimal("100.10"));
+        priceProvider.updateQuote("TQQQ", new BigDecimal("100.00"), new BigDecimal("99.90"), new BigDecimal("100.10"));
     }
 
     @Test
@@ -46,6 +61,9 @@ class RetryableOrderExecutorTest {
     void 재시도_후_체결() {
         ExecutionOrder order = createOrder("QQQ", ExecutionOrderSide.SELL, 5);
         broker.setOrderIds("ORD001", "ORD002");
+        priceProvider.setQuoteSequence("QQQ",
+                new BigDecimal("100.00"), new BigDecimal("99.90"), new BigDecimal("100.10"),
+                new BigDecimal("101.00"), new BigDecimal("100.80"), new BigDecimal("101.20"));
 
         // 첫 번째: 미체결
         fillChecker.setFillResult("ORD001", FillResult.partial(0, 5, BigDecimal.ZERO));
@@ -56,6 +74,9 @@ class RetryableOrderExecutorTest {
 
         assertThat(result.isSuccess()).isTrue();
         assertThat(result.filledQty()).isEqualTo(5);
+        assertThat(broker.placedOrders().get(0).getRefPrice()).isEqualByComparingTo("99.90");
+        assertThat(broker.placedOrders().get(1).getRefPrice()).isEqualByComparingTo("100.80");
+        assertThat(broker.placedOrders().get(1).getLimitPrice()).isEqualByComparingTo("100.79");
     }
 
     @Test
@@ -102,9 +123,9 @@ class RetryableOrderExecutorTest {
     @Test
     @DisplayName("버퍼 퍼센트는 시도 횟수에 따라 증가")
     void 버퍼_증가_확인() {
-        assertThat(executor.getBufferPercent(1)).isEqualByComparingTo("0.3");
-        assertThat(executor.getBufferPercent(2)).isEqualByComparingTo("0.5");
-        assertThat(executor.getBufferPercent(3)).isEqualByComparingTo("0.8");
+        assertThat(executor.getRetryTickOffset(1, ExecutionOrderSide.BUY)).isEqualTo(0);
+        assertThat(executor.getRetryTickOffset(2, ExecutionOrderSide.BUY)).isEqualTo(1);
+        assertThat(executor.getRetryTickOffset(3, ExecutionOrderSide.BUY)).isEqualTo(2);
     }
 
     private ExecutionOrder createOrder(String symbol, ExecutionOrderSide side, long qty) {
@@ -115,6 +136,7 @@ class RetryableOrderExecutorTest {
     private static class FakeBroker implements OrderBroker {
         private String[] orderIds = { "ORD001" };
         private int callCount = 0;
+        private final java.util.List<ExecutionOrder> placedOrders = new java.util.ArrayList<>();
 
         void setNextOrderId(String orderId) {
             this.orderIds = new String[] { orderId };
@@ -126,9 +148,46 @@ class RetryableOrderExecutorTest {
 
         @Override
         public BrokerOrderResult place(ExecutionOrder order) {
+            placedOrders.add(order);
             String orderId = orderIds[Math.min(callCount, orderIds.length - 1)];
             callCount++;
             return BrokerOrderResult.success(orderId, "주문 접수");
+        }
+
+        java.util.List<ExecutionOrder> placedOrders() {
+            return placedOrders;
+        }
+    }
+
+    private static class SequencedPriceProvider extends FakeRealtimePriceProvider {
+        private final java.util.Map<String, java.util.Queue<my.side.trading.core.domain.portfolio.RealtimeQuote>> sequences =
+                new java.util.HashMap<>();
+
+        void setQuoteSequence(
+                String symbol,
+                BigDecimal firstLast,
+                BigDecimal firstBid,
+                BigDecimal firstAsk,
+                BigDecimal secondLast,
+                BigDecimal secondBid,
+                BigDecimal secondAsk) {
+            java.util.ArrayDeque<my.side.trading.core.domain.portfolio.RealtimeQuote> queue = new java.util.ArrayDeque<>();
+            queue.add(new my.side.trading.core.domain.portfolio.RealtimeQuote(firstLast, firstBid, firstAsk));
+            queue.add(new my.side.trading.core.domain.portfolio.RealtimeQuote(secondLast, secondBid, secondAsk));
+            sequences.put(symbol, queue);
+        }
+
+        @Override
+        public java.util.Optional<my.side.trading.core.domain.portfolio.RealtimeQuote> getQuote(String symbol) {
+            java.util.Queue<my.side.trading.core.domain.portfolio.RealtimeQuote> queue = sequences.get(symbol);
+            if (queue != null && !queue.isEmpty()) {
+                my.side.trading.core.domain.portfolio.RealtimeQuote current = queue.peek();
+                if (queue.size() > 1) {
+                    queue.poll();
+                }
+                return java.util.Optional.of(current);
+            }
+            return super.getQuote(symbol);
         }
     }
 }

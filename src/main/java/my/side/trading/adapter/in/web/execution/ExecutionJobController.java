@@ -6,6 +6,8 @@ import my.side.trading.adapter.in.scheduler.StrategyEodScheduler;
 import my.side.trading.core.adapter.in.web.common.ApiResponse;
 import my.side.trading.core.application.execution.ExecutionJobExecutor;
 import my.side.trading.core.application.orchestration.RebalanceOrchestrator;
+import my.side.trading.core.application.orchestration.RebalanceRunResult;
+import my.side.trading.core.domain.execution.ExecutionTriggerType;
 import my.side.trading.core.domain.execution.order.ExecutionJob;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -27,20 +29,19 @@ public class ExecutionJobController {
     @PostMapping("/{jobId}/execute")
     public ApiResponse<ExecutionJob> execute(@PathVariable Long jobId) {
         log.info("수동 작업 실행 요청: jobId={}", jobId);
-        return ApiResponse.success(executor.execute(jobId, LocalDateTime.now()));
+        return ApiResponse.success(executor.execute(jobId, LocalDateTime.now(), ExecutionTriggerType.MANUAL));
     }
 
     @PostMapping("/manual-rebalance")
-    public ApiResponse<Void> manualRebalance() {
+    public ApiResponse<RebalanceRunResult> manualRebalance() {
         log.info("수동 리밸런싱 트리거 요청됨.");
-        rebalanceOrchestrator.run(LocalDateTime.now());
-        return ApiResponse.success(null);
+        return ApiResponse.success(rebalanceOrchestrator.run(LocalDateTime.now(), ExecutionTriggerType.MANUAL));
     }
 
     @PostMapping("/eod-calculation")
     public ApiResponse<Void> eodCalculation() {
         log.info("수동 EOD 계산 요청됨.");
-        eodScheduler.runEod();
+        eodScheduler.runManualEod();
         return ApiResponse.success(null);
     }
 }

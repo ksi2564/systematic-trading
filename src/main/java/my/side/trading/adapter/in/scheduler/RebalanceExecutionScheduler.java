@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import my.side.trading.core.application.execution.ExecutionGuard;
 import my.side.trading.core.application.orchestration.RebalanceOrchestrator;
+import my.side.trading.core.domain.execution.ExecutionTriggerType;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -23,14 +24,13 @@ public class RebalanceExecutionScheduler {
     // TODO: 추후 계절시간 감안 필요
     @Scheduled(cron = "0 45 23 * * MON-FRI", zone = "Asia/Seoul") // 23:45 KST
     public void runRebalance() {
-        if (!guard.isExecutionEnabled()) {
-            log.info("[SCHED] execution disabled -> skip");
+        var blockReason = guard.getExecutionBlockReason(ExecutionTriggerType.AUTOMATED);
+        if (blockReason.isPresent()) {
+            log.info("[SCHED] automated rebalance blocked -> skip | reason={}, mode={}",
+                    blockReason.get().code(),
+                    guard.currentMode());
             return;
         }
-        if (guard.isKillSwitchOn()) {
-            log.info("[SCHED] kill switch ON -> skip");
-            return;
-        }
-        orchestrator.run(LocalDateTime.now());
+        orchestrator.run(LocalDateTime.now(), ExecutionTriggerType.AUTOMATED);
     }
 }

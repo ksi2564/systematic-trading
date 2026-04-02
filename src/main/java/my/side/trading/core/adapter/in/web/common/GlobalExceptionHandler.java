@@ -1,5 +1,6 @@
 package my.side.trading.core.adapter.in.web.common;
 
+import my.side.trading.core.application.execution.ExecutionBlockedException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.FieldError;
@@ -16,6 +17,12 @@ import java.util.Map;
 public class GlobalExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
+
+    @ExceptionHandler(ExecutionBlockedException.class)
+    public ResponseEntity<ApiResponse<Void>> handleExecutionBlockedException(ExecutionBlockedException ex) {
+        log.warn("Execution blocked: {}", ex.getReason().code());
+        return new ResponseEntity<>(ApiResponse.error(ex.getReason().code()), HttpStatus.CONFLICT);
+    }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ApiResponse<Map<String, String>>> handleValidationExceptions(

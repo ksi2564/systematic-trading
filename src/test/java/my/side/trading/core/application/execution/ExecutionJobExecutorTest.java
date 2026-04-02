@@ -1,12 +1,17 @@
 package my.side.trading.core.application.execution;
 
+import my.side.trading.core.domain.execution.ExecutionTriggerType;
 import my.side.trading.core.domain.execution.order.*;
+import my.side.trading.core.domain.operation.OperatingMode;
+import my.side.trading.core.application.execution.pricing.MarketLikePricingPolicy;
 import my.side.trading.core.infrastructure.config.TradingExecutionProps;
+import my.side.trading.core.infrastructure.config.TradingOperationProps;
 import my.side.trading.testutil.FakeExecutionJobRepository;
 import my.side.trading.testutil.FakeOrderBroker;
 import my.side.trading.testutil.FakeOrderCanceller;
 import my.side.trading.testutil.FakeOrderFillChecker;
 import my.side.trading.testutil.FakeOrderInquiry;
+import my.side.trading.testutil.FakeRealtimePriceProvider;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -34,10 +39,25 @@ class ExecutionJobExecutorTest {
                 fillChecker = new FakeOrderFillChecker();
                 canceller = new FakeOrderCanceller();
                 orderInquiry = new FakeOrderInquiry();
-                guard = new ExecutionGuard(new TradingExecutionProps(true), () -> false);
+                guard = new ExecutionGuard(
+                                new TradingExecutionProps(true),
+                                new TradingOperationProps(
+                                                OperatingMode.AUTO_LIVE,
+                                                new TradingOperationProps.AutoLiveGateProps(5, true, true, true)),
+                                () -> false);
+                FakeRealtimePriceProvider priceProvider = FakeRealtimePriceProvider.withLastPrices(
+                                java.util.Map.of("QQQ", new BigDecimal("100.00"), "TQQQ", new BigDecimal("100.00")));
+                ExecutionOrderFactory orderFactory = new ExecutionOrderFactory(
+                                priceProvider,
+                                new MarketLikePricingPolicy(
+                                                new BigDecimal("0.01"), 0, 0, 1, 1, new BigDecimal("0.25"), 3,
+                                                2000));
 
                 RetryableOrderExecutor retryableExecutor = new RetryableOrderExecutor(orderBroker, fillChecker,
-                                canceller);
+                                canceller, orderFactory,
+                                new MarketLikePricingPolicy(
+                                                new BigDecimal("0.01"), 0, 0, 1, 1, new BigDecimal("0.25"), 3,
+                                                2000));
                 retryableExecutor.setWaitMs(0); // 테스트에서는 대기 시간 제거
 
                 executor = new ExecutionJobExecutor(jobRepository, retryableExecutor, orderInquiry, guard);
@@ -69,7 +89,7 @@ class ExecutionJobExecutorTest {
                 fillChecker.setFullyFilled("0123456789", 1, new BigDecimal("100"));
 
                 LocalDateTime now = LocalDateTime.of(2025, 12, 21, 23, 45);
-                ExecutionJob executed = executor.execute(1L, now);
+                ExecutionJob executed = executor.execute(1L, now, ExecutionTriggerType.AUTOMATED);
 
                 ExecutionOrder executedOrder = executed.getOrders().get(0);
                 assertThat(executedOrder.getBrokerOrderId()).isEqualTo("0123456789");
@@ -107,7 +127,7 @@ class ExecutionJobExecutorTest {
                 fillChecker.setFullyFilled("ORD002", 3, new BigDecimal("300"));
 
                 LocalDateTime now = LocalDateTime.of(2025, 12, 21, 23, 45);
-                ExecutionJob executed = executor.execute(1L, now);
+                ExecutionJob executed = executor.execute(1L, now, ExecutionTriggerType.AUTOMATED);
 
                 ExecutionOrder executedOrder = executed.getOrders().get(0);
                 assertThat(executedOrder.getStatus()).isEqualTo(ExecutionOrderStatus.ACCEPTED);
@@ -146,7 +166,7 @@ class ExecutionJobExecutorTest {
                 fillChecker.setFillResult("ORD003", FillResult.partial(0, 10, BigDecimal.ZERO));
 
                 LocalDateTime now = LocalDateTime.of(2025, 12, 21, 23, 45);
-                ExecutionJob executed = executor.execute(1L, now);
+                ExecutionJob executed = executor.execute(1L, now, ExecutionTriggerType.AUTOMATED);
 
                 ExecutionOrder executedOrder = executed.getOrders().get(0);
                 assertThat(executedOrder.getStatus()).isEqualTo(ExecutionOrderStatus.REJECTED);
@@ -179,7 +199,7 @@ class ExecutionJobExecutorTest {
                 fillChecker.setFullyFilled("BUY_ORD", 10, new BigDecimal("1000"));
 
                 LocalDateTime now = LocalDateTime.of(2025, 12, 21, 23, 45);
-                ExecutionJob executed = executor.execute(1L, now);
+                ExecutionJob executed = executor.execute(1L, now, ExecutionTriggerType.AUTOMATED);
 
                 // SELL(TQQQ)과 BUY(QQQ) 모두 ACCEPTED
                 assertThat(executed.getOrders().stream()

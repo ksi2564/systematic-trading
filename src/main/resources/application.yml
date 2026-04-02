@@ -41,6 +41,22 @@ kis:
   acnt-prdt-cd: ${KIS_ACNT_PRDT_CD}
 
 trading:
+  pricing:
+    tick-size: 0.01
+    initial-buy-ticks: 0
+    initial-sell-ticks: 0
+    retry-buy-ticks: 1
+    retry-sell-ticks: 1
+    fee-pct: 0.25
+    max-attempts: 3
+    retry-wait-ms: 2000
+  operation:
+    mode: PAPER
+    auto-live-gate:
+      required-consecutive-eod-success-days: 5
+      require-zero-pending-orders: true
+      require-zero-duplicate-signal-jobs: true
+      require-manual-approval-record: true
   scheduling:
     enabled: false
   execution:

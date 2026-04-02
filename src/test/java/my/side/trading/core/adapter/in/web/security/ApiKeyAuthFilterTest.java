@@ -10,6 +10,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.io.IOException;
+import java.util.List;
 
 import static org.mockito.Mockito.*;
 
@@ -24,7 +25,7 @@ class ApiKeyAuthFilterTest {
     private FilterChain chain;
 
     private final String VALID_KEY = "test-key";
-    private ApiKeyAuthFilter filter = new ApiKeyAuthFilter(VALID_KEY);
+    private ApiKeyAuthFilter filter = new ApiKeyAuthFilter(VALID_KEY, List.of());
 
     @Test
     void 유효한_키_제공시_통과() throws ServletException, IOException {
@@ -48,13 +49,14 @@ class ApiKeyAuthFilterTest {
     }
 
     @Test
-    void 대시보드_경로는_키_없이_통과() throws ServletException, IOException {
+    void 대시보드_경로도_기본값에서는_인증이_필요하다() throws ServletException, IOException {
         when(request.getRequestURI()).thenReturn("/api/dashboard/summary");
+        when(request.getHeader("X-API-KEY")).thenReturn(null);
 
         filter.doFilter(request, response, chain);
 
-        verify(chain).doFilter(request, response);
-        verify(request, never()).getHeader(anyString()); // 헤더 체크조차 안함
+        verify(response).sendError(HttpServletResponse.SC_UNAUTHORIZED, "Invalid API Key");
+        verify(chain, never()).doFilter(request, response);
     }
 
     // === 보안 테스트 확장: /kis/*, /execution/* 경로 인증 검증 ===
@@ -103,22 +105,24 @@ class ApiKeyAuthFilterTest {
     }
 
     @Test
-    void Actuator_헬스체크_경로는_키_없이_통과() throws ServletException, IOException {
+    void 설정된_공개경로는_키_없이_통과() throws ServletException, IOException {
+        ApiKeyAuthFilter publicFilter = new ApiKeyAuthFilter(VALID_KEY, List.of("/actuator", "/swagger-ui"));
         when(request.getRequestURI()).thenReturn("/actuator/health");
 
-        filter.doFilter(request, response, chain);
+        publicFilter.doFilter(request, response, chain);
 
         verify(chain).doFilter(request, response);
         verify(request, never()).getHeader(anyString());
     }
 
     @Test
-    void Swagger_경로는_키_없이_통과() throws ServletException, IOException {
+    void Swagger_경로는_기본값에서는_인증이_필요하다() throws ServletException, IOException {
         when(request.getRequestURI()).thenReturn("/swagger-ui/index.html");
+        when(request.getHeader("X-API-KEY")).thenReturn(null);
 
         filter.doFilter(request, response, chain);
 
-        verify(chain).doFilter(request, response);
-        verify(request, never()).getHeader(anyString());
+        verify(response).sendError(HttpServletResponse.SC_UNAUTHORIZED, "Invalid API Key");
+        verify(chain, never()).doFilter(request, response);
     }
 }

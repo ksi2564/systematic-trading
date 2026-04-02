@@ -11,6 +11,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.io.IOException;
+import java.util.List;
 
 import static org.mockito.Mockito.*;
 
@@ -28,7 +29,7 @@ class RateLimitFilterTest {
 
     @BeforeEach
     void setUp() {
-        filter = new RateLimitFilter();
+        filter = new RateLimitFilter(List.of());
     }
 
     @Test
@@ -60,15 +61,29 @@ class RateLimitFilterTest {
     }
 
     @Test
-    void 공개_경로는_레이트리밋_적용_제외() throws ServletException, IOException {
+    void 공개_경로는_설정된_경우에만_레이트리밋_적용_제외() throws ServletException, IOException {
+        RateLimitFilter publicFilter = new RateLimitFilter(List.of("/actuator"));
         when(request.getRequestURI()).thenReturn("/actuator/health");
 
         // 20회 요청해도 모두 통과 (레이트리밋 미적용)
         for (int i = 0; i < 20; i++) {
-            filter.doFilter(request, response, chain);
+            publicFilter.doFilter(request, response, chain);
         }
 
         verify(chain, times(20)).doFilter(request, response);
         verify(request, never()).getRemoteAddr(); // IP 체크조차 안함
+    }
+
+    @Test
+    void 대시보드_경로도_기본값에서는_레이트리밋_적용_대상() throws ServletException, IOException {
+        when(request.getRequestURI()).thenReturn("/api/dashboard/summary");
+        when(request.getRemoteAddr()).thenReturn("10.0.0.9");
+
+        for (int i = 0; i < 11; i++) {
+            filter.doFilter(request, response, chain);
+        }
+
+        verify(chain, times(10)).doFilter(request, response);
+        verify(response).sendError(429, "Too Many Requests");
     }
 }

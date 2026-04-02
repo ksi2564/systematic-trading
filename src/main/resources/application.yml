@@ -41,6 +41,9 @@ kis:
   acnt-prdt-cd: ${KIS_ACNT_PRDT_CD}
 
 trading:
+  security:
+    api-key: ${TRADING_API_KEY:change-me}
+    public-path-prefixes: []
   scheduling:
     enabled: false
   execution:

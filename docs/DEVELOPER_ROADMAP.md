@@ -1,5 +1,8 @@
 # 🗺️ 개발 로드맵 및 가이드 (Developer Roadmap)
 
+> 주의: 이 문서는 초기 구현 단계의 로드맵 기록입니다.
+> 현재 제품 기준 기획은 `docs/QQQ_AutoTrading_FullPlan.md`를 우선합니다.
+
 기획서(`QQQ_AutoTrading_FullPlan.md`)에 정의된 시스템을 완성하기 위한 단계별 개발 계획입니다.
 
 ---

@@ -28,11 +28,18 @@ public class StrategyEodScheduler {
     // KST 기준 미장 마감 이후 15분 여유
     // TODO: 추후 계절시간 감안 필요
     @Scheduled(cron = "0 15 06 * * TUE-SAT", zone = "Asia/Seoul") // 06:15 KST
-    public void runEod() {
+    public void runScheduledEod() {
         if (!enabled) {
             return;
         }
-        LocalDate asOfDate = LocalDate.now().minusDays(1); // "전일 EOD"
+        runEod(LocalDate.now().minusDays(1));
+    }
+
+    public void runManualEod() {
+        runEod(LocalDate.now().minusDays(1));
+    }
+
+    private void runEod(LocalDate asOfDate) {
         QuotedPriceResponse res = quotedPriceService.getQuotedPrice("QQQ");
         BigDecimal close = new BigDecimal(res.item().prevClosePrice());
 

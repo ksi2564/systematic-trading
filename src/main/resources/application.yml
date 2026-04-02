@@ -41,6 +41,13 @@ kis:
   acnt-prdt-cd: ${KIS_ACNT_PRDT_CD}
 
 trading:
+  operation:
+    mode: PAPER
+    auto-live-gate:
+      required-consecutive-eod-success-days: 5
+      require-zero-pending-orders: true
+      require-zero-duplicate-signal-jobs: true
+      require-manual-approval-record: true
   scheduling:
     enabled: false
   execution:

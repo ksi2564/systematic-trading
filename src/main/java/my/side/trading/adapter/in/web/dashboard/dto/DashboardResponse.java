@@ -1,6 +1,7 @@
 package my.side.trading.adapter.in.web.dashboard.dto;
 
 import lombok.Builder;
+import my.side.trading.core.application.execution.ExecutionGuardSnapshot;
 import my.side.trading.core.domain.execution.order.ExecutionJob;
 import my.side.trading.core.domain.portfolio.Portfolio;
 import my.side.trading.core.domain.strategy.StrategyState;
@@ -13,6 +14,7 @@ public record DashboardResponse(
         Portfolio portfolio,
         StrategyState strategyState,
         CircuitBreakerInfo circuitBreaker,
+        ExecutionGuardSnapshot guard,
         List<ExecutionJob> recentJobs) {
     @Builder
     public record CircuitBreakerInfo(
@@ -25,11 +27,13 @@ public record DashboardResponse(
             StrategyState strategyState,
             BigDecimal vix,
             BigDecimal qqq200Ma,
+            ExecutionGuardSnapshot guard,
             List<ExecutionJob> recentJobs) {
         return DashboardResponse.builder()
                 .portfolio(portfolio)
                 .strategyState(strategyState)
                 .circuitBreaker(new CircuitBreakerInfo(vix, qqq200Ma))
+                .guard(guard)
                 .recentJobs(recentJobs)
                 .build();
     }

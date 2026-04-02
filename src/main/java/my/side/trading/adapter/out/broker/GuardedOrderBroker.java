@@ -21,7 +21,7 @@ public class GuardedOrderBroker implements OrderBroker {
     @Override
     public BrokerOrderResult place(ExecutionOrder order) {
         try {
-            guard.requireExecutionAllowed();
+            guard.requireOrderPlacementAllowed();
         } catch (ExecutionBlockedException e) {
             // 여기서 "실패 주문"으로 오염시키지 않게, BLOCKED reason을 명확히 남김
             // "BLOCKED:" prefix로 구분 중이므로 message 수정 시 유의!

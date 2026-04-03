@@ -200,10 +200,13 @@
 ### 현재 구현
 
 - `RateLimitFilter`와 `ApiKeyAuthFilter`는 `/*` 전체 경로에 적용된다.
-- 아래 경로는 인증과 레이트 리밋 예외로 처리된다.
+- 기본값은 공개 경로 없음이다.
+- 공개 예외는 `trading.security.public-path-prefixes`로만 열 수 있다.
+- `prod` 프로필에서는 아래 경로를 공개 예외로 둘 수 없고, 설정하면 애플리케이션이 기동하지 않는다.
   - `/api/dashboard/**`
-  - `/swagger-ui/**`
-  - `/v3/api-docs/**`
+  - `/api/jobs/**`
+  - `/execution/**`
+  - `/kis/**`
   - `/actuator/**`
 - 그 외 경로는 `X-API-KEY` 헤더 검증이 필요하다.
 - 비공개 경로는 IP 기준 초당 10 요청으로 제한된다.

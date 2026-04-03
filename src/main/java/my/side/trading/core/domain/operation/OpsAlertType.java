@@ -1,0 +1,12 @@
+package my.side.trading.core.domain.operation;
+
+public enum OpsAlertType {
+    EOD_FAILURE,
+    BROKER_API_FAILURE,
+    DATA_UNCERTAIN,
+    UNRESOLVED_ORDER,
+    KILL_SWITCH_ON,
+    DUPLICATE_SIGNAL_JOB_DETECTED,
+    KPI_BREACH,
+    RISK_LIMIT_BREACH
+}

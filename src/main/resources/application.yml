@@ -67,6 +67,13 @@ trading:
       max-duplicate-signal-jobs: 0
       max-unresolved-orders: 0
       max-order-failure-rate-pct: 5.0
+    alerts:
+      enabled: false
+      dedupe-ttl-minutes: 30
+      discord:
+        enabled: false
+        webhook-url: ${TRADING_DISCORD_WEBHOOK_URL:}
+        min-severity: ERROR
     risk-limits:
       max-order-notional-usd: 0
       max-daily-turnover-pct: 0

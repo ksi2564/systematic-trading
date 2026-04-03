@@ -128,7 +128,8 @@ class RetryableOrderExecutorTest {
                                 BigDecimal.ZERO,
                                 BigDecimal.ZERO,
                                 maxRetryExposureUsd,
-                                BigDecimal.ZERO)),
+                                BigDecimal.ZERO),
+                        new TradingOperationProps.AlertsProps(false, 30)),
                 new FakeExecutionJobRepository());
         return new RetryableOrderExecutor(
                 broker,

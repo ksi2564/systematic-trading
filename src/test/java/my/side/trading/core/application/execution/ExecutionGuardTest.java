@@ -1,16 +1,27 @@
 package my.side.trading.core.application.execution;
 
 import my.side.trading.core.application.operation.OperationsKpiService;
+import my.side.trading.core.application.operation.OperationsKpiBreach;
+import my.side.trading.core.application.operation.OperationsKpiSnapshot;
 import my.side.trading.core.domain.execution.ExecutionTriggerType;
 import my.side.trading.core.domain.guard.KillSwitchReader;
 import my.side.trading.core.domain.operation.OperatingMode;
+import my.side.trading.core.domain.operation.OpsAlertPublisher;
+import my.side.trading.core.domain.operation.OpsAlertType;
+import my.side.trading.core.domain.time.MarketStatus;
 import my.side.trading.core.infrastructure.config.TradingExecutionProps;
 import my.side.trading.core.infrastructure.config.TradingOperationProps;
 import org.junit.jupiter.api.Test;
 
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.util.List;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class ExecutionGuardTest {
@@ -57,44 +68,71 @@ class ExecutionGuardTest {
 
     @Test
     void killSwitch_on_이면_가장_우선해서_차단() {
-        ExecutionGuard guard = createGuard(true, OperatingMode.AUTO_LIVE, true);
+        OpsAlertPublisher alertPublisher = mock(OpsAlertPublisher.class);
+        ExecutionGuard guard = createGuard(true, OperatingMode.AUTO_LIVE, true, false, alertPublisher);
 
         assertThatThrownBy(() -> guard.requireExecutionAllowed(ExecutionTriggerType.AUTOMATED))
                 .isInstanceOf(ExecutionBlockedException.class)
                 .hasMessageContaining("KILL_SWITCH_ON");
 
         assertThat(guard.isKillSwitchOn()).isTrue();
+        verify(alertPublisher).publish(argThat(alert -> alert.type() == OpsAlertType.KILL_SWITCH_ON));
     }
 
     @Test
     void auto_live에서_kpi_breach면_자동실행만_차단한다() {
-        ExecutionGuard guard = createGuard(true, OperatingMode.AUTO_LIVE, false, true);
+        OpsAlertPublisher alertPublisher = mock(OpsAlertPublisher.class);
+        ExecutionGuard guard = createGuard(true, OperatingMode.AUTO_LIVE, false, true, alertPublisher);
 
         assertThatThrownBy(() -> guard.requireExecutionAllowed(ExecutionTriggerType.AUTOMATED))
                 .isInstanceOf(ExecutionBlockedException.class)
                 .hasMessageContaining("KPI_BREACH");
 
         assertThat(guard.canExecute(ExecutionTriggerType.MANUAL)).isTrue();
+        verify(alertPublisher).publish(argThat(alert -> alert.type() == OpsAlertType.KPI_BREACH));
     }
 
     private ExecutionGuard createGuard(boolean enabled, OperatingMode mode, boolean killSwitchOn) {
-        return createGuard(enabled, mode, killSwitchOn, false);
+        return createGuard(enabled, mode, killSwitchOn, false, alert -> {});
     }
 
     private ExecutionGuard createGuard(boolean enabled, OperatingMode mode, boolean killSwitchOn, boolean kpiBreached) {
+        return createGuard(enabled, mode, killSwitchOn, kpiBreached, alert -> {});
+    }
+
+    private ExecutionGuard createGuard(
+            boolean enabled,
+            OperatingMode mode,
+            boolean killSwitchOn,
+            boolean kpiBreached,
+            OpsAlertPublisher alertPublisher
+    ) {
         TradingExecutionProps props = new TradingExecutionProps(enabled);
         TradingOperationProps operationProps = new TradingOperationProps(
                 mode,
                 new TradingOperationProps.AutoLiveGateProps(5, true, true, true),
-                new TradingOperationProps.KpiProps(true, 0, 0, new java.math.BigDecimal("5.0")),
+                new TradingOperationProps.KpiProps(true, 0, 0, new BigDecimal("5.0")),
                 new TradingOperationProps.RiskLimitProps(
-                        java.math.BigDecimal.ZERO,
-                        java.math.BigDecimal.ZERO,
-                        java.math.BigDecimal.ZERO,
-                        java.math.BigDecimal.ZERO));
+                        BigDecimal.ZERO,
+                        BigDecimal.ZERO,
+                        BigDecimal.ZERO,
+                        BigDecimal.ZERO),
+                new TradingOperationProps.AlertsProps(false, 30));
         KillSwitchReader killSwitchReader = () -> killSwitchOn;
         OperationsKpiService operationsKpiService = mock(OperationsKpiService.class);
         when(operationsKpiService.hasAutoLiveBreach()).thenReturn(kpiBreached);
-        return new ExecutionGuard(props, operationProps, killSwitchReader, operationsKpiService);
+        when(operationsKpiService.snapshot()).thenReturn(new OperationsKpiSnapshot(
+                LocalDate.of(2026, 4, 2),
+                MarketStatus.REGULAR,
+                LocalDate.of(2026, 4, 1),
+                !kpiBreached,
+                0,
+                0,
+                0,
+                0,
+                BigDecimal.ZERO,
+                kpiBreached,
+                kpiBreached ? List.of(OperationsKpiBreach.UNRESOLVED_ORDERS_PRESENT) : List.of()));
+        return new ExecutionGuard(props, operationProps, killSwitchReader, operationsKpiService, alertPublisher);
     }
 }

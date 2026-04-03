@@ -5,10 +5,15 @@ import my.side.trading.core.application.operation.OperationsKpiService;
 import my.side.trading.core.domain.execution.ExecutionTriggerType;
 import my.side.trading.core.domain.guard.KillSwitchReader;
 import my.side.trading.core.domain.operation.OperatingMode;
+import my.side.trading.core.domain.operation.OpsAlert;
+import my.side.trading.core.domain.operation.OpsAlertPublisher;
+import my.side.trading.core.domain.operation.OpsAlertSeverity;
+import my.side.trading.core.domain.operation.OpsAlertType;
 import my.side.trading.core.infrastructure.config.TradingExecutionProps;
 import my.side.trading.core.infrastructure.config.TradingOperationProps;
 import org.springframework.stereotype.Component;
 
+import java.util.LinkedHashMap;
 import java.util.Optional;
 
 @Component
@@ -19,10 +24,12 @@ public class ExecutionGuard {
     private final TradingOperationProps operationProps;
     private final KillSwitchReader killSwitchReader;
     private final OperationsKpiService operationsKpiService;
+    private final OpsAlertPublisher opsAlertPublisher;
 
     public void requireExecutionAllowed(ExecutionTriggerType triggerType) {
         getExecutionBlockReason(triggerType)
                 .ifPresent(reason -> {
+                    publishExecutionBlockAlert(reason, triggerType);
                     throw new ExecutionBlockedException(reason);
                 });
     }
@@ -30,6 +37,7 @@ public class ExecutionGuard {
     public void requireOrderPlacementAllowed() {
         getOrderPlacementBlockReason()
                 .ifPresent(reason -> {
+                    publishOrderPlacementAlert(reason);
                     throw new ExecutionBlockedException(reason);
                 });
     }
@@ -95,5 +103,47 @@ public class ExecutionGuard {
             return Optional.of(ExecutionBlockReason.EXECUTION_DISABLED);
         }
         return Optional.empty();
+    }
+
+    private void publishExecutionBlockAlert(ExecutionBlockReason reason, ExecutionTriggerType triggerType) {
+        if (reason == ExecutionBlockReason.KILL_SWITCH_ON) {
+            publishKillSwitchAlert("execution", triggerType.name());
+            return;
+        }
+        if (reason == ExecutionBlockReason.KPI_BREACH && triggerType == ExecutionTriggerType.AUTOMATED) {
+            var snapshot = operationsKpiService.snapshot();
+            LinkedHashMap<String, String> details = new LinkedHashMap<>();
+            details.put("triggerType", triggerType.name());
+            details.put("mode", operationProps.mode().name());
+            details.put("marketDate", snapshot.marketDate().toString());
+            details.put("breaches", snapshot.breaches().toString());
+            opsAlertPublisher.publish(new OpsAlert(
+                    OpsAlertType.KPI_BREACH,
+                    OpsAlertSeverity.ERROR,
+                    "kpi-breach:" + snapshot.marketDate(),
+                    "Automated execution blocked by KPI breach",
+                    details));
+        }
+    }
+
+    private void publishOrderPlacementAlert(ExecutionBlockReason reason) {
+        if (reason == ExecutionBlockReason.KILL_SWITCH_ON) {
+            publishKillSwitchAlert("order-placement", null);
+        }
+    }
+
+    private void publishKillSwitchAlert(String source, String triggerType) {
+        LinkedHashMap<String, String> details = new LinkedHashMap<>();
+        details.put("source", source);
+        details.put("mode", operationProps.mode().name());
+        if (triggerType != null) {
+            details.put("triggerType", triggerType);
+        }
+        opsAlertPublisher.publish(new OpsAlert(
+                OpsAlertType.KILL_SWITCH_ON,
+                OpsAlertSeverity.ERROR,
+                "kill-switch-on",
+                "Kill switch is active",
+                details));
     }
 }

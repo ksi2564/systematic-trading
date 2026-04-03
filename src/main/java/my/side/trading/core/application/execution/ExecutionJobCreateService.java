@@ -7,11 +7,16 @@ import my.side.trading.core.domain.execution.order.ExecutionJobRepository;
 import my.side.trading.core.domain.execution.order.ExecutionOrder;
 import my.side.trading.core.domain.execution.plan.OrderIntent;
 import my.side.trading.core.domain.execution.plan.RebalanceDecision;
+import my.side.trading.core.domain.operation.OpsAlert;
+import my.side.trading.core.domain.operation.OpsAlertPublisher;
+import my.side.trading.core.domain.operation.OpsAlertSeverity;
+import my.side.trading.core.domain.operation.OpsAlertType;
 import my.side.trading.core.domain.portfolio.Portfolio;
 import my.side.trading.core.domain.strategy.WeightSet;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
+import java.util.LinkedHashMap;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -26,6 +31,7 @@ public class ExecutionJobCreateService {
     private final ExecutionOrderFactory orderFactory;
     private final ExecutionJobRepository jobRepository;
     private final ExecutionRiskLimitService riskLimitService;
+    private final OpsAlertPublisher opsAlertPublisher;
 
     public Optional<ExecutionJob> createJob(
             LocalDate signalDate,
@@ -43,6 +49,12 @@ public class ExecutionJobCreateService {
 
         if (jobRepository.findBySignalDate(signalDate).isPresent()) {
             log.warn("job already exists: signalDate={}", signalDate);
+            opsAlertPublisher.publish(new OpsAlert(
+                    OpsAlertType.DUPLICATE_SIGNAL_JOB_DETECTED,
+                    OpsAlertSeverity.WARN,
+                    "duplicate-signal-job:" + signalDate,
+                    "Duplicate signalDate job creation attempt detected",
+                    java.util.Map.of("signalDate", signalDate.toString())));
             return Optional.empty();
         }
 
@@ -62,7 +74,22 @@ public class ExecutionJobCreateService {
                 continue;
             }
 
-            riskLimitService.validatePlannedOrder(signalDate, portfolio, planned.order(), plannedNotional);
+            try {
+                riskLimitService.validatePlannedOrder(signalDate, portfolio, planned.order(), plannedNotional);
+            } catch (ExecutionRiskLimitExceededException e) {
+                LinkedHashMap<String, String> details = new LinkedHashMap<>();
+                details.put("signalDate", signalDate.toString());
+                details.put("symbol", planned.order().getSymbol());
+                details.put("side", planned.order().getSide().name());
+                details.put("violation", e.getViolation().summary());
+                opsAlertPublisher.publish(new OpsAlert(
+                        OpsAlertType.RISK_LIMIT_BREACH,
+                        OpsAlertSeverity.ERROR,
+                        "planned-risk-limit:" + signalDate + ":" + e.getViolation().type(),
+                        "Execution job creation blocked by risk limit",
+                        details));
+                throw e;
+            }
 
             orders.add(planned.order());
             remainingCash = remainingCash.add(planned.cashDelta());

@@ -5,6 +5,8 @@ import my.side.trading.adapter.out.kis.dto.QuotedPriceResponse;
 import my.side.trading.adapter.out.yahoo.YahooVixService;
 import my.side.trading.core.application.market.MarketCalendarService;
 import my.side.trading.core.application.strategy.StrategyStateEodService;
+import my.side.trading.core.domain.operation.OpsAlertPublisher;
+import my.side.trading.core.domain.operation.OpsAlertType;
 import my.side.trading.core.domain.time.MarketStatus;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -23,6 +25,7 @@ class StrategyEodSchedulerTest {
         StrategyStateEodService eodService = mock(StrategyStateEodService.class);
         YahooVixService yahooVixService = mock(YahooVixService.class);
         MarketCalendarService marketCalendarService = mock(MarketCalendarService.class);
+        OpsAlertPublisher opsAlertPublisher = mock(OpsAlertPublisher.class);
         LocalDate marketDate = LocalDate.of(2026, 4, 2);
 
         when(marketCalendarService.currentMarketDate()).thenReturn(marketDate);
@@ -32,12 +35,14 @@ class StrategyEodSchedulerTest {
                 quotedPriceService,
                 eodService,
                 yahooVixService,
-                marketCalendarService);
+                marketCalendarService,
+                opsAlertPublisher);
         ReflectionTestUtils.setField(scheduler, "enabled", true);
 
         scheduler.runScheduledEod();
 
         verifyNoInteractions(quotedPriceService, eodService, yahooVixService);
+        verify(opsAlertPublisher).publish(argThat(alert -> alert.type() == OpsAlertType.DATA_UNCERTAIN));
     }
 
     @Test
@@ -46,6 +51,7 @@ class StrategyEodSchedulerTest {
         StrategyStateEodService eodService = mock(StrategyStateEodService.class);
         YahooVixService yahooVixService = mock(YahooVixService.class);
         MarketCalendarService marketCalendarService = mock(MarketCalendarService.class);
+        OpsAlertPublisher opsAlertPublisher = mock(OpsAlertPublisher.class);
         LocalDate marketDate = LocalDate.of(2026, 11, 27);
 
         when(marketCalendarService.currentMarketDate()).thenReturn(marketDate);
@@ -58,12 +64,41 @@ class StrategyEodSchedulerTest {
                 quotedPriceService,
                 eodService,
                 yahooVixService,
-                marketCalendarService);
+                marketCalendarService,
+                opsAlertPublisher);
         ReflectionTestUtils.setField(scheduler, "enabled", true);
 
         scheduler.runScheduledEod();
 
         verify(eodService).runEod(marketDate, new BigDecimal("499.12"));
+        verifyNoInteractions(opsAlertPublisher);
+    }
+
+    @Test
+    void EOD_실패시_알림을_발행한다() {
+        KisOverseasQuotedPriceService quotedPriceService = mock(KisOverseasQuotedPriceService.class);
+        StrategyStateEodService eodService = mock(StrategyStateEodService.class);
+        YahooVixService yahooVixService = mock(YahooVixService.class);
+        MarketCalendarService marketCalendarService = mock(MarketCalendarService.class);
+        OpsAlertPublisher opsAlertPublisher = mock(OpsAlertPublisher.class);
+        LocalDate marketDate = LocalDate.of(2026, 4, 2);
+
+        when(marketCalendarService.currentMarketDate()).thenReturn(marketDate);
+        when(quotedPriceService.getQuotedPrice("QQQ")).thenReturn(sampleQuotedPriceResponse("499.12"));
+        doThrow(new IllegalStateException("boom")).when(eodService).runEod(marketDate, new BigDecimal("499.12"));
+
+        StrategyEodScheduler scheduler = new StrategyEodScheduler(
+                quotedPriceService,
+                eodService,
+                yahooVixService,
+                marketCalendarService,
+                opsAlertPublisher);
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(scheduler::runManualEod)
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("boom");
+
+        verify(opsAlertPublisher).publish(argThat(alert -> alert.type() == OpsAlertType.EOD_FAILURE));
     }
 
     private QuotedPriceResponse sampleQuotedPriceResponse(String prevClosePrice) {

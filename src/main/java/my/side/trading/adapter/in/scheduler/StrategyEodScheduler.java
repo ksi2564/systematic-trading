@@ -7,12 +7,18 @@ import my.side.trading.adapter.out.kis.dto.QuotedPriceResponse;
 import my.side.trading.adapter.out.yahoo.YahooVixService;
 import my.side.trading.core.application.market.MarketCalendarService;
 import my.side.trading.core.application.strategy.StrategyStateEodService;
+import my.side.trading.core.domain.operation.OpsAlert;
+import my.side.trading.core.domain.operation.OpsAlertPublisher;
+import my.side.trading.core.domain.operation.OpsAlertSeverity;
+import my.side.trading.core.domain.operation.OpsAlertType;
+import my.side.trading.core.domain.time.MarketStatus;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.Map;
 
 @Slf4j
 @Component
@@ -23,6 +29,7 @@ public class StrategyEodScheduler {
     private final StrategyStateEodService eodService;
     private final YahooVixService yahooVixService;
     private final MarketCalendarService marketCalendarService;
+    private final OpsAlertPublisher opsAlertPublisher;
 
     @Value("${trading.scheduling.enabled:false}")
     private boolean enabled;
@@ -40,6 +47,17 @@ public class StrategyEodScheduler {
             log.info("[SCHED] eod skipped by market calendar | marketDate={}, marketStatus={}",
                     marketDate,
                     marketStatus);
+            if (marketStatus == MarketStatus.DATA_UNCERTAIN) {
+                opsAlertPublisher.publish(new OpsAlert(
+                        OpsAlertType.DATA_UNCERTAIN,
+                        OpsAlertSeverity.ERROR,
+                        "data-uncertain:eod:" + marketDate,
+                        "Scheduled EOD skipped because market data is uncertain",
+                        Map.of(
+                                "marketDate", marketDate.toString(),
+                                "marketStatus", marketStatus.name(),
+                                "source", "StrategyEodScheduler")));
+            }
             return;
         }
         runEod(marketDate);
@@ -50,18 +68,32 @@ public class StrategyEodScheduler {
     }
 
     private void runEod(LocalDate asOfDate) {
-        QuotedPriceResponse res = quotedPriceService.getQuotedPrice("QQQ");
-        BigDecimal close = new BigDecimal(res.item().prevClosePrice());
+        try {
+            QuotedPriceResponse res = quotedPriceService.getQuotedPrice("QQQ");
+            BigDecimal close = new BigDecimal(res.item().prevClosePrice());
 
-        // VIX 및 200MA 조회 (Circuit Breaker 용)
-        BigDecimal vix = yahooVixService.getVixPrice().orElse(null);
-        BigDecimal qqqMa200 = yahooVixService.getQqq200Ma().orElse(null);
+            // VIX 및 200MA 조회 (Circuit Breaker 용)
+            BigDecimal vix = yahooVixService.getVixPrice().orElse(null);
+            BigDecimal qqqMa200 = yahooVixService.getQqq200Ma().orElse(null);
 
-        log.info("Circuit Breaker data: VIX={}, QQQ_200MA={}", vix, qqqMa200);
+            log.info("Circuit Breaker data: VIX={}, QQQ_200MA={}", vix, qqqMa200);
 
-        eodService.runEod(asOfDate, close);
+            eodService.runEod(asOfDate, close);
 
-        log.info("EOD updated: asOfDate={}, qqqClose={}", asOfDate, close);
+            log.info("EOD updated: asOfDate={}, qqqClose={}", asOfDate, close);
+        } catch (Exception e) {
+            opsAlertPublisher.publish(new OpsAlert(
+                    OpsAlertType.EOD_FAILURE,
+                    OpsAlertSeverity.ERROR,
+                    "eod-failure:" + asOfDate,
+                    "EOD calculation failed",
+                    Map.of(
+                            "asOfDate", asOfDate.toString(),
+                            "source", "StrategyEodScheduler",
+                            "error", e.getClass().getSimpleName(),
+                            "message", e.getMessage() == null ? "-" : e.getMessage())));
+            throw e;
+        }
     }
 
     /**

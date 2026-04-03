@@ -6,6 +6,8 @@ import my.side.trading.core.domain.execution.plan.OrderIntent;
 import my.side.trading.core.domain.execution.plan.RebalanceDecision;
 import my.side.trading.core.domain.execution.plan.RebalanceType;
 import my.side.trading.core.domain.operation.OperatingMode;
+import my.side.trading.core.domain.operation.OpsAlertPublisher;
+import my.side.trading.core.domain.operation.OpsAlertType;
 import my.side.trading.core.domain.portfolio.Portfolio;
 import my.side.trading.core.domain.portfolio.Position;
 import my.side.trading.core.domain.strategy.WeightSet;
@@ -22,6 +24,9 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 
 class ExecutionJobCreateServiceTest {
 
@@ -70,7 +75,8 @@ class ExecutionJobCreateServiceTest {
     @Test
     void 같은_signalDate_job이_이미_있으면_새로_생성하지_않는다() {
         FakeExecutionJobRepository repo = new FakeExecutionJobRepository();
-        ExecutionJobCreateService service = createService(repo, BigDecimal.ZERO, BigDecimal.ZERO);
+        OpsAlertPublisher alertPublisher = mock(OpsAlertPublisher.class);
+        ExecutionJobCreateService service = createService(repo, BigDecimal.ZERO, BigDecimal.ZERO, alertPublisher);
 
         Portfolio portfolio = new Portfolio(new BigDecimal("1000.00"), List.of());
         RebalanceDecision decision = decision(new BigDecimal("50"));
@@ -83,12 +89,14 @@ class ExecutionJobCreateServiceTest {
 
         var second = service.createJob(signalDate, executeAfter, decision, portfolio);
         assertThat(second).isEmpty();
+        verify(alertPublisher).publish(argThat(alert -> alert.type() == OpsAlertType.DUPLICATE_SIGNAL_JOB_DETECTED));
     }
 
     @Test
     void 주문_금액_한도를_초과하면_job_생성을_차단한다() {
         FakeExecutionJobRepository repo = new FakeExecutionJobRepository();
-        ExecutionJobCreateService service = createService(repo, new BigDecimal("300.00"), BigDecimal.ZERO);
+        OpsAlertPublisher alertPublisher = mock(OpsAlertPublisher.class);
+        ExecutionJobCreateService service = createService(repo, new BigDecimal("300.00"), BigDecimal.ZERO, alertPublisher);
 
         Portfolio portfolio = new Portfolio(new BigDecimal("1000.00"), List.of());
         RebalanceDecision decision = decision(new BigDecimal("50"));
@@ -100,12 +108,21 @@ class ExecutionJobCreateServiceTest {
                 portfolio))
                 .isInstanceOf(ExecutionRiskLimitExceededException.class)
                 .hasMessageContaining("ORDER_NOTIONAL");
+        verify(alertPublisher).publish(argThat(alert -> alert.type() == OpsAlertType.RISK_LIMIT_BREACH));
     }
 
     private ExecutionJobCreateService createService(
             FakeExecutionJobRepository repo,
             BigDecimal maxOrderNotionalUsd,
             BigDecimal maxDailyTurnoverPct) {
+        return createService(repo, maxOrderNotionalUsd, maxDailyTurnoverPct, alert -> {});
+    }
+
+    private ExecutionJobCreateService createService(
+            FakeExecutionJobRepository repo,
+            BigDecimal maxOrderNotionalUsd,
+            BigDecimal maxDailyTurnoverPct,
+            OpsAlertPublisher alertPublisher) {
         FakeRealtimePriceProvider priceProvider = FakeRealtimePriceProvider.withLastPrices(Map.of(
                 "QQQ", new BigDecimal("100.00")));
         MarketLikePricingPolicy pricing = new MarketLikePricingPolicy(
@@ -120,9 +137,10 @@ class ExecutionJobCreateServiceTest {
                                 maxOrderNotionalUsd,
                                 maxDailyTurnoverPct,
                                 BigDecimal.ZERO,
-                                BigDecimal.ZERO)),
+                                BigDecimal.ZERO),
+                        new TradingOperationProps.AlertsProps(false, 30)),
                 repo);
-        return new ExecutionJobCreateService(factory, repo, riskLimitService);
+        return new ExecutionJobCreateService(factory, repo, riskLimitService, alertPublisher);
     }
 
     private RebalanceDecision decision(BigDecimal targetQqqWeight) {

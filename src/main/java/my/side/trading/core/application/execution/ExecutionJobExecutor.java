@@ -8,8 +8,13 @@ import my.side.trading.core.domain.execution.order.ExecutionJobRepository;
 import my.side.trading.core.domain.execution.order.ExecutionOrder;
 import my.side.trading.core.domain.execution.order.ExecutionOrderSide;
 import my.side.trading.core.domain.execution.order.OrderInquiry;
+import my.side.trading.core.domain.operation.OpsAlert;
+import my.side.trading.core.domain.operation.OpsAlertPublisher;
+import my.side.trading.core.domain.operation.OpsAlertSeverity;
+import my.side.trading.core.domain.operation.OpsAlertType;
 import org.springframework.stereotype.Service;
 
+import java.util.LinkedHashMap;
 import java.time.LocalDateTime;
 import java.util.Comparator;
 import java.util.List;
@@ -24,6 +29,7 @@ public class ExecutionJobExecutor {
     private final OrderInquiry orderInquiry;
     private final ExecutionGuard guard;
     private final ExecutionRiskLimitService riskLimitService;
+    private final OpsAlertPublisher opsAlertPublisher;
 
     public ExecutionJob execute(Long jobId, LocalDateTime now) {
         return execute(jobId, now, ExecutionTriggerType.MANUAL);
@@ -65,6 +71,7 @@ public class ExecutionJobExecutor {
 
             ExecutionResult result = orderExecutor.executeWithRetry(order);
             result = applySlippageGuard(order, result);
+            publishExecutionAlerts(job, order, result);
 
             if (result.isSuccess() || result.isPartial()) {
                 job.acceptOrder(order.getId(), result.brokerOrderId(), orderMessage("Success", result), now);
@@ -92,6 +99,37 @@ public class ExecutionJobExecutor {
         return result.detailMessage() == null || result.detailMessage().isBlank()
                 ? defaultMessage
                 : defaultMessage + " | " + result.detailMessage();
+    }
+
+    private void publishExecutionAlerts(ExecutionJob job, ExecutionOrder order, ExecutionResult result) {
+        if (result.isPartial()) {
+            LinkedHashMap<String, String> details = new LinkedHashMap<>();
+            details.put("jobId", String.valueOf(job.getId()));
+            details.put("orderId", String.valueOf(order.getId()));
+            details.put("symbol", order.getSymbol());
+            details.put("filledQty", String.valueOf(result.filledQty()));
+            details.put("requestedQty", String.valueOf(order.getQuantity()));
+            opsAlertPublisher.publish(new OpsAlert(
+                    OpsAlertType.UNRESOLVED_ORDER,
+                    OpsAlertSeverity.WARN,
+                    "unresolved-order:" + job.getId() + ":" + order.getId(),
+                    "Order ended with partial fill and needs attention",
+                    details));
+        }
+
+        if (result.isBlocked() && result.blockReason() == ExecutionBlockReason.RISK_LIMIT_BREACH) {
+            LinkedHashMap<String, String> details = new LinkedHashMap<>();
+            details.put("jobId", String.valueOf(job.getId()));
+            details.put("orderId", String.valueOf(order.getId()));
+            details.put("symbol", order.getSymbol());
+            details.put("detail", result.detailMessage() == null ? "-" : result.detailMessage());
+            opsAlertPublisher.publish(new OpsAlert(
+                    OpsAlertType.RISK_LIMIT_BREACH,
+                    OpsAlertSeverity.ERROR,
+                    "runtime-risk-limit:" + job.getId() + ":" + order.getId(),
+                    "Execution blocked by runtime risk limit",
+                    details));
+        }
     }
 
     private void skipRemainingOrders(ExecutionJob job, Long processedOrderId, LocalDateTime now, String message) {

@@ -10,8 +10,14 @@ import my.side.trading.core.domain.execution.order.BrokerOrderResult;
 import my.side.trading.core.domain.execution.order.ExecutionOrder;
 import my.side.trading.core.domain.execution.order.ExecutionOrderSide;
 import my.side.trading.core.domain.execution.order.OrderBroker;
+import my.side.trading.core.domain.operation.OpsAlert;
+import my.side.trading.core.domain.operation.OpsAlertPublisher;
+import my.side.trading.core.domain.operation.OpsAlertSeverity;
+import my.side.trading.core.domain.operation.OpsAlertType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
+
+import java.util.LinkedHashMap;
 
 @Slf4j
 @Component("kisOrderBroker")
@@ -20,6 +26,7 @@ public class KisOrderBroker implements OrderBroker {
 
     private final KisOverseasOrderService kisOrderService;
     private final KisOverseasOrderRequestMapper requestMapper;
+    private final OpsAlertPublisher opsAlertPublisher;
 
     @Override
     public BrokerOrderResult place(ExecutionOrder order) {
@@ -37,14 +44,20 @@ public class KisOrderBroker implements OrderBroker {
             }
 
             String brokerOrderId = (resp != null && resp.output() != null) ? resp.output().orderNo() : null;
-            return BrokerOrderResult.failure(brokerOrderId, buildFailureMessage(resp));
+            String failureMessage = buildFailureMessage(resp);
+            publishBrokerFailureAlert(order, "response", resp != null ? resp.messageCode() : null, failureMessage);
+            return BrokerOrderResult.failure(brokerOrderId, failureMessage);
 
         } catch (WebClientResponseException e) {
             // HTTP 레벨 에러(4xx/5xx)
             String body = e.getResponseBodyAsString();
-            return BrokerOrderResult.failure(null, "HTTP " + e.getStatusCode() + " body=" + body);
+            String failureMessage = "HTTP " + e.getStatusCode() + " body=" + body;
+            publishBrokerFailureAlert(order, "http", String.valueOf(e.getStatusCode().value()), failureMessage);
+            return BrokerOrderResult.failure(null, failureMessage);
         } catch (Exception e) {
-            return BrokerOrderResult.failure(null, "Exception: " + e.getMessage());
+            String failureMessage = "Exception: " + e.getMessage();
+            publishBrokerFailureAlert(order, "exception", e.getClass().getSimpleName(), failureMessage);
+            return BrokerOrderResult.failure(null, failureMessage);
         }
     }
 
@@ -65,5 +78,25 @@ public class KisOrderBroker implements OrderBroker {
         return "rt_cd=" + resp.resultCode()
                 + ", msg_cd=" + resp.messageCode()
                 + ", msg=" + resp.message();
+    }
+
+    private void publishBrokerFailureAlert(
+            ExecutionOrder order,
+            String failureKind,
+            String failureCode,
+            String failureMessage
+    ) {
+        LinkedHashMap<String, String> details = new LinkedHashMap<>();
+        details.put("symbol", order.getSymbol());
+        details.put("side", order.getSide().name());
+        details.put("failureKind", failureKind);
+        details.put("failureCode", failureCode == null ? "-" : failureCode);
+        details.put("message", failureMessage == null ? "-" : failureMessage);
+        opsAlertPublisher.publish(new OpsAlert(
+                OpsAlertType.BROKER_API_FAILURE,
+                OpsAlertSeverity.ERROR,
+                "broker-api-failure:" + failureKind + ":" + (failureCode == null ? "-" : failureCode),
+                "Broker order API call failed",
+                details));
     }
 }

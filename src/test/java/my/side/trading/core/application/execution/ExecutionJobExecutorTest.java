@@ -11,6 +11,8 @@ import my.side.trading.core.domain.execution.order.ExecutionOrderStatus;
 import my.side.trading.core.domain.execution.order.ExecutionStatus;
 import my.side.trading.core.domain.execution.order.FillResult;
 import my.side.trading.core.domain.operation.OperatingMode;
+import my.side.trading.core.domain.operation.OpsAlertPublisher;
+import my.side.trading.core.domain.operation.OpsAlertType;
 import my.side.trading.core.infrastructure.config.TradingExecutionProps;
 import my.side.trading.core.infrastructure.config.TradingOperationProps;
 import my.side.trading.testutil.FakeExecutionJobRepository;
@@ -28,7 +30,9 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class ExecutionJobExecutorTest {
@@ -41,6 +45,7 @@ class ExecutionJobExecutorTest {
     private ExecutionGuard guard;
     private ExecutionJobExecutor executor;
     private ExecutionRiskLimitService riskLimitService;
+    private OpsAlertPublisher alertPublisher;
 
     @BeforeEach
     void setUp() {
@@ -49,6 +54,7 @@ class ExecutionJobExecutorTest {
         fillChecker = new FakeOrderFillChecker();
         canceller = new FakeOrderCanceller();
         orderInquiry = new FakeOrderInquiry();
+        alertPublisher = mock(OpsAlertPublisher.class);
 
         OperationsKpiService operationsKpiService = mock(OperationsKpiService.class);
         when(operationsKpiService.hasAutoLiveBreach()).thenReturn(false);
@@ -61,8 +67,9 @@ class ExecutionJobExecutorTest {
                         BigDecimal.ZERO,
                         BigDecimal.ZERO,
                         BigDecimal.ZERO,
-                        BigDecimal.ZERO));
-        guard = new ExecutionGuard(new TradingExecutionProps(true), operationProps, () -> false, operationsKpiService);
+                        BigDecimal.ZERO),
+                new TradingOperationProps.AlertsProps(false, 30));
+        guard = new ExecutionGuard(new TradingExecutionProps(true), operationProps, () -> false, operationsKpiService, alert -> {});
         riskLimitService = new ExecutionRiskLimitService(operationProps, jobRepository);
 
         FakeRealtimePriceProvider priceProvider = FakeRealtimePriceProvider.withLastPrices(
@@ -80,7 +87,7 @@ class ExecutionJobExecutorTest {
                 riskLimitService);
         retryableExecutor.setWaitMs(0);
 
-        executor = new ExecutionJobExecutor(jobRepository, retryableExecutor, orderInquiry, guard, riskLimitService);
+        executor = new ExecutionJobExecutor(jobRepository, retryableExecutor, orderInquiry, guard, riskLimitService, alertPublisher);
     }
 
     @Test
@@ -116,6 +123,26 @@ class ExecutionJobExecutorTest {
     }
 
     @Test
+    void 부분_체결로_끝나면_미정리_주문_알림을_발행한다() {
+        ExecutionJob job = singleOrderJob(order(1L, "QQQ", ExecutionOrderSide.BUY, 10));
+
+        jobRepository.save(job);
+        orderBroker.willReturnSequence(1L,
+                BrokerOrderResult.success("ORD001", "ok"),
+                BrokerOrderResult.success("ORD002", "ok"),
+                BrokerOrderResult.success("ORD003", "ok"));
+        fillChecker.setFillResult("ORD001", FillResult.partial(3, 7, new BigDecimal("300")));
+        fillChecker.setFillResult("ORD002", FillResult.partial(0, 7, BigDecimal.ZERO));
+        fillChecker.setFillResult("ORD003", FillResult.partial(0, 7, BigDecimal.ZERO));
+
+        ExecutionJob executed = executor.execute(1L, LocalDateTime.of(2025, 12, 21, 23, 45), ExecutionTriggerType.AUTOMATED);
+
+        assertThat(executed.getOrders().get(0).getStatus()).isEqualTo(ExecutionOrderStatus.ACCEPTED);
+        assertThat(executed.getStatus()).isEqualTo(ExecutionStatus.COMPLETED);
+        verify(alertPublisher).publish(argThat(alert -> alert.type() == OpsAlertType.UNRESOLVED_ORDER));
+    }
+
+    @Test
     void 모든_재시도가_실패하면_rejected로_저장한다() {
         ExecutionJob job = singleOrderJob(order(1L, "QQQ", ExecutionOrderSide.BUY, 10));
 
@@ -144,7 +171,8 @@ class ExecutionJobExecutorTest {
                         BigDecimal.ZERO,
                         BigDecimal.ZERO,
                         BigDecimal.ZERO,
-                        new BigDecimal("0.10")));
+                        new BigDecimal("0.10")),
+                new TradingOperationProps.AlertsProps(false, 30));
         riskLimitService = new ExecutionRiskLimitService(strictRiskProps, jobRepository);
 
         RetryableOrderExecutor retryableExecutor = new RetryableOrderExecutor(
@@ -158,7 +186,7 @@ class ExecutionJobExecutorTest {
                 new MarketLikePricingPolicy(new BigDecimal("0.01"), 0, 0, 1, 1, new BigDecimal("0.25"), 3, 2000),
                 riskLimitService);
         retryableExecutor.setWaitMs(0);
-        executor = new ExecutionJobExecutor(jobRepository, retryableExecutor, orderInquiry, guard, riskLimitService);
+        executor = new ExecutionJobExecutor(jobRepository, retryableExecutor, orderInquiry, guard, riskLimitService, alertPublisher);
 
         ExecutionOrder sellOrder = order(1L, "TQQQ", ExecutionOrderSide.SELL, 5);
         ExecutionOrder buyOrder = order(2L, "QQQ", ExecutionOrderSide.BUY, 10);
@@ -188,6 +216,7 @@ class ExecutionJobExecutorTest {
                 .orElseThrow()
                 .getStatus()).isEqualTo(ExecutionOrderStatus.SKIPPED);
         assertThat(executed.getStatus()).isEqualTo(ExecutionStatus.COMPLETED);
+        verify(alertPublisher).publish(argThat(alert -> alert.type() == OpsAlertType.RISK_LIMIT_BREACH));
     }
 
     private ExecutionJob singleOrderJob(ExecutionOrder order) {

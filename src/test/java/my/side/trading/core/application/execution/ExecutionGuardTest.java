@@ -6,6 +6,7 @@ import my.side.trading.core.application.operation.OperationsKpiSnapshot;
 import my.side.trading.core.domain.execution.ExecutionTriggerType;
 import my.side.trading.core.domain.guard.KillSwitchReader;
 import my.side.trading.core.domain.operation.OperatingMode;
+import my.side.trading.core.domain.operation.OperatingModeReader;
 import my.side.trading.core.domain.operation.OpsAlertPublisher;
 import my.side.trading.core.domain.operation.OpsAlertType;
 import my.side.trading.core.domain.time.MarketStatus;
@@ -133,6 +134,20 @@ class ExecutionGuardTest {
                 BigDecimal.ZERO,
                 kpiBreached,
                 kpiBreached ? List.of(OperationsKpiBreach.UNRESOLVED_ORDERS_PRESENT) : List.of()));
-        return new ExecutionGuard(props, operationProps, killSwitchReader, operationsKpiService, alertPublisher);
+        OperatingModeReader operatingModeReader = new FixedOperatingModeReader(mode);
+        return new ExecutionGuard(
+                props,
+                operationProps,
+                operatingModeReader,
+                killSwitchReader,
+                operationsKpiService,
+                alertPublisher);
+    }
+
+    private record FixedOperatingModeReader(OperatingMode currentMode) implements OperatingModeReader {
+        @Override
+        public boolean hasManualApprovalRecord() {
+            return currentMode != OperatingMode.AUTO_LIVE;
+        }
     }
 }

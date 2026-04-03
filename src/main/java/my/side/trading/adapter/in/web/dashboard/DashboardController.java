@@ -5,6 +5,7 @@ import my.side.trading.adapter.in.scheduler.StrategyEodScheduler;
 import my.side.trading.adapter.in.web.dashboard.dto.DashboardResponse;
 import my.side.trading.core.adapter.in.web.common.ApiResponse;
 import my.side.trading.core.application.execution.ExecutionGuard;
+import my.side.trading.core.application.operation.OperatingModeService;
 import my.side.trading.core.application.operation.OperationsKpiService;
 import my.side.trading.core.application.portfolio.PortfolioService;
 import my.side.trading.core.domain.execution.order.ExecutionJob;
@@ -29,6 +30,7 @@ public class DashboardController {
     private final ExecutionJobRepository jobRepository;
     private final ExecutionGuard executionGuard;
     private final OperationsKpiService operationsKpiService;
+    private final OperatingModeService operatingModeService;
 
     @GetMapping("/summary")
     public ApiResponse<DashboardResponse> getSummary() {
@@ -57,8 +59,10 @@ public class DashboardController {
                 vix,
                 qqq200Ma,
                 operationsKpi,
+                operatingModeService.currentMode(),
                 executionGuard.snapshot(),
-                recentJobs));
+                recentJobs,
+                operatingModeService.recentHistory(5)));
     }
 
     @GetMapping("/history")

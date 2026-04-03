@@ -11,6 +11,7 @@ import my.side.trading.core.domain.execution.order.ExecutionOrderStatus;
 import my.side.trading.core.domain.execution.order.ExecutionStatus;
 import my.side.trading.core.domain.execution.order.FillResult;
 import my.side.trading.core.domain.operation.OperatingMode;
+import my.side.trading.core.domain.operation.OperatingModeReader;
 import my.side.trading.core.domain.operation.OpsAlertPublisher;
 import my.side.trading.core.domain.operation.OpsAlertType;
 import my.side.trading.core.infrastructure.config.TradingExecutionProps;
@@ -69,7 +70,24 @@ class ExecutionJobExecutorTest {
                         BigDecimal.ZERO,
                         BigDecimal.ZERO),
                 new TradingOperationProps.AlertsProps(false, 30));
-        guard = new ExecutionGuard(new TradingExecutionProps(true), operationProps, () -> false, operationsKpiService, alert -> {});
+        OperatingModeReader operatingModeReader = new OperatingModeReader() {
+            @Override
+            public OperatingMode currentMode() {
+                return OperatingMode.AUTO_LIVE;
+            }
+
+            @Override
+            public boolean hasManualApprovalRecord() {
+                return true;
+            }
+        };
+        guard = new ExecutionGuard(
+                new TradingExecutionProps(true),
+                operationProps,
+                operatingModeReader,
+                () -> false,
+                operationsKpiService,
+                alert -> {});
         riskLimitService = new ExecutionRiskLimitService(operationProps, jobRepository);
 
         FakeRealtimePriceProvider priceProvider = FakeRealtimePriceProvider.withLastPrices(

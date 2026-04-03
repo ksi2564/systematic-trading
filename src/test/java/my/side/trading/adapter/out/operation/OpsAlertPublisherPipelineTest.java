@@ -1,5 +1,6 @@
 package my.side.trading.adapter.out.operation;
 
+import my.side.trading.core.application.operation.OperatingModeService;
 import my.side.trading.core.domain.operation.OperatingMode;
 import my.side.trading.core.domain.operation.OpsAlert;
 import my.side.trading.core.domain.operation.OpsAlertPublisher;
@@ -14,6 +15,9 @@ import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 
 class OpsAlertPublisherPipelineTest {
 
@@ -37,7 +41,11 @@ class OpsAlertPublisherPipelineTest {
         RecordingChannelPublisher second = new RecordingChannelPublisher();
 
         OpsAlertPublisher composite = new CompositeOpsAlertPublisher(List.of(first, second));
-        OpsAlertPublisher deduplicating = new DeduplicatingOpsAlertPublisher(operationProps(true), composite);
+        OperatingModeService operatingModeService = mock(OperatingModeService.class);
+        OpsAlertPublisher deduplicating = new DeduplicatingOpsAlertPublisher(
+                operationProps(true),
+                operatingModeService,
+                composite);
         OpsAlert alert = sampleAlert();
 
         deduplicating.publish(alert);
@@ -45,6 +53,25 @@ class OpsAlertPublisherPipelineTest {
 
         assertThat(first.alerts).containsExactly(alert);
         assertThat(second.alerts).containsExactly(alert);
+        verify(operatingModeService, times(2)).applySystemAlert(alert);
+    }
+
+    @Test
+    void alertsDisabled여도_autoDemotionHook은_실행된다() {
+        RecordingChannelPublisher first = new RecordingChannelPublisher();
+        OpsAlertPublisher composite = new CompositeOpsAlertPublisher(List.of(first));
+        OperatingModeService operatingModeService = mock(OperatingModeService.class);
+        OpsAlert alert = sampleAlert();
+
+        OpsAlertPublisher deduplicating = new DeduplicatingOpsAlertPublisher(
+                operationProps(false),
+                operatingModeService,
+                composite);
+
+        deduplicating.publish(alert);
+
+        assertThat(first.alerts).isEmpty();
+        verify(operatingModeService).applySystemAlert(alert);
     }
 
     private TradingOperationProps operationProps(boolean alertsEnabled) {

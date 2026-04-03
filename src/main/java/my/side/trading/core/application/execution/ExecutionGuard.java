@@ -5,6 +5,7 @@ import my.side.trading.core.application.operation.OperationsKpiService;
 import my.side.trading.core.domain.execution.ExecutionTriggerType;
 import my.side.trading.core.domain.guard.KillSwitchReader;
 import my.side.trading.core.domain.operation.OperatingMode;
+import my.side.trading.core.domain.operation.OperatingModeReader;
 import my.side.trading.core.domain.operation.OpsAlert;
 import my.side.trading.core.domain.operation.OpsAlertPublisher;
 import my.side.trading.core.domain.operation.OpsAlertSeverity;
@@ -22,6 +23,7 @@ public class ExecutionGuard {
 
     private final TradingExecutionProps executionProps;
     private final TradingOperationProps operationProps;
+    private final OperatingModeReader operatingModeReader;
     private final KillSwitchReader killSwitchReader;
     private final OperationsKpiService operationsKpiService;
     private final OpsAlertPublisher opsAlertPublisher;
@@ -43,13 +45,14 @@ public class ExecutionGuard {
     }
 
     public Optional<ExecutionBlockReason> getExecutionBlockReason(ExecutionTriggerType triggerType) {
+        OperatingMode currentMode = operatingModeReader.currentMode();
         if (killSwitchReader.isKillSwitchOn()) {
             return Optional.of(ExecutionBlockReason.KILL_SWITCH_ON);
         }
-        if (operationProps.mode() == OperatingMode.PAPER) {
+        if (currentMode == OperatingMode.PAPER) {
             return Optional.of(ExecutionBlockReason.PAPER_MODE_BLOCKS_LIVE_EXECUTION);
         }
-        if (triggerType == ExecutionTriggerType.AUTOMATED && operationProps.mode() != OperatingMode.AUTO_LIVE) {
+        if (triggerType == ExecutionTriggerType.AUTOMATED && currentMode != OperatingMode.AUTO_LIVE) {
             return Optional.of(ExecutionBlockReason.AUTO_EXECUTION_REQUIRES_AUTO_LIVE);
         }
         if (!executionProps.enabled()) {
@@ -66,7 +69,7 @@ public class ExecutionGuard {
     }
 
     public OperatingMode currentMode() {
-        return operationProps.mode();
+        return operatingModeReader.currentMode();
     }
 
     public boolean isExecutionEnabled() {
@@ -80,7 +83,7 @@ public class ExecutionGuard {
     public ExecutionGuardSnapshot snapshot() {
         TradingOperationProps.AutoLiveGateProps autoLiveGate = operationProps.autoLiveGate();
         return new ExecutionGuardSnapshot(
-                operationProps.mode(),
+                operatingModeReader.currentMode(),
                 executionProps.enabled(),
                 killSwitchReader.isKillSwitchOn(),
                 getExecutionBlockReason(ExecutionTriggerType.MANUAL).orElse(null),
@@ -89,14 +92,16 @@ public class ExecutionGuard {
                         autoLiveGate.requiredConsecutiveEodSuccessDays(),
                         autoLiveGate.requireZeroPendingOrders(),
                         autoLiveGate.requireZeroDuplicateSignalJobs(),
-                        autoLiveGate.requireManualApprovalRecord()));
+                        autoLiveGate.requireManualApprovalRecord(),
+                        operatingModeReader.hasManualApprovalRecord()));
     }
 
     private Optional<ExecutionBlockReason> getOrderPlacementBlockReason() {
+        OperatingMode currentMode = operatingModeReader.currentMode();
         if (killSwitchReader.isKillSwitchOn()) {
             return Optional.of(ExecutionBlockReason.KILL_SWITCH_ON);
         }
-        if (operationProps.mode() == OperatingMode.PAPER) {
+        if (currentMode == OperatingMode.PAPER) {
             return Optional.of(ExecutionBlockReason.PAPER_MODE_BLOCKS_LIVE_EXECUTION);
         }
         if (!executionProps.enabled()) {
@@ -114,7 +119,7 @@ public class ExecutionGuard {
             var snapshot = operationsKpiService.snapshot();
             LinkedHashMap<String, String> details = new LinkedHashMap<>();
             details.put("triggerType", triggerType.name());
-            details.put("mode", operationProps.mode().name());
+            details.put("mode", operatingModeReader.currentMode().name());
             details.put("marketDate", snapshot.marketDate().toString());
             details.put("breaches", snapshot.breaches().toString());
             opsAlertPublisher.publish(new OpsAlert(
@@ -135,7 +140,7 @@ public class ExecutionGuard {
     private void publishKillSwitchAlert(String source, String triggerType) {
         LinkedHashMap<String, String> details = new LinkedHashMap<>();
         details.put("source", source);
-        details.put("mode", operationProps.mode().name());
+        details.put("mode", operatingModeReader.currentMode().name());
         if (triggerType != null) {
             details.put("triggerType", triggerType);
         }

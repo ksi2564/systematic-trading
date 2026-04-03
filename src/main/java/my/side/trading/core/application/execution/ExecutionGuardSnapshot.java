@@ -14,6 +14,7 @@ public record ExecutionGuardSnapshot(
             int requiredConsecutiveEodSuccessDays,
             boolean requireZeroPendingOrders,
             boolean requireZeroDuplicateSignalJobs,
-            boolean requireManualApprovalRecord) {
+            boolean requireManualApprovalRecord,
+            boolean manualApprovalRecorded) {
     }
 }

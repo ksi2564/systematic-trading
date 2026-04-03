@@ -47,7 +47,7 @@
 - 중복 Job 정황 `0건`
 - 브로커 및 핵심 시세 연동 정상
 - 시장 상태가 `정규장` 또는 명시 승인된 예외 상태
-- 승격 승인 기록 존재
+- `POST /api/operations/mode` 호출로 남겨진 승격 승인 기록 존재
 
 ### 강등 절차
 
@@ -171,6 +171,9 @@
 
 | API | 용도 |
 | :--- | :--- |
+| `GET /api/operations/mode` | 현재 운영 모드와 최근 운영 감사 이력 요약 조회 |
+| `POST /api/operations/mode` | 운영 모드 수동 전환 및 승인 기록 생성 |
+| `GET /api/operations/mode-history` | 운영 모드 감사 로그 최신순 조회 |
 | `POST /api/jobs/manual-rebalance` | 현재 시점 기준 리밸런싱 전체 실행 |
 | `POST /api/jobs/eod-calculation` | EOD 계산 수동 실행 |
 | `POST /api/jobs/{jobId}/execute` | 특정 Job 재실행 |
@@ -312,9 +315,9 @@
 - Actuator `health`, `info`, `metrics`가 노출된다.
 - 주문 생성, 주문 요청, 체결 결과, 취소, 재시도는 우선 확인해야 할 핵심 로그다.
 - 보안 관점에서는 잘못된 API Key 접근과 레이트 리밋 초과 로그를 함께 본다.
-- 운영 KPI와 안전 KPI 산출에 필요한 이벤트는 추후 누락 없이 적재할 수 있어야 한다.
+- 운영 KPI와 안전 KPI 산출에 필요한 이벤트는 운영 감사 로그와 알림 이벤트 기준으로 추적한다.
 - KPI breach 발생 시점, 초과 항목, 당시 운영 모드는 반드시 남겨야 한다.
-- `PAPER`, `MANUAL_LIVE`, `AUTO_LIVE` 전환 이벤트와 승인 기록은 운영 감사 로그로 남겨야 한다.
+- `PAPER`, `MANUAL_LIVE`, `AUTO_LIVE` 전환 이벤트와 승인 기록은 현재 `operation_mode_audit`에 남는다.
 
 ## 12. 최소 장애 알림
 

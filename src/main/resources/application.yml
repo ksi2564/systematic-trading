@@ -80,7 +80,7 @@ trading:
       max-retry-exposure-usd: 0
       max-slippage-pct: 0
   security:
-    api-key: ${TRADING_API_KEY:change-me}
+    api-key: ${TRADING_API_KEY}
     public-path-prefixes: []
   scheduling:
     enabled: false

@@ -4,6 +4,8 @@ import lombok.Builder;
 import my.side.trading.core.application.execution.ExecutionGuardSnapshot;
 import my.side.trading.core.application.operation.OperationsKpiSnapshot;
 import my.side.trading.core.domain.execution.order.ExecutionJob;
+import my.side.trading.core.domain.operation.OperatingMode;
+import my.side.trading.core.domain.operation.OperatingModeAuditEvent;
 import my.side.trading.core.domain.portfolio.Portfolio;
 import my.side.trading.core.domain.strategy.StrategyState;
 
@@ -16,8 +18,10 @@ public record DashboardResponse(
         StrategyState strategyState,
         CircuitBreakerInfo circuitBreaker,
         OperationsKpiSnapshot operationsKpi,
+        OperatingMode operatingMode,
         ExecutionGuardSnapshot guard,
-        List<ExecutionJob> recentJobs) {
+        List<ExecutionJob> recentJobs,
+        List<OperatingModeAuditEvent> recentOperatingModeAudits) {
     @Builder
     public record CircuitBreakerInfo(
             BigDecimal vix,
@@ -30,15 +34,19 @@ public record DashboardResponse(
             BigDecimal vix,
             BigDecimal qqq200Ma,
             OperationsKpiSnapshot operationsKpi,
+            OperatingMode operatingMode,
             ExecutionGuardSnapshot guard,
-            List<ExecutionJob> recentJobs) {
+            List<ExecutionJob> recentJobs,
+            List<OperatingModeAuditEvent> recentOperatingModeAudits) {
         return DashboardResponse.builder()
                 .portfolio(portfolio)
                 .strategyState(strategyState)
                 .circuitBreaker(new CircuitBreakerInfo(vix, qqq200Ma))
                 .operationsKpi(operationsKpi)
+                .operatingMode(operatingMode)
                 .guard(guard)
                 .recentJobs(recentJobs)
+                .recentOperatingModeAudits(recentOperatingModeAudits)
                 .build();
     }
 }

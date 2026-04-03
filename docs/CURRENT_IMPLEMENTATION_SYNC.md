@@ -140,9 +140,14 @@
 
 ### P2. 운영 강등 / 승격 이력과 감사 로그
 
-- 운영 모드와 자동 실행 가드는 구현돼 있다.
-- 하지만 `AUTO_LIVE` 승격/강등 이력, 승인 기록, 운영 감사 로그 모델은 없다.
-- 현재는 차단 조건이 실행에 반영될 뿐, “누가 언제 왜 전환했는지”를 구조적으로 남기지 않는다.
+- 현재 운영 모드의 진실 원천은 `trading_control.OPERATING_MODE`다.
+- 부팅 시 DB 값이 없으면 `trading.operation.mode`를 bootstrap 기본값으로 사용한다.
+- 단, bootstrap 값이 `AUTO_LIVE`이고 수동 승인 기록이 필수면 안전하게 `MANUAL_LIVE`로 내려 시작하고 감사 로그를 남긴다.
+- `operation_mode_audit` append-only 테이블에 승격/강등/안전 override 이력이 저장된다.
+- `AUTO_LIVE` 수동 진입은 승인 기록으로 적재되며, `requestedBy`, `reason`, `approvedBy`, `approvedAt`을 함께 남긴다.
+- `GET /api/operations/mode`, `POST /api/operations/mode`, `GET /api/operations/mode-history` 운영 API가 추가됐다.
+- 대시보드 요약은 현재 DB 운영 모드와 최근 운영 감사 이력 5건을 함께 노출한다.
+- 시스템 이벤트 `KPI_BREACH`, `DATA_UNCERTAIN`, `EOD_FAILURE`, `UNRESOLVED_ORDER`, `RISK_LIMIT_BREACH`, `BROKER_API_FAILURE`, `KILL_SWITCH_ON`은 현재 모드가 `AUTO_LIVE`일 때 자동 강등으로 연결된다.
 
 ### P2. 성과 측정 체계
 
@@ -175,8 +180,7 @@
 현재 기준에서 후속 구현 우선순위는 아래가 합리적이다.
 
 1. 운영 환경 공개 경로 재조정
-2. 운영 강등 / 승격 이력 및 감사 로그
-3. 성과 측정 체계(NAV / PnL / MDD)
-4. 파라미터 변경 레지스터
+2. 성과 측정 체계(NAV / PnL / MDD)
+3. 파라미터 변경 레지스터
 
 로드맵 관리 기준 문서는 `docs/DEVELOPER_ROADMAP.md`다.

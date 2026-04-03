@@ -2,6 +2,7 @@ package my.side.trading.adapter.out.operation;
 
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
+import my.side.trading.core.application.operation.OperatingModeService;
 import my.side.trading.core.domain.operation.OpsAlert;
 import my.side.trading.core.domain.operation.OpsAlertPublisher;
 import my.side.trading.core.infrastructure.config.TradingOperationProps;
@@ -16,14 +17,17 @@ import java.time.Duration;
 public class DeduplicatingOpsAlertPublisher implements OpsAlertPublisher {
 
     private final TradingOperationProps operationProps;
+    private final OperatingModeService operatingModeService;
     private final OpsAlertPublisher delegate;
     private final Cache<String, Boolean> dedupeCache;
 
     public DeduplicatingOpsAlertPublisher(
             TradingOperationProps operationProps,
+            OperatingModeService operatingModeService,
             @Qualifier("compositeOpsAlertPublisher") OpsAlertPublisher delegate
     ) {
         this.operationProps = operationProps;
+        this.operatingModeService = operatingModeService;
         this.delegate = delegate;
         this.dedupeCache = Caffeine.newBuilder()
                 .expireAfterWrite(Duration.ofMinutes(operationProps.alerts().dedupeTtlMinutes()))
@@ -34,6 +38,7 @@ public class DeduplicatingOpsAlertPublisher implements OpsAlertPublisher {
     @Override
     public void publish(OpsAlert alert) {
         try {
+            operatingModeService.applySystemAlert(alert);
             if (!operationProps.alerts().enabled()) {
                 return;
             }

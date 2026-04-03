@@ -13,6 +13,11 @@ public record TradingSecurityProps(
         List<String> publicPathPrefixes
 ) {
     public TradingSecurityProps {
-        publicPathPrefixes = publicPathPrefixes == null ? List.of() : List.copyOf(publicPathPrefixes);
+        publicPathPrefixes = publicPathPrefixes == null
+                ? List.of()
+                : publicPathPrefixes.stream()
+                .map(String::trim)
+                .filter(prefix -> !prefix.isEmpty())
+                .toList();
     }
 }

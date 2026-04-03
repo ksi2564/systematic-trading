@@ -13,4 +13,5 @@ logging:
 
 trading:
   security:
+    # prod에서는 운영 API와 Actuator를 public-path-prefixes로 열면 기동 시 실패한다.
     public-path-prefixes: []

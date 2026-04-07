@@ -80,3 +80,25 @@ src/main/java/my/side/trading
 - KIS 자격증명은 환경변수로 주입한다.
 - 로컬 개발 기본 DB 설정은 `src/main/resources/application.yml`에 있다.
 - `trading.scheduling.enabled`, `trading.execution.enabled` 기본값은 `false`이며, 실거래 관련 변경은 특히 보수적으로 검토한다.
+
+## 7. Session Workflow Rules
+
+새 대화 세션에서 개발을 시작할 때는 아래 순서를 기본 절차로 따른다.
+
+1. `.codex/handoff/current.md`를 먼저 읽고 현재 handoff를 기준으로 삼는다.
+2. 현재 브랜치가 로컬 `master`인지 확인한다.
+3. `master`가 아니면 로컬 `master`로 이동한 뒤 시작한다.
+4. 원격 `master`와 로컬 `master`가 맞는지 `fetch`로 확인하고, 필요하면 먼저 최신 상태로 맞춘다.
+5. 로컬 기능 브랜치가 남아 있으면 개발 완료 여부와 `master` 반영 여부를 확인한다.
+6. 이미 개발이 끝났고 `master`에 반영된 로컬 기능 브랜치는 삭제한다.
+7. handoff에 적힌 다음 개발 항목을 진행할 새 로컬 기능 브랜치를 만든다.
+8. 실제 개발은 반드시 그 로컬 기능 브랜치에서 진행한다.
+9. 개발이 끝나면 로컬 기능 브랜치에서 원격 기능 브랜치를 push하고 PR까지 생성한다.
+10. PR 생성까지 완료되면 `.codex/handoff/current.md`를 최신 상태로 갱신하고, 이전 버전은 `.codex/handoff/archive/`로 보관한다.
+
+추가 원칙:
+
+- 특별한 이유가 없는 한 `master`에서 직접 개발하지 않는다.
+- handoff 기준 파일은 `docs/`가 아니라 `.codex/handoff/current.md`다.
+- handoff는 제품 문서가 아니라 세션 전환용 작업 메모로 다룬다.
+- 문서와 주석은 한글을 최우선으로 작성한다.

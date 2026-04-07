@@ -205,6 +205,7 @@
 - `RateLimitFilter`와 `ApiKeyAuthFilter`는 `/*` 전체 경로에 적용된다.
 - 기본값은 공개 경로 없음이다.
 - 공개 예외는 `trading.security.public-path-prefixes`로만 열 수 있다.
+- `trading.security.api-key`는 필수 설정이며, 값이 없거나 공백이면 애플리케이션이 기동하지 않는다.
 - `prod` 프로필에서는 아래 경로를 공개 예외로 둘 수 없고, 설정하면 애플리케이션이 기동하지 않는다.
   - `/api/dashboard/**`
   - `/api/jobs/**`
@@ -215,7 +216,6 @@
 - 비공개 경로는 IP 기준 초당 10 요청으로 제한된다.
 
 ### 현재 구현과 기준 정책 간 차이
-
 - 현재 구현은 일부 조회 경로를 공개 예외로 취급한다.
 - 운영 기준으로는 대시보드와 Actuator를 기본 공개 경로로 보지 않는다.
 - 운영 환경에서는 리버스 프록시, 사설망, 별도 인증 계층 중 최소 하나를 추가하는 것이 필수에 가깝다.
@@ -321,15 +321,27 @@
 
 ## 12. 최소 장애 알림
 
-최소 장애 알림은 현재 구현 범위가 아니라 `다음 범위`다. 다만 `AUTO_LIVE` 운영 완성도를 위해 아래 이벤트는 우선 알림 대상으로 고정한다.
+최소 장애 알림은 현재 구현 범위다. `AUTO_LIVE` 운영 완성도를 위해 아래 이벤트를 dedupe 가능한 운영 알림으로 발행한다.
+
+- 알림 이벤트 모델은 `OpsAlert`이고, 발행 포트는 `OpsAlertPublisher`다.
+- 퍼블리셔 파이프라인은 `DeduplicatingOpsAlertPublisher -> CompositeOpsAlertPublisher -> channel publisher` 구조다.
+- 로그 채널은 `WARN`, `ERROR`를 모두 기록한다.
+- Discord 채널은 `trading.operation.alerts.discord.min-severity` 이상만 전송하고, 기본값은 `ERROR`다.
+- dedupe는 `dedupeKey + TTL` 기준으로 동작한다.
+- 알림 전송 실패는 EOD / 주문 / execution guard 본 흐름을 실패시키지 않는다.
+
+현재 우선 알림 이벤트:
 
 - EOD 계산 실패
 - 브로커 장애 또는 주문 API 실패
-- 데이터 결측 또는 미확정
-- 미정리 주문 또는 부분 체결 지속
-- Kill Switch 활성화 또는 중복 Job 정황
+- 데이터 결측 또는 `DATA_UNCERTAIN`
+- 미정리 주문 또는 부분체결 지속
+- Kill Switch 활성화
+- 중복 Job 탐지
+- KPI breach
+- 실행 리스크 한도 breach
 
-알림 채널은 특정 제품에 고정하지 않고, 운영자가 즉시 인지 가능한 비동기 채널을 사용한다.
+알림 채널은 특정 제품에 고정하지 않고, 운영자가 비동기로 즉시 인지 가능한 채널을 사용한다. 현재 구현 채널은 로그와 Discord Incoming Webhook이다.
 
 ## 13. 운영 문서 사용 원칙
 
@@ -338,3 +350,4 @@
 - 전략 숫자와 해석이 필요하면 `docs/STRATEGY_SPEC.md`를 함께 본다.
 - 현재 코드와 운영 기대가 다를 때는 `docs/CURRENT_IMPLEMENTATION_SYNC.md`에서 갭을 확인한다.
 - 보안 필터 범위와 공개 경로 정책의 기술적 근거는 `docs/decisions/001_code_review_security_and_refactoring.md`를 참조한다.
+

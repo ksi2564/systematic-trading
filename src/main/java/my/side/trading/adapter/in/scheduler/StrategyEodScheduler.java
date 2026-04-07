@@ -6,6 +6,7 @@ import my.side.trading.adapter.out.kis.client.KisOverseasQuotedPriceService;
 import my.side.trading.adapter.out.kis.dto.QuotedPriceResponse;
 import my.side.trading.adapter.out.yahoo.YahooVixService;
 import my.side.trading.core.application.market.MarketCalendarService;
+import my.side.trading.core.application.portfolio.PortfolioPerformanceSnapshotService;
 import my.side.trading.core.application.strategy.StrategyStateEodService;
 import my.side.trading.core.domain.operation.OpsAlert;
 import my.side.trading.core.domain.operation.OpsAlertPublisher;
@@ -27,6 +28,7 @@ public class StrategyEodScheduler {
 
     private final KisOverseasQuotedPriceService quotedPriceService;
     private final StrategyStateEodService eodService;
+    private final PortfolioPerformanceSnapshotService portfolioPerformanceSnapshotService;
     private final YahooVixService yahooVixService;
     private final MarketCalendarService marketCalendarService;
     private final OpsAlertPublisher opsAlertPublisher;
@@ -79,6 +81,7 @@ public class StrategyEodScheduler {
             log.info("Circuit Breaker data: VIX={}, QQQ_200MA={}", vix, qqqMa200);
 
             eodService.runEod(asOfDate, close);
+            capturePerformanceSnapshot(asOfDate);
 
             log.info("EOD updated: asOfDate={}, qqqClose={}", asOfDate, close);
         } catch (Exception e) {
@@ -93,6 +96,24 @@ public class StrategyEodScheduler {
                             "error", e.getClass().getSimpleName(),
                             "message", e.getMessage() == null ? "-" : e.getMessage())));
             throw e;
+        }
+    }
+
+    private void capturePerformanceSnapshot(LocalDate asOfDate) {
+        try {
+            portfolioPerformanceSnapshotService.captureDailySnapshot(asOfDate);
+        } catch (Exception e) {
+            log.error("Performance snapshot capture failed: asOfDate={}", asOfDate, e);
+            opsAlertPublisher.publish(new OpsAlert(
+                    OpsAlertType.PERFORMANCE_SNAPSHOT_FAILURE,
+                    OpsAlertSeverity.ERROR,
+                    "performance-snapshot-failure:" + asOfDate,
+                    "Performance snapshot capture failed",
+                    Map.of(
+                            "asOfDate", asOfDate.toString(),
+                            "source", "StrategyEodScheduler",
+                            "error", e.getClass().getSimpleName(),
+                            "message", e.getMessage() == null ? "-" : e.getMessage())));
         }
     }
 

@@ -6,6 +6,8 @@ import my.side.trading.core.application.execution.ExecutionGuard;
 import my.side.trading.core.application.execution.ExecutionGuardSnapshot;
 import my.side.trading.core.application.operation.OperatingModeService;
 import my.side.trading.core.application.operation.OperationsKpiSnapshot;
+import my.side.trading.core.application.portfolio.PortfolioPerformanceService;
+import my.side.trading.core.application.portfolio.PortfolioPerformanceSummary;
 import my.side.trading.core.application.portfolio.PortfolioService;
 import my.side.trading.core.domain.execution.order.ExecutionJob;
 import my.side.trading.core.domain.execution.order.ExecutionJobRepository;
@@ -44,6 +46,7 @@ class DashboardControllerTest {
         ExecutionGuard executionGuard = mock(ExecutionGuard.class);
         my.side.trading.core.application.operation.OperationsKpiService operationsKpiService =
                 mock(my.side.trading.core.application.operation.OperationsKpiService.class);
+        PortfolioPerformanceService portfolioPerformanceService = mock(PortfolioPerformanceService.class);
         OperatingModeService operatingModeService = mock(OperatingModeService.class);
 
         when(portfolioService.getCurrentPortfolio()).thenReturn(new Portfolio(BigDecimal.TEN, List.of()));
@@ -70,6 +73,22 @@ class DashboardControllerTest {
                 BigDecimal.ZERO,
                 false,
                 List.of()));
+        when(portfolioPerformanceService.getSummary()).thenReturn(new PortfolioPerformanceSummary(
+                true,
+                null,
+                LocalDate.of(2026, 4, 3),
+                new BigDecimal("1000.0000"),
+                new BigDecimal("1200.0000"),
+                new BigDecimal("16.6667"),
+                new BigDecimal("25.0000"),
+                new BigDecimal("50.0000"),
+                new BigDecimal("5.0000"),
+                List.of(new PortfolioPerformanceSummary.MonthlyPnl(
+                        "2026-04",
+                        new BigDecimal("950.0000"),
+                        new BigDecimal("1000.0000"),
+                        new BigDecimal("50.0000"),
+                        new BigDecimal("5.2632")))));
         when(operatingModeService.currentMode()).thenReturn(OperatingMode.MANUAL_LIVE);
         when(operatingModeService.recentHistory(5)).thenReturn(List.of(auditEvent()));
 
@@ -80,11 +99,15 @@ class DashboardControllerTest {
                 jobRepository,
                 executionGuard,
                 operationsKpiService,
+                portfolioPerformanceService,
                 operatingModeService);
 
         DashboardResponse response = controller.getSummary().data();
 
         assertThat(response.operatingMode()).isEqualTo(OperatingMode.MANUAL_LIVE);
+        assertThat(response.performance().dataAvailable()).isTrue();
+        assertThat(response.performance().latestNav()).isEqualByComparingTo("1000.0000");
+        assertThat(response.performance().recentMonthlyPnl()).hasSize(1);
         assertThat(response.recentOperatingModeAudits()).hasSize(1);
         assertThat(response.recentOperatingModeAudits().getFirst().triggerCode()).isEqualTo("KPI_BREACH");
     }

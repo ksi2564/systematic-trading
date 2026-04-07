@@ -2,6 +2,7 @@ package my.side.trading.adapter.out.persistence.jpa.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
+import my.side.trading.core.domain.portfolio.PortfolioSnapshot;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -39,4 +40,29 @@ public class PortfolioSnapshotEntity {
     // DD 퍼센트 (예: 15.23)
     @Column(name = "dd_percent", nullable = false, precision = 7, scale = 4)
     private BigDecimal ddPercent;
+
+    public PortfolioSnapshot toDomain() {
+        return new PortfolioSnapshot(
+                asOfDate,
+                totalValue,
+                cash,
+                wQqq,
+                wQld,
+                wTqqq,
+                ddPercent
+        );
+    }
+
+    public static PortfolioSnapshotEntity from(Long id, PortfolioSnapshot snapshot) {
+        return PortfolioSnapshotEntity.builder()
+                .id(id)
+                .asOfDate(snapshot.asOfDate())
+                .totalValue(snapshot.totalValue())
+                .cash(snapshot.cash())
+                .wQqq(snapshot.wQqq())
+                .wQld(snapshot.wQld())
+                .wTqqq(snapshot.wTqqq())
+                .ddPercent(snapshot.ddPercent())
+                .build();
+    }
 }

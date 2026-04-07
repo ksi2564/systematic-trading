@@ -7,6 +7,7 @@ import my.side.trading.core.adapter.in.web.common.ApiResponse;
 import my.side.trading.core.application.execution.ExecutionGuard;
 import my.side.trading.core.application.operation.OperatingModeService;
 import my.side.trading.core.application.operation.OperationsKpiService;
+import my.side.trading.core.application.portfolio.PortfolioPerformanceService;
 import my.side.trading.core.application.portfolio.PortfolioService;
 import my.side.trading.core.domain.execution.order.ExecutionJob;
 import my.side.trading.core.domain.execution.order.ExecutionJobRepository;
@@ -30,6 +31,7 @@ public class DashboardController {
     private final ExecutionJobRepository jobRepository;
     private final ExecutionGuard executionGuard;
     private final OperationsKpiService operationsKpiService;
+    private final PortfolioPerformanceService portfolioPerformanceService;
     private final OperatingModeService operatingModeService;
 
     @GetMapping("/summary")
@@ -52,6 +54,7 @@ public class DashboardController {
                 .toList();
 
         var operationsKpi = operationsKpiService.snapshot();
+        var performance = portfolioPerformanceService.getSummary();
 
         return ApiResponse.success(DashboardResponse.of(
                 portfolio,
@@ -59,6 +62,7 @@ public class DashboardController {
                 vix,
                 qqq200Ma,
                 operationsKpi,
+                performance,
                 operatingModeService.currentMode(),
                 executionGuard.snapshot(),
                 recentJobs,

@@ -2,6 +2,8 @@ package my.side.trading.core.domain.operation;
 
 public enum OpsAlertType {
     EOD_FAILURE,
+    PERFORMANCE_DATA_MISSING,
+    PERFORMANCE_SNAPSHOT_FAILURE,
     BROKER_API_FAILURE,
     DATA_UNCERTAIN,
     UNRESOLVED_ORDER,

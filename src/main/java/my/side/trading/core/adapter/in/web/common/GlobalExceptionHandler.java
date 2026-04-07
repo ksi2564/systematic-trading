@@ -1,14 +1,16 @@
 package my.side.trading.core.adapter.in.web.common;
 
 import my.side.trading.core.application.execution.ExecutionBlockedException;
+import my.side.trading.core.application.operation.ParameterRegistryConflictException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -24,6 +26,12 @@ public class GlobalExceptionHandler {
         return new ResponseEntity<>(ApiResponse.error(ex.getReason().code()), HttpStatus.CONFLICT);
     }
 
+    @ExceptionHandler(ParameterRegistryConflictException.class)
+    public ResponseEntity<ApiResponse<Void>> handleParameterRegistryConflict(ParameterRegistryConflictException ex) {
+        log.warn("Parameter registry conflict: {}", ex.getMessage());
+        return new ResponseEntity<>(ApiResponse.error(ex.getMessage()), HttpStatus.CONFLICT);
+    }
+
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ApiResponse<Map<String, String>>> handleValidationExceptions(
             MethodArgumentNotValidException ex) {
@@ -35,6 +43,12 @@ public class GlobalExceptionHandler {
         });
         log.warn("Validation failed: {}", errors);
         return new ResponseEntity<>(ApiResponse.error("Validation failed", errors), HttpStatus.BAD_REQUEST);
+    }
+
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ApiResponse<Void>> handleMethodArgumentTypeMismatch(MethodArgumentTypeMismatchException ex) {
+        log.warn("Argument type mismatch: {}", ex.getMessage());
+        return new ResponseEntity<>(ApiResponse.error("Invalid request parameter"), HttpStatus.BAD_REQUEST);
     }
 
     @ExceptionHandler(IllegalArgumentException.class)

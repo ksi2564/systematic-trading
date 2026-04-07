@@ -7,17 +7,18 @@ public enum StrategyPhase {
     DRAWDOWN,
     RECOVERY;
 
-    private static final BigDecimal FIFTEEN = BigDecimal.valueOf(15);
-    private static final BigDecimal TEN = BigDecimal.valueOf(10);
-
-    /**
-     * @param maxDdPercent 해당 ATH 이후 최악의 DD (%)
-     * @param ddPercent    현재 DD (%)
-     */
     public static StrategyPhase from(BigDecimal maxDdPercent, BigDecimal ddPercent) {
-        if (maxDdPercent.compareTo(FIFTEEN) < 0) {
+        return from(maxDdPercent, ddPercent, RecoveryThresholds.defaults());
+    }
+
+    public static StrategyPhase from(
+            BigDecimal maxDdPercent,
+            BigDecimal ddPercent,
+            RecoveryThresholds thresholds
+    ) {
+        if (maxDdPercent.compareTo(thresholds.activationMaxDrawdownPct()) < 0) {
             return NORMAL;
         }
-        return ddPercent.compareTo(TEN) <= 0 ? RECOVERY : DRAWDOWN;
+        return ddPercent.compareTo(thresholds.recoveryDrawdownPct()) <= 0 ? RECOVERY : DRAWDOWN;
     }
 }

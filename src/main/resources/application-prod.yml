@@ -18,7 +18,15 @@ trading:
       - /public/api
     public-path-protection-mode: REVERSE_PROXY
     public-path-protection-note: 공개 포트폴리오 읽기 API는 리버스 프록시 또는 CDN 뒤에서만 노출한다.
+    # 예시 origin이다. 실제 배포에서는 공개 프론트엔드의 실제 HTTPS origin만 남기고
+    # portfolio.example.com 같은 샘플 값은 제거해야 한다.
     public-read-allowed-origins:
       - https://portfolio.example.com
     public-rate-limit-per-minute: 120
     public-cache-max-age-seconds: 300
+    public-client-ip-header: X-Forwarded-For
+    # 예시 CIDR이다. 실제 배포에서는 앱 바로 앞단의 reverse proxy 또는 CDN egress CIDR만 남기고
+    # 사설망 예시값(10.0.0.0/8)은 제거해야 한다. 잘못 두면 forwarded header 신뢰 범위가 과도해진다.
+    public-trusted-proxy-ranges:
+      - 10.0.0.0/8
+    public-access-log-enabled: true

@@ -55,6 +55,9 @@ class TradingSecurityPropsBindingTest {
                     assertThat(props.publicReadAllowedOrigins()).isEmpty();
                     assertThat(props.publicRateLimitPerMinute()).isEqualTo(60);
                     assertThat(props.publicCacheMaxAgeSeconds()).isEqualTo(300);
+                    assertThat(props.publicClientIpHeader()).isEqualTo("X-Forwarded-For");
+                    assertThat(props.publicTrustedProxyRanges()).isEmpty();
+                    assertThat(props.publicAccessLogEnabled()).isFalse();
                 });
     }
 
@@ -82,7 +85,11 @@ class TradingSecurityPropsBindingTest {
                         "trading.security.public-read-allowed-origins[0]=https://portfolio.example.com",
                         "trading.security.public-read-allowed-origins[1]=https://cdn.example.com",
                         "trading.security.public-rate-limit-per-minute=120",
-                        "trading.security.public-cache-max-age-seconds=600")
+                        "trading.security.public-cache-max-age-seconds=600",
+                        "trading.security.public-client-ip-header=X-Forwarded-For",
+                        "trading.security.public-trusted-proxy-ranges[0]=10.0.0.0/8",
+                        "trading.security.public-trusted-proxy-ranges[1]=192.168.0.10",
+                        "trading.security.public-access-log-enabled=true")
                 .run(context -> {
                     assertThat(context).hasNotFailed();
                     TradingSecurityProps props = context.getBean(TradingSecurityProps.class);
@@ -90,6 +97,10 @@ class TradingSecurityPropsBindingTest {
                             .containsExactly("https://portfolio.example.com", "https://cdn.example.com");
                     assertThat(props.publicRateLimitPerMinute()).isEqualTo(120);
                     assertThat(props.publicCacheMaxAgeSeconds()).isEqualTo(600);
+                    assertThat(props.publicClientIpHeader()).isEqualTo("X-Forwarded-For");
+                    assertThat(props.publicTrustedProxyRanges())
+                            .containsExactly("10.0.0.0/8", "192.168.0.10");
+                    assertThat(props.publicAccessLogEnabled()).isTrue();
                 });
     }
 

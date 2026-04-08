@@ -58,6 +58,13 @@ public class SecurityPublicPathPolicyValidator {
                     "공개 경로를 열 때는 trading.security.public-path-protection-note를 비워둘 수 없습니다."
             );
         }
+
+        if (securityProps.publicPathProtectionMode() == PublicPathProtectionMode.REVERSE_PROXY
+                && securityProps.publicTrustedProxyRanges().isEmpty()) {
+            throw new IllegalStateException(
+                    "REVERSE_PROXY 모드에서는 trading.security.public-trusted-proxy-ranges를 비워둘 수 없습니다."
+            );
+        }
     }
 
     static boolean isProdProtectedPrefix(String configuredPrefix) {

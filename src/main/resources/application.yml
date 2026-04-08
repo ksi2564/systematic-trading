@@ -87,6 +87,9 @@ trading:
     public-read-allowed-origins: []
     public-rate-limit-per-minute: 60
     public-cache-max-age-seconds: 300
+    public-client-ip-header: X-Forwarded-For
+    public-trusted-proxy-ranges: []
+    public-access-log-enabled: false
   scheduling:
     enabled: false
   execution:

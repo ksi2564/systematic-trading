@@ -36,7 +36,10 @@ class PublicPortfolioControllerTest {
                 "공개 API는 리버스 프록시 뒤에서만 노출한다.",
                 List.of("https://portfolio.example.com"),
                 120,
-                300
+                300,
+                "X-Forwarded-For",
+                List.of("10.0.0.0/8"),
+                true
         );
         mockMvc = MockMvcBuilders.standaloneSetup(new PublicPortfolioController(publicPortfolioReadService, securityProps))
                 .build();

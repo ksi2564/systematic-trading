@@ -24,13 +24,36 @@ public class WebFilterConfig {
     }
 
     @Bean
-    public FilterRegistrationBean<RateLimitFilter> rateLimitFilter() {
-        FilterRegistrationBean<RateLimitFilter> registration = new FilterRegistrationBean<>();
-        registration.setFilter(new RateLimitFilter(
+    public PublicRequestClientResolver publicRequestClientResolver() {
+        return new PublicRequestClientResolver(
                 securityProps.publicPathPrefixes(),
-                securityProps.publicRateLimitPerMinute()));
+                securityProps.publicClientIpHeader(),
+                securityProps.publicTrustedProxyRanges());
+    }
+
+    @Bean
+    public FilterRegistrationBean<PublicReadAccessLogFilter> publicReadAccessLogFilter(
+            PublicRequestClientResolver publicRequestClientResolver
+    ) {
+        FilterRegistrationBean<PublicReadAccessLogFilter> registration = new FilterRegistrationBean<>();
+        registration.setFilter(new PublicReadAccessLogFilter(
+                publicRequestClientResolver,
+                securityProps.publicAccessLogEnabled()));
         registration.addUrlPatterns("/*");
         registration.setOrder(1);
+        return registration;
+    }
+
+    @Bean
+    public FilterRegistrationBean<RateLimitFilter> rateLimitFilter(
+            PublicRequestClientResolver publicRequestClientResolver
+    ) {
+        FilterRegistrationBean<RateLimitFilter> registration = new FilterRegistrationBean<>();
+        registration.setFilter(new RateLimitFilter(
+                publicRequestClientResolver,
+                securityProps.publicRateLimitPerMinute()));
+        registration.addUrlPatterns("/*");
+        registration.setOrder(2);
         return registration;
     }
 
@@ -39,7 +62,7 @@ public class WebFilterConfig {
         FilterRegistrationBean<ApiKeyAuthFilter> registration = new FilterRegistrationBean<>();
         registration.setFilter(new ApiKeyAuthFilter(securityProps.apiKey(), securityProps.publicPathPrefixes()));
         registration.addUrlPatterns("/*");
-        registration.setOrder(2);
+        registration.setOrder(3);
         return registration;
     }
 }

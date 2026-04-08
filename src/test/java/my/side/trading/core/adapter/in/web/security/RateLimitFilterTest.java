@@ -29,7 +29,7 @@ class RateLimitFilterTest {
 
     @BeforeEach
     void setUp() {
-        filter = new RateLimitFilter(List.of(), 3);
+        filter = new RateLimitFilter(new PublicRequestClientResolver(List.of(), "X-Forwarded-For", List.of()), 3);
     }
 
     @Test
@@ -62,7 +62,9 @@ class RateLimitFilterTest {
 
     @Test
     void 공개_경로는_공개용_별도_레이트리밋을_적용한다() throws ServletException, IOException {
-        RateLimitFilter publicFilter = new RateLimitFilter(List.of("/public/api"), 3);
+        RateLimitFilter publicFilter = new RateLimitFilter(
+                new PublicRequestClientResolver(List.of("/public/api"), "X-Forwarded-For", List.of()),
+                3);
         when(request.getRequestURI()).thenReturn("/public/api/v1/summary");
         when(request.getRemoteAddr()).thenReturn("203.0.113.9");
 
@@ -84,6 +86,26 @@ class RateLimitFilterTest {
         }
 
         verify(chain, times(10)).doFilter(request, response);
+        verify(response).sendError(429, "Too Many Requests");
+    }
+
+    @Test
+    void 신뢰된_프록시_뒤의_공개경로는_forwarded_ip기준으로_레이트리밋한다() throws ServletException, IOException {
+        RateLimitFilter publicFilter = new RateLimitFilter(
+                new PublicRequestClientResolver(
+                        List.of("/public/api"),
+                        "X-Forwarded-For",
+                        List.of("10.0.0.0/8")),
+                3);
+        when(request.getRequestURI()).thenReturn("/public/api/v1/summary");
+        when(request.getRemoteAddr()).thenReturn("10.10.10.10");
+        when(request.getHeader("X-Forwarded-For")).thenReturn("198.51.100.10, 10.10.10.10");
+
+        for (int i = 0; i < 4; i++) {
+            publicFilter.doFilter(request, response, chain);
+        }
+
+        verify(chain, times(3)).doFilter(request, response);
         verify(response).sendError(429, "Too Many Requests");
     }
 }

@@ -226,6 +226,9 @@
 - 공개 읽기 API의 CORS 허용 origin은 `trading.security.public-read-allowed-origins`로 제한한다.
 - 공개 경로도 별도 public rate limit을 적용하며, 무제한 예외로 두지 않는다.
 - 보호 모드는 `PRIVATE_NETWORK`, `VPN`, `REVERSE_PROXY`, `ADDITIONAL_AUTH` 중 하나를 사용한다.
+- `REVERSE_PROXY` 모드에서는 `trading.security.public-trusted-proxy-ranges`를 반드시 설정한다.
+- 공개 경로의 client IP는 신뢰 프록시 범위 안에서만 `trading.security.public-client-ip-header`를 사용해 해석한다.
+- `trading.security.public-access-log-enabled=true`면 공개 읽기 API 접근 로그가 남는다.
 - `trading.security.api-key`는 필수 설정이며, 값이 없거나 공백이면 애플리케이션이 기동하지 않는다.
 - `prod` 프로필에서는 아래 경로를 공개 예외로 둘 수 없고, 설정하면 애플리케이션이 기동하지 않는다.
   - `/api/dashboard/**`
@@ -245,6 +248,9 @@
 - 공개 페이지는 별도 외부 프론트가 소비하고, 애플리케이션은 JSON API만 제공한다.
 - 운영 환경에서는 `REVERSE_PROXY` 선언을 기본값으로 사용하고, reverse proxy 또는 CDN 뒤에서만 노출한다.
 - 공개 API 응답은 짧은 cache-control을 두고, 외부 캐시는 proxy/CDN 계층에서 관리한다.
+- reverse proxy 또는 CDN egress CIDR은 `trading.security.public-trusted-proxy-ranges`에 실제 값으로 반영한다.
+- 브라우저 소비 origin만 `trading.security.public-read-allowed-origins`에 명시하고 wildcard는 사용하지 않는다.
+- 접근 로그는 `my.side.trading.publicapi.access` logger 기준으로 수집하고, reverse proxy access log와 함께 본다.
 
 ### 현재 구현과 기준 정책 간 차이
 - 현재 구현은 일부 조회 경로를 공개 예외로 취급한다.

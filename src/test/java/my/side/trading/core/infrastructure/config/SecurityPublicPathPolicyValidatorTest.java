@@ -61,7 +61,8 @@ class SecurityPublicPathPolicyValidatorTest {
                         "spring.profiles.active=prod",
                         "trading.security.public-path-prefixes[0]=/actuator/health",
                         "trading.security.public-path-protection-mode=REVERSE_PROXY",
-                        "trading.security.public-path-protection-note=리버스 프록시에서 내부 헬스체크만 허용"
+                        "trading.security.public-path-protection-note=리버스 프록시에서 내부 헬스체크만 허용",
+                        "trading.security.public-trusted-proxy-ranges[0]=10.0.0.0/8"
                 )
                 .run(context -> {
                     assertThat(context).hasFailed();
@@ -126,9 +127,25 @@ class SecurityPublicPathPolicyValidatorTest {
                         "spring.profiles.active=prod",
                         "trading.security.public-path-prefixes[0]=/public/api",
                         "trading.security.public-path-protection-mode=REVERSE_PROXY",
-                        "trading.security.public-path-protection-note=공개 포트폴리오 읽기 API는 리버스 프록시 뒤에서만 노출"
+                        "trading.security.public-path-protection-note=공개 포트폴리오 읽기 API는 리버스 프록시 뒤에서만 노출",
+                        "trading.security.public-trusted-proxy-ranges[0]=10.0.0.0/8"
                 )
                 .run(context -> assertThat(context).hasNotFailed());
+    }
+
+    @Test
+    void reverseProxy모드에서는_신뢰프록시범위를_명시해야한다() {
+        contextRunner
+                .withPropertyValues(
+                        "trading.security.public-path-prefixes[0]=/public/api",
+                        "trading.security.public-path-protection-mode=REVERSE_PROXY",
+                        "trading.security.public-path-protection-note=공개 API는 리버스 프록시 뒤에서만 노출"
+                )
+                .run(context -> {
+                    assertThat(context).hasFailed();
+                    assertThat(context.getStartupFailure())
+                            .hasStackTraceContaining("public-trusted-proxy-ranges");
+                });
     }
 
     @Configuration(proxyBeanMethods = false)

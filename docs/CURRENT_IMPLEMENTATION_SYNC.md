@@ -135,6 +135,9 @@
 - `trading.security.api-key`는 필수 설정이며, 값이 없거나 공백이면 애플리케이션이 기동하지 않는다.
 - 공개 경로도 무제한으로 열리지 않고 별도 public rate limit이 적용된다.
 - 공개 읽기 API의 CORS 허용 origin은 `trading.security.public-read-allowed-origins`로 제한한다.
+- `REVERSE_PROXY` 모드에서는 `trading.security.public-trusted-proxy-ranges`를 반드시 설정해야 한다.
+- 공개 경로의 client IP 해석은 신뢰 프록시 범위 안에서만 `trading.security.public-client-ip-header` 값을 사용한다.
+- `trading.security.public-access-log-enabled=true`면 공개 읽기 API 접근 로그를 별도 logger로 남긴다.
 - `prod` 프로필에서는 `/api/dashboard`, `/api/jobs`, `/execution`, `/kis`, `/actuator`를 공개 경로로 설정하면 기동 시 실패한다.
 
 ### 운영 모드 감사 / 전환 API
@@ -166,9 +169,10 @@
 ### P1. 운영 환경 공개 경로 보호
 
 - 공개 경로를 열려면 애플리케이션 설정에 외부 보호 계층과 운영 메모를 명시해야 한다.
-- 공개 포트폴리오 읽기 API는 애플리케이션 안에서 분리됐지만, reverse proxy / CDN / TLS / 접근 로그 같은 실제 외부 경계는 인프라 책임으로 남아 있다.
+- 공개 포트폴리오 읽기 API는 애플리케이션 안에서 분리됐고, 신뢰 프록시 allowlist와 public 접근 로그까지 앱 설정으로 보강됐다.
+- 다만 reverse proxy / CDN / TLS 인증서 / 실제 WAF 정책 같은 외부 경계는 여전히 인프라 책임으로 남아 있다.
 - `prod` 프로필에서 운영 API와 Actuator를 공개 경로로 여는 설정은 기동 시 차단된다.
-- 다만 프록시/VPN/추가 인증 자체를 실제로 구성하는 일은 애플리케이션 밖 인프라 책임으로 남아 있다.
+- 프록시/VPN/추가 인증 자체를 실제로 구성하는 일은 애플리케이션 밖 인프라 책임으로 남아 있다.
 
 ### P2. 성과 측정 체계
 

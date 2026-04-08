@@ -22,14 +22,19 @@ import java.util.concurrent.TimeUnit;
 public class RateLimitFilter implements Filter {
 
     private final Cache<String, Bucket> buckets;
-    private final List<String> publicPathPrefixes;
+    private final PublicRequestClientResolver clientResolver;
     private final int publicRateLimitPerMinute;
 
     public RateLimitFilter(List<String> publicPathPrefixes, int publicRateLimitPerMinute) {
+        this(new PublicRequestClientResolver(publicPathPrefixes, "X-Forwarded-For", List.of()),
+                publicRateLimitPerMinute);
+    }
+
+    public RateLimitFilter(PublicRequestClientResolver clientResolver, int publicRateLimitPerMinute) {
         this.buckets = Caffeine.newBuilder()
                 .expireAfterAccess(1, TimeUnit.HOURS)
                 .build();
-        this.publicPathPrefixes = publicPathPrefixes == null ? List.of() : List.copyOf(publicPathPrefixes);
+        this.clientResolver = clientResolver;
         this.publicRateLimitPerMinute = publicRateLimitPerMinute;
     }
 
@@ -38,23 +43,25 @@ public class RateLimitFilter implements Filter {
             throws IOException, ServletException {
         HttpServletRequest httpRequest = (HttpServletRequest) request;
         String path = httpRequest.getRequestURI();
-        String clientIp = httpRequest.getRemoteAddr();
-        boolean publicPath = isPublicPath(path);
+        boolean publicPath = clientResolver.isPublicPath(path);
+        String clientIp = publicPath
+                ? clientResolver.resolveClientIp(httpRequest)
+                : normalizeValue(httpRequest.getRemoteAddr());
         Bucket bucket = buckets.get(rateLimitKey(clientIp, publicPath), key -> createNewBucket(publicPath));
 
         if (bucket.tryConsume(1)) {
             chain.doFilter(request, response);
         } else {
-            log.warn("Rate limit exceeded for IP: {}, Path={}, Public={}", clientIp, path, publicPath);
+            log.warn(
+                    "Rate limit exceeded for IP: {}, RemoteAddr={}, Path={}, Public={}, ForwardedHeader={}",
+                    clientIp,
+                    normalizeValue(httpRequest.getRemoteAddr()),
+                    path,
+                    publicPath,
+                    normalizeValue(httpRequest.getHeader(clientResolver.forwardedClientIpHeader()))
+            );
             ((HttpServletResponse) response).sendError(429, "Too Many Requests");
         }
-    }
-
-    /**
-     * 레이트리밋 적용 제외 대상인 공개 경로 여부 확인
-     */
-    private boolean isPublicPath(String path) {
-        return publicPathPrefixes.stream().anyMatch(path::startsWith);
     }
 
     private String rateLimitKey(String clientIp, boolean publicPath) {
@@ -77,5 +84,9 @@ public class RateLimitFilter implements Filter {
                 .capacity(publicRateLimitPerMinute)
                 .refillGreedy(publicRateLimitPerMinute, Duration.ofMinutes(1))
                 .build();
+    }
+
+    private String normalizeValue(String value) {
+        return value == null || value.isBlank() ? "-" : value.trim();
     }
 }

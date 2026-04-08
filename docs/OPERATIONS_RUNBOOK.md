@@ -223,6 +223,8 @@
 - 기본값은 공개 경로 없음이다.
 - 공개 예외는 `trading.security.public-path-prefixes`로만 열 수 있다.
 - 공개 예외를 하나라도 열면 `trading.security.public-path-protection-mode`와 `trading.security.public-path-protection-note`를 함께 설정해야 한다.
+- 공개 읽기 API의 CORS 허용 origin은 `trading.security.public-read-allowed-origins`로 제한한다.
+- 공개 경로도 별도 public rate limit을 적용하며, 무제한 예외로 두지 않는다.
 - 보호 모드는 `PRIVATE_NETWORK`, `VPN`, `REVERSE_PROXY`, `ADDITIONAL_AUTH` 중 하나를 사용한다.
 - `trading.security.api-key`는 필수 설정이며, 값이 없거나 공백이면 애플리케이션이 기동하지 않는다.
 - `prod` 프로필에서는 아래 경로를 공개 예외로 둘 수 없고, 설정하면 애플리케이션이 기동하지 않는다.
@@ -233,6 +235,16 @@
   - `/actuator/**`
 - 그 외 경로는 `X-API-KEY` 헤더 검증이 필요하다.
 - 비공개 경로는 IP 기준 초당 10 요청으로 제한된다.
+
+### 공개 포트폴리오 읽기 API 운영 원칙
+
+- 공개 API는 `/public/api/v1/**`만 허용한다.
+- 공개 API는 운영 대시보드(`/api/dashboard/**`)를 재사용하지 않는다.
+- 공개 데이터는 최신 EOD 스냅샷 기준이며 장중 잔고/실시간 값은 사용하지 않는다.
+- 공개 응답은 비율 중심이다. NAV, 현금 금액, 주문 이력, 운영 감사 이력은 포함하지 않는다.
+- 공개 페이지는 별도 외부 프론트가 소비하고, 애플리케이션은 JSON API만 제공한다.
+- 운영 환경에서는 `REVERSE_PROXY` 선언을 기본값으로 사용하고, reverse proxy 또는 CDN 뒤에서만 노출한다.
+- 공개 API 응답은 짧은 cache-control을 두고, 외부 캐시는 proxy/CDN 계층에서 관리한다.
 
 ### 현재 구현과 기준 정책 간 차이
 - 현재 구현은 일부 조회 경로를 공개 예외로 취급한다.

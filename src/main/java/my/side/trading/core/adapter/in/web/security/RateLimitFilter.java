@@ -23,33 +23,29 @@ public class RateLimitFilter implements Filter {
 
     private final Cache<String, Bucket> buckets;
     private final List<String> publicPathPrefixes;
+    private final int publicRateLimitPerMinute;
 
-    public RateLimitFilter(List<String> publicPathPrefixes) {
+    public RateLimitFilter(List<String> publicPathPrefixes, int publicRateLimitPerMinute) {
         this.buckets = Caffeine.newBuilder()
                 .expireAfterAccess(1, TimeUnit.HOURS)
                 .build();
         this.publicPathPrefixes = publicPathPrefixes == null ? List.of() : List.copyOf(publicPathPrefixes);
+        this.publicRateLimitPerMinute = publicRateLimitPerMinute;
     }
 
     @Override
     public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain)
             throws IOException, ServletException {
         HttpServletRequest httpRequest = (HttpServletRequest) request;
-
-        // 공개 경로는 레이트리밋 적용 제외
-        if (isPublicPath(httpRequest.getRequestURI())) {
-            chain.doFilter(request, response);
-            return;
-        }
-
+        String path = httpRequest.getRequestURI();
         String clientIp = httpRequest.getRemoteAddr();
-
-        Bucket bucket = buckets.get(clientIp, key -> createNewBucket());
+        boolean publicPath = isPublicPath(path);
+        Bucket bucket = buckets.get(rateLimitKey(clientIp, publicPath), key -> createNewBucket(publicPath));
 
         if (bucket.tryConsume(1)) {
             chain.doFilter(request, response);
         } else {
-            log.warn("Rate limit exceeded for IP: {}", clientIp);
+            log.warn("Rate limit exceeded for IP: {}, Path={}, Public={}", clientIp, path, publicPath);
             ((HttpServletResponse) response).sendError(429, "Too Many Requests");
         }
     }
@@ -61,12 +57,25 @@ public class RateLimitFilter implements Filter {
         return publicPathPrefixes.stream().anyMatch(path::startsWith);
     }
 
-    private Bucket createNewBucket() {
-        // 초당 10개 허용 (Capacity 10, Refill 10 tokens per second)
-        Bandwidth limit = Bandwidth.builder()
+    private String rateLimitKey(String clientIp, boolean publicPath) {
+        return (publicPath ? "public:" : "private:") + clientIp;
+    }
+
+    private Bucket createNewBucket(boolean publicPath) {
+        return Bucket.builder().addLimit(publicPath ? publicBandwidth() : privateBandwidth()).build();
+    }
+
+    private Bandwidth privateBandwidth() {
+        return Bandwidth.builder()
                 .capacity(10)
                 .refillGreedy(10, Duration.ofSeconds(1))
                 .build();
-        return Bucket.builder().addLimit(limit).build();
+    }
+
+    private Bandwidth publicBandwidth() {
+        return Bandwidth.builder()
+                .capacity(publicRateLimitPerMinute)
+                .refillGreedy(publicRateLimitPerMinute, Duration.ofMinutes(1))
+                .build();
     }
 }

@@ -34,6 +34,7 @@
 - 최소 장애 알림 이벤트 모델, dedupe, 로그 채널, Discord webhook 채널
 - 운영 모드 감사 로그, 수동 전환 API, 자동 강등 이력
 - 대시보드 요약 / Job 이력 조회
+- 공개 포트폴리오 요약 / 성과 읽기 API
 - API Key 필수 설정 기반 인증과 레이트 리밋
 
 핵심 구현 포인트:
@@ -132,6 +133,8 @@
 - 보호 모드는 `PRIVATE_NETWORK`, `VPN`, `REVERSE_PROXY`, `ADDITIONAL_AUTH` 중 하나로 선언한다.
 - 기본값은 공개 경로 없음이다.
 - `trading.security.api-key`는 필수 설정이며, 값이 없거나 공백이면 애플리케이션이 기동하지 않는다.
+- 공개 경로도 무제한으로 열리지 않고 별도 public rate limit이 적용된다.
+- 공개 읽기 API의 CORS 허용 origin은 `trading.security.public-read-allowed-origins`로 제한한다.
 - `prod` 프로필에서는 `/api/dashboard`, `/api/jobs`, `/execution`, `/kis`, `/actuator`를 공개 경로로 설정하면 기동 시 실패한다.
 
 ### 운영 모드 감사 / 전환 API
@@ -145,7 +148,16 @@
 - 대시보드 요약은 현재 DB 운영 모드와 최근 운영 감사 이력 5건을 함께 노출한다.
 - `GET /api/dashboard/history`는 최신순 Job 이력, 운영 모드 감사 이력, 최근 성과 스냅샷을 함께 노출한다.
 - `GET /api/dashboard/performance`는 성과 요약, 최근 일별 NAV/DD 시계열, 월별 손익 이력을 함께 노출한다.
+- `GET /public/api/v1/summary`는 최신 EOD 스냅샷 기준 공개용 요약 성과와 보유 비중만 노출한다.
+- `GET /public/api/v1/performance`는 절대 금액 없이 정규화 인덱스와 월별 수익률만 노출한다.
 - 시스템 이벤트 `KPI_BREACH`, `DATA_UNCERTAIN`, `EOD_FAILURE`, `UNRESOLVED_ORDER`, `RISK_LIMIT_BREACH`, `BROKER_API_FAILURE`, `KILL_SWITCH_ON`은 현재 모드가 `AUTO_LIVE`일 때 자동 강등으로 연결된다.
+
+### 파라미터 변경 이력 레지스터
+
+- `ParameterRegistryService`가 핵심 파라미터 레지스터를 bootstrap / 조회 / 변경 이력 적재까지 관리한다.
+- `PropertyBasedEffectiveParameterSnapshotProvider`가 현재 설정값을 레지스터 기준값으로 읽기 쉬운 문자열로 노출한다.
+- `GET /api/operations/parameter-registry`, `GET /api/operations/parameter-registry/history`, `POST /api/operations/parameter-registry/history`가 구현돼 있다.
+- 변경 기록에는 변경자, 사유, 상태, 근거, 검증 방법, 검증 요약, 다음 재검토일, 관련 산출물이 함께 저장된다.
 
 ## 4. 남아 있는 정책-구현 갭
 
@@ -154,6 +166,7 @@
 ### P1. 운영 환경 공개 경로 보호
 
 - 공개 경로를 열려면 애플리케이션 설정에 외부 보호 계층과 운영 메모를 명시해야 한다.
+- 공개 포트폴리오 읽기 API는 애플리케이션 안에서 분리됐지만, reverse proxy / CDN / TLS / 접근 로그 같은 실제 외부 경계는 인프라 책임으로 남아 있다.
 - `prod` 프로필에서 운영 API와 Actuator를 공개 경로로 여는 설정은 기동 시 차단된다.
 - 다만 프록시/VPN/추가 인증 자체를 실제로 구성하는 일은 애플리케이션 밖 인프라 책임으로 남아 있다.
 
@@ -162,11 +175,6 @@
 - 현재 KPI는 운영 안전 중단용 최소 모델이다.
 - NAV, 누계 PnL, MDD, 성과 리포트 API는 추가됐지만 해석 기준은 아직 최소 수준이다.
 - 수수료, 세금, 장기 보유 비용까지 포함한 성과 해석 체계도 아직 없다.
-
-### P3. 파라미터 변경 이력 레지스터
-
-- 전략 파라미터 변경 이력, 변경자, 변경 근거, 검증 결과를 함께 관리하는 레지스터가 없다.
-- 현재는 설정 변경과 코드 변경 이력이 분리돼 있다.
 
 ## 5. 운영 가능 수준 판단
 
@@ -177,7 +185,7 @@
   - 남은 일은 앱 밖 인프라 보호, 운영 점검, 배포 환경 검증에 가깝다.
 - `MANUAL_LIVE`
   - 조건부로 가능하다.
-  - 다만 파라미터 변경 이력 레지스터가 없어 운영 중 설정 변경 추적성이 약하다.
+  - 파라미터 변경 이력 레지스터와 공개용 읽기 API 경계는 들어왔지만, 실거래 운영 기록과 인프라 보호 구성이 더 필요하다.
 - `AUTO_LIVE`
   - 아직 보수적으로는 이르다.
   - 수동 실거래 운영 기록, 승격 체크리스트 검증, 인프라 보호 구성이 더 필요하다.
@@ -197,14 +205,16 @@
 - 실행 리스크 한도 4종 부재
 - 최소 장애 알림 골격 부재
 - 운영 모드 감사 로그 / 전환 API 부재
+- 파라미터 변경 이력 레지스터 부재
+- 공개용 포트폴리오 읽기 API 부재
 - API key placeholder fallback 제거 부재
 
 ## 7. 다음 우선순위
 
 현재 기준에서 후속 구현 우선순위는 아래가 합리적이다.
 
-1. 파라미터 변경 이력 레지스터
-2. 운영 환경 공개 경로 보호 사양 확정과 실제 인프라 적용
-3. 성과 측정 체계(NAV / PnL / MDD) 고도화
+1. 공개 운영 환경의 reverse proxy / CDN / TLS / 접근 로그 실제 적용
+2. 성과 측정 체계(NAV / PnL / MDD) 고도화
+3. `AUTO_LIVE` 승격 전 운영 리허설과 체크리스트 구체화
 
 로드맵 관리 기준 문서는 `docs/DEVELOPER_ROADMAP.md`다.

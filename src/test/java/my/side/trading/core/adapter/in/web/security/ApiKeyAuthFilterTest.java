@@ -25,7 +25,7 @@ class ApiKeyAuthFilterTest {
     private FilterChain chain;
 
     private final String VALID_KEY = "test-key";
-    private ApiKeyAuthFilter filter = new ApiKeyAuthFilter(VALID_KEY, List.of());
+    private final ApiKeyAuthFilter filter = new ApiKeyAuthFilter(VALID_KEY, List.of());
 
     @Test
     void 유효한_키_제공시_통과() throws ServletException, IOException {
@@ -106,8 +106,8 @@ class ApiKeyAuthFilterTest {
 
     @Test
     void 설정된_공개경로는_키_없이_통과() throws ServletException, IOException {
-        ApiKeyAuthFilter publicFilter = new ApiKeyAuthFilter(VALID_KEY, List.of("/actuator", "/swagger-ui"));
-        when(request.getRequestURI()).thenReturn("/actuator/health");
+        ApiKeyAuthFilter publicFilter = new ApiKeyAuthFilter(VALID_KEY, List.of("/public/api", "/actuator"));
+        when(request.getRequestURI()).thenReturn("/public/api/v1/summary");
 
         publicFilter.doFilter(request, response, chain);
 

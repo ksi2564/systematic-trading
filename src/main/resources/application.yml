@@ -84,6 +84,9 @@ trading:
     public-path-prefixes: []
     public-path-protection-mode: UNSPECIFIED
     public-path-protection-note: ""
+    public-read-allowed-origins: []
+    public-rate-limit-per-minute: 60
+    public-cache-max-age-seconds: 300
   scheduling:
     enabled: false
   execution:

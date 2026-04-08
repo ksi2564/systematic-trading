@@ -12,8 +12,14 @@ public record TradingSecurityProps(
         @NotBlank String apiKey,
         List<String> publicPathPrefixes,
         PublicPathProtectionMode publicPathProtectionMode,
-        String publicPathProtectionNote
+        String publicPathProtectionNote,
+        List<String> publicReadAllowedOrigins,
+        int publicRateLimitPerMinute,
+        int publicCacheMaxAgeSeconds
 ) {
+    private static final int DEFAULT_PUBLIC_RATE_LIMIT_PER_MINUTE = 60;
+    private static final int DEFAULT_PUBLIC_CACHE_MAX_AGE_SECONDS = 300;
+
     public TradingSecurityProps {
         publicPathPrefixes = publicPathPrefixes == null
                 ? List.of()
@@ -27,5 +33,17 @@ public record TradingSecurityProps(
         publicPathProtectionNote = publicPathProtectionNote == null
                 ? ""
                 : publicPathProtectionNote.trim();
+        publicReadAllowedOrigins = publicReadAllowedOrigins == null
+                ? List.of()
+                : publicReadAllowedOrigins.stream()
+                .map(String::trim)
+                .filter(origin -> !origin.isEmpty())
+                .toList();
+        publicRateLimitPerMinute = publicRateLimitPerMinute <= 0
+                ? DEFAULT_PUBLIC_RATE_LIMIT_PER_MINUTE
+                : publicRateLimitPerMinute;
+        publicCacheMaxAgeSeconds = publicCacheMaxAgeSeconds <= 0
+                ? DEFAULT_PUBLIC_CACHE_MAX_AGE_SECONDS
+                : publicCacheMaxAgeSeconds;
     }
 }

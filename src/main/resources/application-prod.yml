@@ -14,4 +14,11 @@ logging:
 trading:
   security:
     # prod에서는 운영 API와 Actuator를 public-path-prefixes로 열면 기동 시 실패한다.
-    public-path-prefixes: []
+    public-path-prefixes:
+      - /public/api
+    public-path-protection-mode: REVERSE_PROXY
+    public-path-protection-note: 공개 포트폴리오 읽기 API는 리버스 프록시 또는 CDN 뒤에서만 노출한다.
+    public-read-allowed-origins:
+      - https://portfolio.example.com
+    public-rate-limit-per-minute: 120
+    public-cache-max-age-seconds: 300

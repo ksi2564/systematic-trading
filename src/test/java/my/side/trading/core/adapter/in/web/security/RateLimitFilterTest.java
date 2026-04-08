@@ -29,7 +29,7 @@ class RateLimitFilterTest {
 
     @BeforeEach
     void setUp() {
-        filter = new RateLimitFilter(List.of());
+        filter = new RateLimitFilter(List.of(), 3);
     }
 
     @Test
@@ -61,17 +61,17 @@ class RateLimitFilterTest {
     }
 
     @Test
-    void 공개_경로는_설정된_경우에만_레이트리밋_적용_제외() throws ServletException, IOException {
-        RateLimitFilter publicFilter = new RateLimitFilter(List.of("/actuator"));
-        when(request.getRequestURI()).thenReturn("/actuator/health");
+    void 공개_경로는_공개용_별도_레이트리밋을_적용한다() throws ServletException, IOException {
+        RateLimitFilter publicFilter = new RateLimitFilter(List.of("/public/api"), 3);
+        when(request.getRequestURI()).thenReturn("/public/api/v1/summary");
+        when(request.getRemoteAddr()).thenReturn("203.0.113.9");
 
-        // 20회 요청해도 모두 통과 (레이트리밋 미적용)
-        for (int i = 0; i < 20; i++) {
+        for (int i = 0; i < 4; i++) {
             publicFilter.doFilter(request, response, chain);
         }
 
-        verify(chain, times(20)).doFilter(request, response);
-        verify(request, never()).getRemoteAddr(); // IP 체크조차 안함
+        verify(chain, times(3)).doFilter(request, response);
+        verify(response).sendError(429, "Too Many Requests");
     }
 
     @Test

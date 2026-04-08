@@ -119,6 +119,18 @@ class SecurityPublicPathPolicyValidatorTest {
                 .run(context -> assertThat(context).hasNotFailed());
     }
 
+    @Test
+    void prod에서도_public_api는_보호선언이있으면_열수있다() {
+        contextRunner
+                .withPropertyValues(
+                        "spring.profiles.active=prod",
+                        "trading.security.public-path-prefixes[0]=/public/api",
+                        "trading.security.public-path-protection-mode=REVERSE_PROXY",
+                        "trading.security.public-path-protection-note=공개 포트폴리오 읽기 API는 리버스 프록시 뒤에서만 노출"
+                )
+                .run(context -> assertThat(context).hasNotFailed());
+    }
+
     @Configuration(proxyBeanMethods = false)
     @EnableConfigurationProperties(TradingSecurityProps.class)
     static class SecurityPolicyConfig {

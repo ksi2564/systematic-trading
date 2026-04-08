@@ -52,6 +52,9 @@ class TradingSecurityPropsBindingTest {
                     assertThat(props.publicPathPrefixes()).containsExactly("/actuator");
                     assertThat(props.publicPathProtectionMode()).isEqualTo(PublicPathProtectionMode.UNSPECIFIED);
                     assertThat(props.publicPathProtectionNote()).isEmpty();
+                    assertThat(props.publicReadAllowedOrigins()).isEmpty();
+                    assertThat(props.publicRateLimitPerMinute()).isEqualTo(60);
+                    assertThat(props.publicCacheMaxAgeSeconds()).isEqualTo(300);
                 });
     }
 
@@ -68,6 +71,25 @@ class TradingSecurityPropsBindingTest {
                     TradingSecurityProps props = context.getBean(TradingSecurityProps.class);
                     assertThat(props.publicPathProtectionMode()).isEqualTo(PublicPathProtectionMode.VPN);
                     assertThat(props.publicPathProtectionNote()).isEqualTo("사내 VPN 뒤에서만 문서를 공개한다");
+                });
+    }
+
+    @Test
+    void shouldBindPublicReadOptions() {
+        contextRunner
+                .withPropertyValues(
+                        "trading.security.api-key=test-key",
+                        "trading.security.public-read-allowed-origins[0]=https://portfolio.example.com",
+                        "trading.security.public-read-allowed-origins[1]=https://cdn.example.com",
+                        "trading.security.public-rate-limit-per-minute=120",
+                        "trading.security.public-cache-max-age-seconds=600")
+                .run(context -> {
+                    assertThat(context).hasNotFailed();
+                    TradingSecurityProps props = context.getBean(TradingSecurityProps.class);
+                    assertThat(props.publicReadAllowedOrigins())
+                            .containsExactly("https://portfolio.example.com", "https://cdn.example.com");
+                    assertThat(props.publicRateLimitPerMinute()).isEqualTo(120);
+                    assertThat(props.publicCacheMaxAgeSeconds()).isEqualTo(600);
                 });
     }
 

@@ -13,11 +13,24 @@ public class WebFilterConfig {
     private final TradingSecurityProps securityProps;
 
     @Bean
+    public FilterRegistrationBean<PublicReadCorsFilter> publicReadCorsFilter() {
+        FilterRegistrationBean<PublicReadCorsFilter> registration = new FilterRegistrationBean<>();
+        registration.setFilter(new PublicReadCorsFilter(
+                securityProps.publicPathPrefixes(),
+                securityProps.publicReadAllowedOrigins()));
+        registration.addUrlPatterns("/*");
+        registration.setOrder(0);
+        return registration;
+    }
+
+    @Bean
     public FilterRegistrationBean<RateLimitFilter> rateLimitFilter() {
         FilterRegistrationBean<RateLimitFilter> registration = new FilterRegistrationBean<>();
-        registration.setFilter(new RateLimitFilter(securityProps.publicPathPrefixes()));
-        registration.addUrlPatterns("/*"); // 전체 경로에 적용 (공개 경로는 필터 내부에서 제외)
-        registration.setOrder(1); // 가장 먼저 실행
+        registration.setFilter(new RateLimitFilter(
+                securityProps.publicPathPrefixes(),
+                securityProps.publicRateLimitPerMinute()));
+        registration.addUrlPatterns("/*");
+        registration.setOrder(1);
         return registration;
     }
 
@@ -25,8 +38,8 @@ public class WebFilterConfig {
     public FilterRegistrationBean<ApiKeyAuthFilter> apiKeyAuthFilter() {
         FilterRegistrationBean<ApiKeyAuthFilter> registration = new FilterRegistrationBean<>();
         registration.setFilter(new ApiKeyAuthFilter(securityProps.apiKey(), securityProps.publicPathPrefixes()));
-        registration.addUrlPatterns("/*"); // 전체 경로에 적용 (공개 경로는 필터 내부에서 제외)
-        registration.setOrder(2); // Rate Limit 통과 후 인증 체크
+        registration.addUrlPatterns("/*");
+        registration.setOrder(2);
         return registration;
     }
 }

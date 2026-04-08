@@ -205,6 +205,8 @@
 - `RateLimitFilter`와 `ApiKeyAuthFilter`는 `/*` 전체 경로에 적용된다.
 - 기본값은 공개 경로 없음이다.
 - 공개 예외는 `trading.security.public-path-prefixes`로만 열 수 있다.
+- 공개 예외를 하나라도 열면 `trading.security.public-path-protection-mode`와 `trading.security.public-path-protection-note`를 함께 설정해야 한다.
+- 보호 모드는 `PRIVATE_NETWORK`, `VPN`, `REVERSE_PROXY`, `ADDITIONAL_AUTH` 중 하나를 사용한다.
 - `trading.security.api-key`는 필수 설정이며, 값이 없거나 공백이면 애플리케이션이 기동하지 않는다.
 - `prod` 프로필에서는 아래 경로를 공개 예외로 둘 수 없고, 설정하면 애플리케이션이 기동하지 않는다.
   - `/api/dashboard/**`

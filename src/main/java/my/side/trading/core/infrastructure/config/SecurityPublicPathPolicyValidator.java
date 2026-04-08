@@ -25,6 +25,8 @@ public class SecurityPublicPathPolicyValidator {
 
     @PostConstruct
     void validate() {
+        validatePublicPathProtectionDeclaration();
+
         if (!environment.acceptsProfiles(Profiles.of("prod"))) {
             return;
         }
@@ -36,6 +38,24 @@ public class SecurityPublicPathPolicyValidator {
         if (!violations.isEmpty()) {
             throw new IllegalStateException(
                     "prod profile에서는 운영 API/Actuator 경로를 public-path-prefixes로 열 수 없습니다: " + violations
+            );
+        }
+    }
+
+    private void validatePublicPathProtectionDeclaration() {
+        if (securityProps.publicPathPrefixes().isEmpty()) {
+            return;
+        }
+
+        if (securityProps.publicPathProtectionMode() == PublicPathProtectionMode.UNSPECIFIED) {
+            throw new IllegalStateException(
+                    "공개 경로를 열 때는 trading.security.public-path-protection-mode를 명시해야 합니다."
+            );
+        }
+
+        if (securityProps.publicPathProtectionNote().isBlank()) {
+            throw new IllegalStateException(
+                    "공개 경로를 열 때는 trading.security.public-path-protection-note를 비워둘 수 없습니다."
             );
         }
     }

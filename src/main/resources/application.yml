@@ -82,6 +82,8 @@ trading:
   security:
     api-key: ${TRADING_API_KEY}
     public-path-prefixes: []
+    public-path-protection-mode: UNSPECIFIED
+    public-path-protection-note: ""
   scheduling:
     enabled: false
   execution:

@@ -50,6 +50,24 @@ class TradingSecurityPropsBindingTest {
                     TradingSecurityProps props = context.getBean(TradingSecurityProps.class);
                     assertThat(props.apiKey()).isEqualTo("test-key");
                     assertThat(props.publicPathPrefixes()).containsExactly("/actuator");
+                    assertThat(props.publicPathProtectionMode()).isEqualTo(PublicPathProtectionMode.UNSPECIFIED);
+                    assertThat(props.publicPathProtectionNote()).isEmpty();
+                });
+    }
+
+    @Test
+    void shouldBindPublicPathProtectionMetadata() {
+        contextRunner
+                .withPropertyValues(
+                        "trading.security.api-key=test-key",
+                        "trading.security.public-path-prefixes[0]=/swagger-ui",
+                        "trading.security.public-path-protection-mode=VPN",
+                        "trading.security.public-path-protection-note=사내 VPN 뒤에서만 문서를 공개한다")
+                .run(context -> {
+                    assertThat(context).hasNotFailed();
+                    TradingSecurityProps props = context.getBean(TradingSecurityProps.class);
+                    assertThat(props.publicPathProtectionMode()).isEqualTo(PublicPathProtectionMode.VPN);
+                    assertThat(props.publicPathProtectionNote()).isEqualTo("사내 VPN 뒤에서만 문서를 공개한다");
                 });
     }
 

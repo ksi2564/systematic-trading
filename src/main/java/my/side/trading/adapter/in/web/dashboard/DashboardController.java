@@ -2,6 +2,7 @@ package my.side.trading.adapter.in.web.dashboard;
 
 import lombok.RequiredArgsConstructor;
 import my.side.trading.adapter.in.scheduler.StrategyEodScheduler;
+import my.side.trading.adapter.in.web.dashboard.dto.DashboardHistoryResponse;
 import my.side.trading.adapter.in.web.dashboard.dto.DashboardResponse;
 import my.side.trading.core.adapter.in.web.common.ApiResponse;
 import my.side.trading.core.application.execution.ExecutionGuard;
@@ -11,14 +12,16 @@ import my.side.trading.core.application.portfolio.PortfolioPerformanceService;
 import my.side.trading.core.application.portfolio.PortfolioService;
 import my.side.trading.core.domain.execution.order.ExecutionJob;
 import my.side.trading.core.domain.execution.order.ExecutionJobRepository;
+import my.side.trading.core.domain.portfolio.PortfolioSnapshot;
+import my.side.trading.core.domain.portfolio.PortfolioSnapshotRepository;
 import my.side.trading.core.domain.strategy.StrategyStateRepository;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.math.BigDecimal;
 import java.util.Comparator;
-import java.util.List;
 
 @RestController
 @RequiredArgsConstructor
@@ -32,7 +35,11 @@ public class DashboardController {
     private final ExecutionGuard executionGuard;
     private final OperationsKpiService operationsKpiService;
     private final PortfolioPerformanceService portfolioPerformanceService;
+    private final PortfolioSnapshotRepository portfolioSnapshotRepository;
     private final OperatingModeService operatingModeService;
+
+    private static final int DEFAULT_HISTORY_LIMIT = 20;
+    private static final int MAX_HISTORY_LIMIT = 100;
 
     @GetMapping("/summary")
     public ApiResponse<DashboardResponse> getSummary() {
@@ -70,12 +77,46 @@ public class DashboardController {
     }
 
     @GetMapping("/history")
-    public ApiResponse<List<ExecutionJob>> getHistory() {
-        // 전체 매매 이력 조회 (최신순)
-        var history = jobRepository.findAll().stream()
-                .sorted(Comparator.comparing(ExecutionJob::getSignalDate).reversed())
+    public ApiResponse<DashboardHistoryResponse> getHistory(
+            @RequestParam(defaultValue = "20") int limit
+    ) {
+        int normalizedLimit = normalizeLimit(limit);
+
+        var jobs = jobRepository.findAll().stream()
+                .sorted(jobComparator())
+                .limit(normalizedLimit)
+                .map(DashboardHistoryResponse.JobHistoryItem::from)
                 .toList();
 
-        return ApiResponse.success(history);
+        var operatingAudits = operatingModeService.recentHistory(normalizedLimit).stream()
+                .map(DashboardHistoryResponse.OperatingModeAuditItem::from)
+                .toList();
+
+        var performanceSnapshots = portfolioSnapshotRepository.findAllOrderByAsOfDateAsc().stream()
+                .sorted(performanceSnapshotComparator())
+                .limit(normalizedLimit)
+                .map(DashboardHistoryResponse.PerformanceSnapshotItem::from)
+                .toList();
+
+        return ApiResponse.success(new DashboardHistoryResponse(
+                normalizedLimit,
+                jobs,
+                operatingAudits,
+                performanceSnapshots
+        ));
+    }
+
+    private int normalizeLimit(int limit) {
+        return limit <= 0 ? DEFAULT_HISTORY_LIMIT : Math.min(limit, MAX_HISTORY_LIMIT);
+    }
+
+    private Comparator<ExecutionJob> jobComparator() {
+        return Comparator.comparing(ExecutionJob::getSignalDate, Comparator.nullsLast(Comparator.reverseOrder()))
+                .thenComparing(ExecutionJob::getExecuteAfter, Comparator.nullsLast(Comparator.reverseOrder()))
+                .thenComparing(ExecutionJob::getId, Comparator.nullsLast(Comparator.reverseOrder()));
+    }
+
+    private Comparator<PortfolioSnapshot> performanceSnapshotComparator() {
+        return Comparator.comparing(PortfolioSnapshot::asOfDate, Comparator.nullsLast(Comparator.reverseOrder()));
     }
 }

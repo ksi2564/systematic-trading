@@ -3,6 +3,7 @@ package my.side.trading.adapter.in.web.dashboard;
 import lombok.RequiredArgsConstructor;
 import my.side.trading.adapter.in.scheduler.StrategyEodScheduler;
 import my.side.trading.adapter.in.web.dashboard.dto.DashboardHistoryResponse;
+import my.side.trading.adapter.in.web.dashboard.dto.DashboardPerformanceResponse;
 import my.side.trading.adapter.in.web.dashboard.dto.DashboardResponse;
 import my.side.trading.core.adapter.in.web.common.ApiResponse;
 import my.side.trading.core.application.execution.ExecutionGuard;
@@ -103,6 +104,15 @@ public class DashboardController {
                 jobs,
                 operatingAudits,
                 performanceSnapshots
+        ));
+    }
+
+    @GetMapping("/performance")
+    public ApiResponse<DashboardPerformanceResponse> getPerformance(
+            @RequestParam(defaultValue = "60") int dailyLimit
+    ) {
+        return ApiResponse.success(DashboardPerformanceResponse.from(
+                portfolioPerformanceService.getReport(dailyLimit)
         ));
     }
 

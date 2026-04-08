@@ -2,12 +2,14 @@ package my.side.trading.adapter.in.web.dashboard;
 
 import my.side.trading.adapter.in.scheduler.StrategyEodScheduler;
 import my.side.trading.adapter.in.web.dashboard.dto.DashboardHistoryResponse;
+import my.side.trading.adapter.in.web.dashboard.dto.DashboardPerformanceResponse;
 import my.side.trading.adapter.in.web.dashboard.dto.DashboardResponse;
 import my.side.trading.core.application.execution.ExecutionGuard;
 import my.side.trading.core.application.execution.ExecutionGuardSnapshot;
 import my.side.trading.core.application.operation.OperatingModeService;
 import my.side.trading.core.application.operation.OperationsKpiSnapshot;
 import my.side.trading.core.application.portfolio.PortfolioPerformanceService;
+import my.side.trading.core.application.portfolio.PortfolioPerformanceReport;
 import my.side.trading.core.application.portfolio.PortfolioPerformanceSummary;
 import my.side.trading.core.application.portfolio.PortfolioService;
 import my.side.trading.core.domain.execution.order.ExecutionJob;
@@ -216,6 +218,80 @@ class DashboardControllerTest {
 
         assertThat(defaulted.limit()).isEqualTo(20);
         assertThat(capped.limit()).isEqualTo(100);
+    }
+
+    @Test
+    void performanceReturnsSummaryAndDailySnapshotSeries() {
+        PortfolioService portfolioService = mock(PortfolioService.class);
+        StrategyStateRepository strategyStateRepository = mock(StrategyStateRepository.class);
+        StrategyEodScheduler scheduler = mock(StrategyEodScheduler.class);
+        ExecutionJobRepository jobRepository = mock(ExecutionJobRepository.class);
+        ExecutionGuard executionGuard = mock(ExecutionGuard.class);
+        my.side.trading.core.application.operation.OperationsKpiService operationsKpiService =
+                mock(my.side.trading.core.application.operation.OperationsKpiService.class);
+        PortfolioPerformanceService portfolioPerformanceService = mock(PortfolioPerformanceService.class);
+        PortfolioSnapshotRepository portfolioSnapshotRepository = mock(PortfolioSnapshotRepository.class);
+        OperatingModeService operatingModeService = mock(OperatingModeService.class);
+
+        when(portfolioPerformanceService.getReport(30)).thenReturn(new PortfolioPerformanceReport(
+                new PortfolioPerformanceSummary(
+                        true,
+                        null,
+                        LocalDate.of(2026, 4, 8),
+                        new BigDecimal("1100.0000"),
+                        new BigDecimal("1200.0000"),
+                        new BigDecimal("8.3333"),
+                        new BigDecimal("10.0000"),
+                        new BigDecimal("100.0000"),
+                        new BigDecimal("10.0000"),
+                        List.of()
+                ),
+                30,
+                List.of(
+                        new PortfolioSnapshot(
+                                LocalDate.of(2026, 4, 7),
+                                new BigDecimal("1080.0000"),
+                                new BigDecimal("100.0000"),
+                                new BigDecimal("100.0000"),
+                                BigDecimal.ZERO,
+                                BigDecimal.ZERO,
+                                new BigDecimal("10.0000")),
+                        new PortfolioSnapshot(
+                                LocalDate.of(2026, 4, 8),
+                                new BigDecimal("1100.0000"),
+                                new BigDecimal("120.0000"),
+                                new BigDecimal("90.0000"),
+                                new BigDecimal("10.0000"),
+                                BigDecimal.ZERO,
+                                new BigDecimal("8.3333"))
+                ),
+                List.of(new PortfolioPerformanceSummary.MonthlyPnl(
+                        "2026-04",
+                        new BigDecimal("1000.0000"),
+                        new BigDecimal("1100.0000"),
+                        new BigDecimal("100.0000"),
+                        new BigDecimal("10.0000")))
+        ));
+
+        DashboardController controller = new DashboardController(
+                portfolioService,
+                strategyStateRepository,
+                scheduler,
+                jobRepository,
+                executionGuard,
+                operationsKpiService,
+                portfolioPerformanceService,
+                portfolioSnapshotRepository,
+                operatingModeService);
+
+        DashboardPerformanceResponse response = controller.getPerformance(30).data();
+
+        assertThat(response.dailySnapshotLimit()).isEqualTo(30);
+        assertThat(response.summary().latestNav()).isEqualByComparingTo("1100.0000");
+        assertThat(response.recentDailySnapshots()).hasSize(2);
+        assertThat(response.recentDailySnapshots().getLast().asOfDate()).isEqualTo(LocalDate.of(2026, 4, 8));
+        assertThat(response.monthlyPnls()).hasSize(1);
+        assertThat(response.monthlyPnls().getFirst().month()).isEqualTo("2026-04");
     }
 
     private OperatingModeAuditEvent auditEvent() {

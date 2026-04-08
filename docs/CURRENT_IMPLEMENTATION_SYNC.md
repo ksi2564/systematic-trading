@@ -144,6 +144,7 @@
 - `GET /api/operations/mode`, `POST /api/operations/mode`, `GET /api/operations/mode-history` 운영 API가 구현돼 있다.
 - 대시보드 요약은 현재 DB 운영 모드와 최근 운영 감사 이력 5건을 함께 노출한다.
 - `GET /api/dashboard/history`는 최신순 Job 이력, 운영 모드 감사 이력, 최근 성과 스냅샷을 함께 노출한다.
+- `GET /api/dashboard/performance`는 성과 요약, 최근 일별 NAV/DD 시계열, 월별 손익 이력을 함께 노출한다.
 - 시스템 이벤트 `KPI_BREACH`, `DATA_UNCERTAIN`, `EOD_FAILURE`, `UNRESOLVED_ORDER`, `RISK_LIMIT_BREACH`, `BROKER_API_FAILURE`, `KILL_SWITCH_ON`은 현재 모드가 `AUTO_LIVE`일 때 자동 강등으로 연결된다.
 
 ## 4. 남아 있는 정책-구현 갭
@@ -159,7 +160,7 @@
 ### P2. 성과 측정 체계
 
 - 현재 KPI는 운영 안전 중단용 최소 모델이다.
-- NAV, 누계 PnL, MDD, 성과 리포트 모델은 없다.
+- NAV, 누계 PnL, MDD, 성과 리포트 API는 추가됐지만 해석 기준은 아직 최소 수준이다.
 - 수수료, 세금, 장기 보유 비용까지 포함한 성과 해석 체계도 아직 없다.
 
 ### P3. 파라미터 변경 이력 레지스터

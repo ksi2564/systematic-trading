@@ -61,6 +61,37 @@ class PortfolioPerformanceServiceTest {
         assertThat(summary.recentMonthlyPnl().getLast().pnlAmount()).isEqualByComparingTo("-300.0000");
     }
 
+    @Test
+    void reportContainsRecentDailySnapshotsAndFullMonthlyPnls() {
+        FakePortfolioSnapshotRepository repository = new FakePortfolioSnapshotRepository();
+        repository.save(snapshot(LocalDate.of(2026, 1, 31), "1000.0000", "0.0000"));
+        repository.save(snapshot(LocalDate.of(2026, 2, 28), "1100.0000", "0.0000"));
+        repository.save(snapshot(LocalDate.of(2026, 3, 31), "1050.0000", "4.5455"));
+        PortfolioPerformanceService service = new PortfolioPerformanceService(repository);
+
+        PortfolioPerformanceReport report = service.getReport(2);
+
+        assertThat(report.dailySnapshotLimit()).isEqualTo(2);
+        assertThat(report.recentDailySnapshots()).hasSize(2);
+        assertThat(report.recentDailySnapshots().getFirst().asOfDate()).isEqualTo(LocalDate.of(2026, 2, 28));
+        assertThat(report.recentDailySnapshots().getLast().asOfDate()).isEqualTo(LocalDate.of(2026, 3, 31));
+        assertThat(report.monthlyPnls()).hasSize(3);
+        assertThat(report.monthlyPnls().getFirst().month()).isEqualTo("2026-01");
+        assertThat(report.monthlyPnls().getLast().month()).isEqualTo("2026-03");
+    }
+
+    @Test
+    void reportNormalizesDailyLimitAndHandlesNoSnapshots() {
+        PortfolioPerformanceService service = new PortfolioPerformanceService(new FakePortfolioSnapshotRepository());
+
+        PortfolioPerformanceReport report = service.getReport(0);
+
+        assertThat(report.dailySnapshotLimit()).isEqualTo(60);
+        assertThat(report.summary().dataAvailable()).isFalse();
+        assertThat(report.recentDailySnapshots()).isEmpty();
+        assertThat(report.monthlyPnls()).isEmpty();
+    }
+
     private PortfolioSnapshot snapshot(LocalDate asOfDate, String totalValue, String ddPercent) {
         return new PortfolioSnapshot(
                 asOfDate,

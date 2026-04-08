@@ -1,6 +1,7 @@
 package my.side.trading.adapter.in.web.dashboard;
 
 import my.side.trading.adapter.in.scheduler.StrategyEodScheduler;
+import my.side.trading.adapter.in.web.dashboard.dto.DashboardHistoryResponse;
 import my.side.trading.adapter.in.web.dashboard.dto.DashboardResponse;
 import my.side.trading.core.application.execution.ExecutionGuard;
 import my.side.trading.core.application.execution.ExecutionGuardSnapshot;
@@ -20,6 +21,8 @@ import my.side.trading.core.domain.operation.OperatingModeAuditEvent;
 import my.side.trading.core.domain.operation.OperatingModeTransitionType;
 import my.side.trading.core.domain.operation.OperatingModeTriggerSource;
 import my.side.trading.core.domain.portfolio.Portfolio;
+import my.side.trading.core.domain.portfolio.PortfolioSnapshot;
+import my.side.trading.core.domain.portfolio.PortfolioSnapshotRepository;
 import my.side.trading.core.domain.strategy.StrategyStateRepository;
 import my.side.trading.core.domain.time.MarketStatus;
 import org.junit.jupiter.api.Test;
@@ -47,6 +50,7 @@ class DashboardControllerTest {
         my.side.trading.core.application.operation.OperationsKpiService operationsKpiService =
                 mock(my.side.trading.core.application.operation.OperationsKpiService.class);
         PortfolioPerformanceService portfolioPerformanceService = mock(PortfolioPerformanceService.class);
+        PortfolioSnapshotRepository portfolioSnapshotRepository = mock(PortfolioSnapshotRepository.class);
         OperatingModeService operatingModeService = mock(OperatingModeService.class);
 
         when(portfolioService.getCurrentPortfolio()).thenReturn(new Portfolio(BigDecimal.TEN, List.of()));
@@ -100,6 +104,7 @@ class DashboardControllerTest {
                 executionGuard,
                 operationsKpiService,
                 portfolioPerformanceService,
+                portfolioSnapshotRepository,
                 operatingModeService);
 
         DashboardResponse response = controller.getSummary().data();
@@ -112,9 +117,114 @@ class DashboardControllerTest {
         assertThat(response.recentOperatingModeAudits().getFirst().triggerCode()).isEqualTo("KPI_BREACH");
     }
 
+    @Test
+    void historyContainsJobAuditAndPerformanceSnapshotsLatestFirst() {
+        PortfolioService portfolioService = mock(PortfolioService.class);
+        StrategyStateRepository strategyStateRepository = mock(StrategyStateRepository.class);
+        StrategyEodScheduler scheduler = mock(StrategyEodScheduler.class);
+        ExecutionJobRepository jobRepository = mock(ExecutionJobRepository.class);
+        ExecutionGuard executionGuard = mock(ExecutionGuard.class);
+        my.side.trading.core.application.operation.OperationsKpiService operationsKpiService =
+                mock(my.side.trading.core.application.operation.OperationsKpiService.class);
+        PortfolioPerformanceService portfolioPerformanceService = mock(PortfolioPerformanceService.class);
+        PortfolioSnapshotRepository portfolioSnapshotRepository = mock(PortfolioSnapshotRepository.class);
+        OperatingModeService operatingModeService = mock(OperatingModeService.class);
+
+        when(jobRepository.findAll()).thenReturn(List.of(
+                sampleJob(1L, LocalDate.of(2026, 4, 2), LocalDateTime.of(2026, 4, 2, 23, 40)),
+                sampleJob(2L, LocalDate.of(2026, 4, 3), LocalDateTime.of(2026, 4, 3, 23, 45))
+        ));
+        when(operatingModeService.recentHistory(2)).thenReturn(List.of(
+                auditEvent(2L, Instant.parse("2026-04-03T01:00:00Z")),
+                auditEvent(1L, Instant.parse("2026-04-02T01:00:00Z"))
+        ));
+        when(portfolioSnapshotRepository.findAllOrderByAsOfDateAsc()).thenReturn(List.of(
+                new PortfolioSnapshot(
+                        LocalDate.of(2026, 4, 2),
+                        new BigDecimal("980.0000"),
+                        new BigDecimal("100.0000"),
+                        new BigDecimal("100.0000"),
+                        BigDecimal.ZERO,
+                        BigDecimal.ZERO,
+                        new BigDecimal("2.0000")),
+                new PortfolioSnapshot(
+                        LocalDate.of(2026, 4, 3),
+                        new BigDecimal("1000.0000"),
+                        new BigDecimal("120.0000"),
+                        new BigDecimal("90.0000"),
+                        new BigDecimal("10.0000"),
+                        BigDecimal.ZERO,
+                        new BigDecimal("1.0000"))
+        ));
+
+        DashboardController controller = new DashboardController(
+                portfolioService,
+                strategyStateRepository,
+                scheduler,
+                jobRepository,
+                executionGuard,
+                operationsKpiService,
+                portfolioPerformanceService,
+                portfolioSnapshotRepository,
+                operatingModeService);
+
+        DashboardHistoryResponse response = controller.getHistory(2).data();
+
+        assertThat(response.limit()).isEqualTo(2);
+        assertThat(response.jobs()).hasSize(2);
+        assertThat(response.jobs().getFirst().id()).isEqualTo(2L);
+        assertThat(response.jobs().getFirst().acceptedOrderCount()).isEqualTo(1);
+        assertThat(response.jobs().getFirst().orders().getFirst().symbol()).isEqualTo("QQQ");
+        assertThat(response.operatingModeAudits()).hasSize(2);
+        assertThat(response.operatingModeAudits().getFirst().id()).isEqualTo(2L);
+        assertThat(response.performanceSnapshots()).hasSize(2);
+        assertThat(response.performanceSnapshots().getFirst().asOfDate()).isEqualTo(LocalDate.of(2026, 4, 3));
+        assertThat(response.performanceSnapshots().getFirst().totalValue()).isEqualByComparingTo("1000.0000");
+    }
+
+    @Test
+    void historyNormalizesNonPositiveAndExcessiveLimit() {
+        PortfolioService portfolioService = mock(PortfolioService.class);
+        StrategyStateRepository strategyStateRepository = mock(StrategyStateRepository.class);
+        StrategyEodScheduler scheduler = mock(StrategyEodScheduler.class);
+        ExecutionJobRepository jobRepository = mock(ExecutionJobRepository.class);
+        ExecutionGuard executionGuard = mock(ExecutionGuard.class);
+        my.side.trading.core.application.operation.OperationsKpiService operationsKpiService =
+                mock(my.side.trading.core.application.operation.OperationsKpiService.class);
+        PortfolioPerformanceService portfolioPerformanceService = mock(PortfolioPerformanceService.class);
+        PortfolioSnapshotRepository portfolioSnapshotRepository = mock(PortfolioSnapshotRepository.class);
+        OperatingModeService operatingModeService = mock(OperatingModeService.class);
+
+        when(jobRepository.findAll()).thenReturn(List.of(sampleJob()));
+        when(portfolioSnapshotRepository.findAllOrderByAsOfDateAsc()).thenReturn(List.of());
+        when(operatingModeService.recentHistory(20)).thenReturn(List.of());
+        when(operatingModeService.recentHistory(100)).thenReturn(List.of());
+
+        DashboardController controller = new DashboardController(
+                portfolioService,
+                strategyStateRepository,
+                scheduler,
+                jobRepository,
+                executionGuard,
+                operationsKpiService,
+                portfolioPerformanceService,
+                portfolioSnapshotRepository,
+                operatingModeService);
+
+        DashboardHistoryResponse defaulted = controller.getHistory(0).data();
+        DashboardHistoryResponse capped = controller.getHistory(999).data();
+
+        assertThat(defaulted.limit()).isEqualTo(20);
+        assertThat(capped.limit()).isEqualTo(100);
+    }
+
     private OperatingModeAuditEvent auditEvent() {
+        return auditEvent(1L, Instant.parse("2026-04-03T00:00:00Z"));
+    }
+
+    private OperatingModeAuditEvent auditEvent(Long id, Instant createdAt) {
         return new OperatingModeAuditEvent(
-                1L,
+                id,
                 OperatingMode.AUTO_LIVE,
                 OperatingMode.MANUAL_LIVE,
                 OperatingModeTransitionType.DEMOTION,
@@ -124,15 +234,19 @@ class DashboardControllerTest {
                 "Automatic demotion triggered by KPI_BREACH",
                 null,
                 null,
-                Instant.parse("2026-04-03T00:00:00Z"));
+                createdAt);
     }
 
     private ExecutionJob sampleJob() {
+        return sampleJob(1L, LocalDate.of(2026, 4, 3), LocalDateTime.of(2026, 4, 3, 23, 45));
+    }
+
+    private ExecutionJob sampleJob(Long id, LocalDate signalDate, LocalDateTime executeAfter) {
         return ExecutionJob.rehydrate(
-                1L,
-                LocalDate.of(2026, 4, 3),
-                LocalDateTime.of(2026, 4, 3, 23, 45),
-                ExecutionStatus.PENDING,
+                id,
+                signalDate,
+                executeAfter,
+                ExecutionStatus.COMPLETED,
                 List.of(ExecutionOrder.rehydrate(
                         1L,
                         "QQQ",
@@ -140,10 +254,10 @@ class DashboardControllerTest {
                         1,
                         new BigDecimal("100"),
                         new BigDecimal("100"),
-                        ExecutionOrderStatus.PLANNED,
-                        null,
-                        null)),
-                null,
-                null);
+                        ExecutionOrderStatus.ACCEPTED,
+                        "ORD-001",
+                        "accepted")),
+                executeAfter.plusMinutes(1),
+                executeAfter.plusMinutes(3));
     }
 }

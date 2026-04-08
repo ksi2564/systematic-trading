@@ -58,8 +58,8 @@
     - [ ] `POST /api/jobs/manual-rebalance`: 강제 리밸런싱 트리거.
     - [ ] `POST /api/jobs/eod-calculation`: 장 마감 후 데이터 갱신 수동 실행.
 - **`DashboardController` (신규)**:
-    - [ ] `GET /api/dashboard/summary`: NAV, 현재 MDD, 보유 현황 요약.
-    - [ ] `GET /api/dashboard/history`: 거래 이력(ExecutionResult) 조회.
+    - [x] `GET /api/dashboard/summary`: NAV, 현재 MDD, 보유 현황 요약.
+    - [x] `GET /api/dashboard/history`: Job 이력 + 운영 감사 이력 + 성과 스냅샷 조회.
 
 ### 2.2 입력값 검증 (Validation)
 - `@Valid` 어노테이션을 사용하여 잘못된 파라미터(예: 리밸런싱 타겟 비중 합이 100%가 아님) 요청 시 즉시 차단.

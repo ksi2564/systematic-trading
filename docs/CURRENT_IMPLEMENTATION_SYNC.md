@@ -143,6 +143,7 @@
 - `AUTO_LIVE` 수동 진입은 승인 기록으로 적재되며, `requestedBy`, `reason`, `approvedBy`, `approvedAt`을 함께 남긴다.
 - `GET /api/operations/mode`, `POST /api/operations/mode`, `GET /api/operations/mode-history` 운영 API가 구현돼 있다.
 - 대시보드 요약은 현재 DB 운영 모드와 최근 운영 감사 이력 5건을 함께 노출한다.
+- `GET /api/dashboard/history`는 최신순 Job 이력, 운영 모드 감사 이력, 최근 성과 스냅샷을 함께 노출한다.
 - 시스템 이벤트 `KPI_BREACH`, `DATA_UNCERTAIN`, `EOD_FAILURE`, `UNRESOLVED_ORDER`, `RISK_LIMIT_BREACH`, `BROKER_API_FAILURE`, `KILL_SWITCH_ON`은 현재 모드가 `AUTO_LIVE`일 때 자동 강등으로 연결된다.
 
 ## 4. 남아 있는 정책-구현 갭

@@ -178,7 +178,7 @@
 | `POST /api/jobs/eod-calculation` | EOD 계산 수동 실행 |
 | `POST /api/jobs/{jobId}/execute` | 특정 Job 재실행 |
 | `GET /api/dashboard/summary` | 포트폴리오, 전략 상태, 보조 지표, 최근 Job 요약 조회 |
-| `GET /api/dashboard/history` | 저장된 Job 이력 조회 |
+| `GET /api/dashboard/history` | Job 이력, 운영 모드 감사 이력, 최근 성과 스냅샷 조회 |
 
 ### KIS 연동 확인용 API
 

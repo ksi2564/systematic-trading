@@ -10,7 +10,9 @@ import java.util.List;
 @ConfigurationProperties(prefix = "trading.security")
 public record TradingSecurityProps(
         @NotBlank String apiKey,
-        List<String> publicPathPrefixes
+        List<String> publicPathPrefixes,
+        PublicPathProtectionMode publicPathProtectionMode,
+        String publicPathProtectionNote
 ) {
     public TradingSecurityProps {
         publicPathPrefixes = publicPathPrefixes == null
@@ -19,5 +21,11 @@ public record TradingSecurityProps(
                 .map(String::trim)
                 .filter(prefix -> !prefix.isEmpty())
                 .toList();
+        publicPathProtectionMode = publicPathProtectionMode == null
+                ? PublicPathProtectionMode.UNSPECIFIED
+                : publicPathProtectionMode;
+        publicPathProtectionNote = publicPathProtectionNote == null
+                ? ""
+                : publicPathProtectionNote.trim();
     }
 }

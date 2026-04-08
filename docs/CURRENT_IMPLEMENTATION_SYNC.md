@@ -128,6 +128,8 @@
 
 - 보안 필터는 `/*` 전체 경로에 적용된다.
 - 공개 경로는 하드코딩이 아니라 `trading.security.public-path-prefixes` 설정으로 제어한다.
+- 공개 경로를 하나라도 열면 `trading.security.public-path-protection-mode`와 `trading.security.public-path-protection-note`를 함께 명시해야 한다.
+- 보호 모드는 `PRIVATE_NETWORK`, `VPN`, `REVERSE_PROXY`, `ADDITIONAL_AUTH` 중 하나로 선언한다.
 - 기본값은 공개 경로 없음이다.
 - `trading.security.api-key`는 필수 설정이며, 값이 없거나 공백이면 애플리케이션이 기동하지 않는다.
 - `prod` 프로필에서는 `/api/dashboard`, `/api/jobs`, `/execution`, `/kis`, `/actuator`를 공개 경로로 설정하면 기동 시 실패한다.
@@ -149,8 +151,9 @@
 
 ### P1. 운영 환경 공개 경로 보호
 
-- `prod` 프로필에서 운영 API와 Actuator를 공개 경로로 여는 설정은 이제 기동 시 차단된다.
-- 다만 프록시/VPN/추가 인증과 결합되는 제품 운영 보호 정책은 애플리케이션 밖 인프라 기준으로 여전히 남아 있다.
+- 공개 경로를 열려면 애플리케이션 설정에 외부 보호 계층과 운영 메모를 명시해야 한다.
+- `prod` 프로필에서 운영 API와 Actuator를 공개 경로로 여는 설정은 기동 시 차단된다.
+- 다만 프록시/VPN/추가 인증 자체를 실제로 구성하는 일은 애플리케이션 밖 인프라 책임으로 남아 있다.
 
 ### P2. 성과 측정 체계
 

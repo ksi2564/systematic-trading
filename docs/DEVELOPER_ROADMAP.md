@@ -60,6 +60,7 @@
 - **`DashboardController` (신규)**:
     - [x] `GET /api/dashboard/summary`: NAV, 현재 MDD, 보유 현황 요약.
     - [x] `GET /api/dashboard/history`: Job 이력 + 운영 감사 이력 + 성과 스냅샷 조회.
+    - [x] `GET /api/dashboard/performance`: 성과 요약 + 일별 시계열 + 월별 손익 조회.
 
 ### 2.2 입력값 검증 (Validation)
 - `@Valid` 어노테이션을 사용하여 잘못된 파라미터(예: 리밸런싱 타겟 비중 합이 100%가 아님) 요청 시 즉시 차단.

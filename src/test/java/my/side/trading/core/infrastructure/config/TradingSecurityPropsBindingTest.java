@@ -2,8 +2,8 @@ package my.side.trading.core.infrastructure.config;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
-import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.boot.context.properties.bind.validation.BindValidationException;
+import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.context.annotation.Configuration;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -101,6 +101,23 @@ class TradingSecurityPropsBindingTest {
                     assertThat(props.publicTrustedProxyRanges())
                             .containsExactly("10.0.0.0/8", "192.168.0.10");
                     assertThat(props.publicAccessLogEnabled()).isTrue();
+                });
+    }
+
+    @Test
+    void shouldBindCommaSeparatedPublicReadOptions() {
+        contextRunner
+                .withPropertyValues(
+                        "trading.security.api-key=test-key",
+                        "trading.security.public-read-allowed-origins=https://portfolio.example.com,https://cdn.example.com",
+                        "trading.security.public-trusted-proxy-ranges=10.0.0.0/8,192.168.0.10")
+                .run(context -> {
+                    assertThat(context).hasNotFailed();
+                    TradingSecurityProps props = context.getBean(TradingSecurityProps.class);
+                    assertThat(props.publicReadAllowedOrigins())
+                            .containsExactly("https://portfolio.example.com", "https://cdn.example.com");
+                    assertThat(props.publicTrustedProxyRanges())
+                            .containsExactly("10.0.0.0/8", "192.168.0.10");
                 });
     }
 

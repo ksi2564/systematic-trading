@@ -250,6 +250,8 @@
 - 공개 API 응답은 짧은 cache-control을 두고, 외부 캐시는 proxy/CDN 계층에서 관리한다.
 - reverse proxy 또는 CDN egress CIDR은 `trading.security.public-trusted-proxy-ranges`에 실제 값으로 반영한다.
 - 브라우저 소비 origin만 `trading.security.public-read-allowed-origins`에 명시하고 wildcard는 사용하지 않는다.
+- 운영 환경에서는 `TRADING_PUBLIC_READ_ALLOWED_ORIGINS`, `TRADING_PUBLIC_TRUSTED_PROXY_RANGES` 환경변수로 실제 목록을 주입한다.
+- prod에서는 `example.com` 계열 샘플 origin, wildcard origin, path가 포함된 origin, `10.0.0.0/8` 샘플 CIDR을 두면 기동 실패로 막는다.
 - 접근 로그는 `my.side.trading.publicapi.access` logger 기준으로 수집하고, reverse proxy access log와 함께 본다.
 
 ### 현재 구현과 기준 정책 간 차이

@@ -1,6 +1,7 @@
 package my.side.trading.adapter.in.web.dashboard.dto;
 
 import lombok.Builder;
+import my.side.trading.core.domain.portfolio.PerformanceAnalyticsSnapshot;
 import my.side.trading.core.domain.execution.order.ExecutionJob;
 import my.side.trading.core.domain.execution.order.ExecutionOrder;
 import my.side.trading.core.domain.execution.order.ExecutionOrderStatus;
@@ -22,7 +23,8 @@ public record DashboardHistoryResponse(
         int limit,
         List<JobHistoryItem> jobs,
         List<OperatingModeAuditItem> operatingModeAudits,
-        List<PerformanceSnapshotItem> performanceSnapshots
+        List<PerformanceSnapshotItem> performanceSnapshots,
+        List<PerformanceAnalyticsSnapshotItem> performanceAnalyticsSnapshots
 ) {
     @Builder
     public record JobHistoryItem(
@@ -143,6 +145,43 @@ public record DashboardHistoryResponse(
                     snapshot.wQld(),
                     snapshot.wTqqq(),
                     snapshot.ddPercent()
+            );
+        }
+    }
+
+    @Builder
+    public record PerformanceAnalyticsSnapshotItem(
+            LocalDate asOfDate,
+            BigDecimal navUsd,
+            BigDecimal navKrw,
+            BigDecimal fxRate,
+            BigDecimal realizedPnlUsd,
+            BigDecimal realizedPnlKrw,
+            BigDecimal brokerFeeUsd,
+            BigDecimal brokerFeeKrw,
+            BigDecimal taxUsd,
+            BigDecimal taxKrw,
+            boolean actualDataReady,
+            BigDecimal holdingCostEstimateUsd,
+            BigDecimal holdingCostEstimateKrw,
+            boolean holdingCostConfigured
+    ) {
+        public static PerformanceAnalyticsSnapshotItem from(PerformanceAnalyticsSnapshot snapshot) {
+            return new PerformanceAnalyticsSnapshotItem(
+                    snapshot.asOfDate(),
+                    snapshot.navUsd(),
+                    snapshot.navKrw(),
+                    snapshot.fxRate(),
+                    snapshot.realizedPnlUsd(),
+                    snapshot.realizedPnlKrw(),
+                    snapshot.brokerFeeUsd(),
+                    snapshot.brokerFeeKrw(),
+                    snapshot.taxUsd(),
+                    snapshot.taxKrw(),
+                    snapshot.actualDataReady(),
+                    snapshot.holdingCostEstimateUsd(),
+                    snapshot.holdingCostEstimateKrw(),
+                    snapshot.holdingCostConfigured()
             );
         }
     }

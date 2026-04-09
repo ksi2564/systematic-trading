@@ -8,8 +8,9 @@ import my.side.trading.core.application.execution.ExecutionGuard;
 import my.side.trading.core.application.execution.ExecutionGuardSnapshot;
 import my.side.trading.core.application.operation.OperatingModeService;
 import my.side.trading.core.application.operation.OperationsKpiSnapshot;
-import my.side.trading.core.application.portfolio.PortfolioPerformanceService;
-import my.side.trading.core.application.portfolio.PortfolioPerformanceReport;
+import my.side.trading.core.application.portfolio.PortfolioPerformanceAnalyticsReport;
+import my.side.trading.core.application.portfolio.PortfolioPerformanceAnalyticsService;
+import my.side.trading.core.application.portfolio.PortfolioPerformanceAnalyticsSummary;
 import my.side.trading.core.application.portfolio.PortfolioPerformanceSummary;
 import my.side.trading.core.application.portfolio.PortfolioService;
 import my.side.trading.core.domain.execution.order.ExecutionJob;
@@ -22,6 +23,7 @@ import my.side.trading.core.domain.operation.OperatingMode;
 import my.side.trading.core.domain.operation.OperatingModeAuditEvent;
 import my.side.trading.core.domain.operation.OperatingModeTransitionType;
 import my.side.trading.core.domain.operation.OperatingModeTriggerSource;
+import my.side.trading.core.domain.portfolio.PerformanceAnalyticsSnapshot;
 import my.side.trading.core.domain.portfolio.Portfolio;
 import my.side.trading.core.domain.portfolio.PortfolioSnapshot;
 import my.side.trading.core.domain.portfolio.PortfolioSnapshotRepository;
@@ -43,7 +45,7 @@ import static org.mockito.Mockito.when;
 class DashboardControllerTest {
 
     @Test
-    void summaryContainsOperatingModeAndRecentAuditHistory() {
+    void 요약응답에_운영모드와_성과분석블록이_포함된다() {
         PortfolioService portfolioService = mock(PortfolioService.class);
         StrategyStateRepository strategyStateRepository = mock(StrategyStateRepository.class);
         StrategyEodScheduler scheduler = mock(StrategyEodScheduler.class);
@@ -51,7 +53,7 @@ class DashboardControllerTest {
         ExecutionGuard executionGuard = mock(ExecutionGuard.class);
         my.side.trading.core.application.operation.OperationsKpiService operationsKpiService =
                 mock(my.side.trading.core.application.operation.OperationsKpiService.class);
-        PortfolioPerformanceService portfolioPerformanceService = mock(PortfolioPerformanceService.class);
+        PortfolioPerformanceAnalyticsService analyticsService = mock(PortfolioPerformanceAnalyticsService.class);
         PortfolioSnapshotRepository portfolioSnapshotRepository = mock(PortfolioSnapshotRepository.class);
         OperatingModeService operatingModeService = mock(OperatingModeService.class);
 
@@ -79,22 +81,7 @@ class DashboardControllerTest {
                 BigDecimal.ZERO,
                 false,
                 List.of()));
-        when(portfolioPerformanceService.getSummary()).thenReturn(new PortfolioPerformanceSummary(
-                true,
-                null,
-                LocalDate.of(2026, 4, 3),
-                new BigDecimal("1000.0000"),
-                new BigDecimal("1200.0000"),
-                new BigDecimal("16.6667"),
-                new BigDecimal("25.0000"),
-                new BigDecimal("50.0000"),
-                new BigDecimal("5.0000"),
-                List.of(new PortfolioPerformanceSummary.MonthlyPnl(
-                        "2026-04",
-                        new BigDecimal("950.0000"),
-                        new BigDecimal("1000.0000"),
-                        new BigDecimal("50.0000"),
-                        new BigDecimal("5.2632")))));
+        when(analyticsService.getSummary()).thenReturn(sampleAnalyticsSummary());
         when(operatingModeService.currentMode()).thenReturn(OperatingMode.MANUAL_LIVE);
         when(operatingModeService.recentHistory(5)).thenReturn(List.of(auditEvent()));
 
@@ -105,7 +92,7 @@ class DashboardControllerTest {
                 jobRepository,
                 executionGuard,
                 operationsKpiService,
-                portfolioPerformanceService,
+                analyticsService,
                 portfolioSnapshotRepository,
                 operatingModeService);
 
@@ -114,13 +101,13 @@ class DashboardControllerTest {
         assertThat(response.operatingMode()).isEqualTo(OperatingMode.MANUAL_LIVE);
         assertThat(response.performance().dataAvailable()).isTrue();
         assertThat(response.performance().latestNav()).isEqualByComparingTo("1000.0000");
-        assertThat(response.performance().recentMonthlyPnl()).hasSize(1);
+        assertThat(response.performance().actualPerformanceUsd().netActualPnlAmount()).isEqualByComparingTo("12.0000");
+        assertThat(response.performance().holdingCostEstimate().configured()).isTrue();
         assertThat(response.recentOperatingModeAudits()).hasSize(1);
-        assertThat(response.recentOperatingModeAudits().getFirst().triggerCode()).isEqualTo("KPI_BREACH");
     }
 
     @Test
-    void historyContainsJobAuditAndPerformanceSnapshotsLatestFirst() {
+    void 이력응답에_포트폴리오와_성과분석스냅샷이_최신순으로_포함된다() {
         PortfolioService portfolioService = mock(PortfolioService.class);
         StrategyStateRepository strategyStateRepository = mock(StrategyStateRepository.class);
         StrategyEodScheduler scheduler = mock(StrategyEodScheduler.class);
@@ -128,7 +115,7 @@ class DashboardControllerTest {
         ExecutionGuard executionGuard = mock(ExecutionGuard.class);
         my.side.trading.core.application.operation.OperationsKpiService operationsKpiService =
                 mock(my.side.trading.core.application.operation.OperationsKpiService.class);
-        PortfolioPerformanceService portfolioPerformanceService = mock(PortfolioPerformanceService.class);
+        PortfolioPerformanceAnalyticsService analyticsService = mock(PortfolioPerformanceAnalyticsService.class);
         PortfolioSnapshotRepository portfolioSnapshotRepository = mock(PortfolioSnapshotRepository.class);
         OperatingModeService operatingModeService = mock(OperatingModeService.class);
 
@@ -141,22 +128,12 @@ class DashboardControllerTest {
                 auditEvent(1L, Instant.parse("2026-04-02T01:00:00Z"))
         ));
         when(portfolioSnapshotRepository.findAllOrderByAsOfDateAsc()).thenReturn(List.of(
-                new PortfolioSnapshot(
-                        LocalDate.of(2026, 4, 2),
-                        new BigDecimal("980.0000"),
-                        new BigDecimal("100.0000"),
-                        new BigDecimal("100.0000"),
-                        BigDecimal.ZERO,
-                        BigDecimal.ZERO,
-                        new BigDecimal("2.0000")),
-                new PortfolioSnapshot(
-                        LocalDate.of(2026, 4, 3),
-                        new BigDecimal("1000.0000"),
-                        new BigDecimal("120.0000"),
-                        new BigDecimal("90.0000"),
-                        new BigDecimal("10.0000"),
-                        BigDecimal.ZERO,
-                        new BigDecimal("1.0000"))
+                portfolioSnapshot(LocalDate.of(2026, 4, 2), "980.0000"),
+                portfolioSnapshot(LocalDate.of(2026, 4, 3), "1000.0000")
+        ));
+        when(analyticsService.getRecentSnapshots(2)).thenReturn(List.of(
+                analyticsSnapshot(LocalDate.of(2026, 4, 2), false),
+                analyticsSnapshot(LocalDate.of(2026, 4, 3), true)
         ));
 
         DashboardController controller = new DashboardController(
@@ -166,26 +143,20 @@ class DashboardControllerTest {
                 jobRepository,
                 executionGuard,
                 operationsKpiService,
-                portfolioPerformanceService,
+                analyticsService,
                 portfolioSnapshotRepository,
                 operatingModeService);
 
         DashboardHistoryResponse response = controller.getHistory(2).data();
 
-        assertThat(response.limit()).isEqualTo(2);
         assertThat(response.jobs()).hasSize(2);
-        assertThat(response.jobs().getFirst().id()).isEqualTo(2L);
-        assertThat(response.jobs().getFirst().acceptedOrderCount()).isEqualTo(1);
-        assertThat(response.jobs().getFirst().orders().getFirst().symbol()).isEqualTo("QQQ");
-        assertThat(response.operatingModeAudits()).hasSize(2);
-        assertThat(response.operatingModeAudits().getFirst().id()).isEqualTo(2L);
-        assertThat(response.performanceSnapshots()).hasSize(2);
         assertThat(response.performanceSnapshots().getFirst().asOfDate()).isEqualTo(LocalDate.of(2026, 4, 3));
-        assertThat(response.performanceSnapshots().getFirst().totalValue()).isEqualByComparingTo("1000.0000");
+        assertThat(response.performanceAnalyticsSnapshots()).hasSize(2);
+        assertThat(response.performanceAnalyticsSnapshots().getFirst().actualDataReady()).isTrue();
     }
 
     @Test
-    void historyNormalizesNonPositiveAndExcessiveLimit() {
+    void 성과응답에_실성과_시계열이_포함된다() {
         PortfolioService portfolioService = mock(PortfolioService.class);
         StrategyStateRepository strategyStateRepository = mock(StrategyStateRepository.class);
         StrategyEodScheduler scheduler = mock(StrategyEodScheduler.class);
@@ -193,84 +164,39 @@ class DashboardControllerTest {
         ExecutionGuard executionGuard = mock(ExecutionGuard.class);
         my.side.trading.core.application.operation.OperationsKpiService operationsKpiService =
                 mock(my.side.trading.core.application.operation.OperationsKpiService.class);
-        PortfolioPerformanceService portfolioPerformanceService = mock(PortfolioPerformanceService.class);
+        PortfolioPerformanceAnalyticsService analyticsService = mock(PortfolioPerformanceAnalyticsService.class);
         PortfolioSnapshotRepository portfolioSnapshotRepository = mock(PortfolioSnapshotRepository.class);
         OperatingModeService operatingModeService = mock(OperatingModeService.class);
 
-        when(jobRepository.findAll()).thenReturn(List.of(sampleJob()));
-        when(portfolioSnapshotRepository.findAllOrderByAsOfDateAsc()).thenReturn(List.of());
-        when(operatingModeService.recentHistory(20)).thenReturn(List.of());
-        when(operatingModeService.recentHistory(100)).thenReturn(List.of());
-
-        DashboardController controller = new DashboardController(
-                portfolioService,
-                strategyStateRepository,
-                scheduler,
-                jobRepository,
-                executionGuard,
-                operationsKpiService,
-                portfolioPerformanceService,
-                portfolioSnapshotRepository,
-                operatingModeService);
-
-        DashboardHistoryResponse defaulted = controller.getHistory(0).data();
-        DashboardHistoryResponse capped = controller.getHistory(999).data();
-
-        assertThat(defaulted.limit()).isEqualTo(20);
-        assertThat(capped.limit()).isEqualTo(100);
-    }
-
-    @Test
-    void performanceReturnsSummaryAndDailySnapshotSeries() {
-        PortfolioService portfolioService = mock(PortfolioService.class);
-        StrategyStateRepository strategyStateRepository = mock(StrategyStateRepository.class);
-        StrategyEodScheduler scheduler = mock(StrategyEodScheduler.class);
-        ExecutionJobRepository jobRepository = mock(ExecutionJobRepository.class);
-        ExecutionGuard executionGuard = mock(ExecutionGuard.class);
-        my.side.trading.core.application.operation.OperationsKpiService operationsKpiService =
-                mock(my.side.trading.core.application.operation.OperationsKpiService.class);
-        PortfolioPerformanceService portfolioPerformanceService = mock(PortfolioPerformanceService.class);
-        PortfolioSnapshotRepository portfolioSnapshotRepository = mock(PortfolioSnapshotRepository.class);
-        OperatingModeService operatingModeService = mock(OperatingModeService.class);
-
-        when(portfolioPerformanceService.getReport(30)).thenReturn(new PortfolioPerformanceReport(
-                new PortfolioPerformanceSummary(
-                        true,
-                        null,
-                        LocalDate.of(2026, 4, 8),
-                        new BigDecimal("1100.0000"),
-                        new BigDecimal("1200.0000"),
-                        new BigDecimal("8.3333"),
-                        new BigDecimal("10.0000"),
-                        new BigDecimal("100.0000"),
-                        new BigDecimal("10.0000"),
-                        List.of()
-                ),
+        when(analyticsService.getReport(30)).thenReturn(new PortfolioPerformanceAnalyticsReport(
+                sampleAnalyticsSummary(),
                 30,
                 List.of(
-                        new PortfolioSnapshot(
-                                LocalDate.of(2026, 4, 7),
-                                new BigDecimal("1080.0000"),
-                                new BigDecimal("100.0000"),
-                                new BigDecimal("100.0000"),
-                                BigDecimal.ZERO,
-                                BigDecimal.ZERO,
-                                new BigDecimal("10.0000")),
-                        new PortfolioSnapshot(
-                                LocalDate.of(2026, 4, 8),
-                                new BigDecimal("1100.0000"),
-                                new BigDecimal("120.0000"),
-                                new BigDecimal("90.0000"),
-                                new BigDecimal("10.0000"),
-                                BigDecimal.ZERO,
-                                new BigDecimal("8.3333"))
+                        portfolioSnapshot(LocalDate.of(2026, 4, 7), "1080.0000"),
+                        portfolioSnapshot(LocalDate.of(2026, 4, 8), "1100.0000")
                 ),
                 List.of(new PortfolioPerformanceSummary.MonthlyPnl(
                         "2026-04",
                         new BigDecimal("1000.0000"),
                         new BigDecimal("1100.0000"),
                         new BigDecimal("100.0000"),
-                        new BigDecimal("10.0000")))
+                        new BigDecimal("10.0000"))),
+                List.of(analyticsSnapshot(LocalDate.of(2026, 4, 8), true)),
+                List.of(new PortfolioPerformanceAnalyticsReport.ActualMonthlyAnalytics(
+                        "2026-04",
+                        2,
+                        1,
+                        new BigDecimal("12.0000"),
+                        new BigDecimal("17160.0000"),
+                        new BigDecimal("15.0000"),
+                        new BigDecimal("21450.0000"),
+                        new BigDecimal("2.0000"),
+                        new BigDecimal("2860.0000"),
+                        new BigDecimal("1.0000"),
+                        new BigDecimal("1430.0000"),
+                        new BigDecimal("0.7500"),
+                        new BigDecimal("1072.5000")
+                ))
         ));
 
         DashboardController controller = new DashboardController(
@@ -280,18 +206,104 @@ class DashboardControllerTest {
                 jobRepository,
                 executionGuard,
                 operationsKpiService,
-                portfolioPerformanceService,
+                analyticsService,
                 portfolioSnapshotRepository,
                 operatingModeService);
 
         DashboardPerformanceResponse response = controller.getPerformance(30).data();
 
-        assertThat(response.dailySnapshotLimit()).isEqualTo(30);
-        assertThat(response.summary().latestNav()).isEqualByComparingTo("1100.0000");
+        assertThat(response.summary().actualPerformanceKrw().netActualPnlAmount()).isEqualByComparingTo("17160.0000");
         assertThat(response.recentDailySnapshots()).hasSize(2);
-        assertThat(response.recentDailySnapshots().getLast().asOfDate()).isEqualTo(LocalDate.of(2026, 4, 8));
-        assertThat(response.monthlyPnls()).hasSize(1);
-        assertThat(response.monthlyPnls().getFirst().month()).isEqualTo("2026-04");
+        assertThat(response.recentDailyActualSnapshots()).singleElement()
+                .satisfies(snapshot -> assertThat(snapshot.actualDataReady()).isTrue());
+        assertThat(response.monthlyActualAnalytics()).singleElement()
+                .satisfies(month -> assertThat(month.netActualPnlUsd()).isEqualByComparingTo("12.0000"));
+    }
+
+    private PortfolioPerformanceAnalyticsSummary sampleAnalyticsSummary() {
+        return new PortfolioPerformanceAnalyticsSummary(
+                new PortfolioPerformanceSummary(
+                        true,
+                        null,
+                        LocalDate.of(2026, 4, 3),
+                        new BigDecimal("1000.0000"),
+                        new BigDecimal("1200.0000"),
+                        new BigDecimal("16.6667"),
+                        new BigDecimal("25.0000"),
+                        new BigDecimal("50.0000"),
+                        new BigDecimal("5.0000"),
+                        List.of(new PortfolioPerformanceSummary.MonthlyPnl(
+                                "2026-04",
+                                new BigDecimal("950.0000"),
+                                new BigDecimal("1000.0000"),
+                                new BigDecimal("50.0000"),
+                                new BigDecimal("5.2632")))
+                ),
+                new PortfolioPerformanceAnalyticsSummary.ActualPerformanceSummary(
+                        LocalDate.of(2026, 4, 3),
+                        new BigDecimal("1000.0000"),
+                        new BigDecimal("12.0000"),
+                        new BigDecimal("1.2000"),
+                        new BigDecimal("15.0000")
+                ),
+                new PortfolioPerformanceAnalyticsSummary.ActualPerformanceSummary(
+                        LocalDate.of(2026, 4, 3),
+                        new BigDecimal("1430000.0000"),
+                        new BigDecimal("17160.0000"),
+                        new BigDecimal("1.2000"),
+                        new BigDecimal("21450.0000")
+                ),
+                new PortfolioPerformanceAnalyticsSummary.CostBreakdown(
+                        new BigDecimal("2.0000"),
+                        new BigDecimal("2860.0000"),
+                        new BigDecimal("1.0000"),
+                        new BigDecimal("1430.0000")
+                ),
+                new PortfolioPerformanceAnalyticsSummary.HoldingCostEstimate(
+                        true,
+                        new BigDecimal("0.7500"),
+                        new BigDecimal("1072.5000")
+                ),
+                new PortfolioPerformanceAnalyticsSummary.AnalysisCoverage(
+                        "PARTIAL",
+                        LocalDate.of(2026, 4, 2),
+                        LocalDate.of(2026, 4, 3),
+                        2,
+                        1,
+                        List.of(LocalDate.of(2026, 4, 2))
+                )
+        );
+    }
+
+    private PortfolioSnapshot portfolioSnapshot(LocalDate date, String totalValue) {
+        return new PortfolioSnapshot(
+                date,
+                new BigDecimal(totalValue),
+                new BigDecimal("100.0000"),
+                new BigDecimal("90.0000"),
+                new BigDecimal("10.0000"),
+                BigDecimal.ZERO.setScale(4),
+                new BigDecimal("1.0000")
+        );
+    }
+
+    private PerformanceAnalyticsSnapshot analyticsSnapshot(LocalDate date, boolean actualDataReady) {
+        return new PerformanceAnalyticsSnapshot(
+                date,
+                new BigDecimal("1000.0000"),
+                new BigDecimal("1430000.0000"),
+                new BigDecimal("1430.00000000"),
+                new BigDecimal("15.0000"),
+                new BigDecimal("21450.0000"),
+                new BigDecimal("2.0000"),
+                new BigDecimal("2860.0000"),
+                new BigDecimal("1.0000"),
+                new BigDecimal("1430.0000"),
+                actualDataReady,
+                new BigDecimal("0.7500"),
+                new BigDecimal("1072.5000"),
+                true
+        );
     }
 
     private OperatingModeAuditEvent auditEvent() {

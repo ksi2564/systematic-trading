@@ -9,10 +9,11 @@ import my.side.trading.core.adapter.in.web.common.ApiResponse;
 import my.side.trading.core.application.execution.ExecutionGuard;
 import my.side.trading.core.application.operation.OperatingModeService;
 import my.side.trading.core.application.operation.OperationsKpiService;
-import my.side.trading.core.application.portfolio.PortfolioPerformanceService;
+import my.side.trading.core.application.portfolio.PortfolioPerformanceAnalyticsService;
 import my.side.trading.core.application.portfolio.PortfolioService;
 import my.side.trading.core.domain.execution.order.ExecutionJob;
 import my.side.trading.core.domain.execution.order.ExecutionJobRepository;
+import my.side.trading.core.domain.portfolio.PerformanceAnalyticsSnapshot;
 import my.side.trading.core.domain.portfolio.PortfolioSnapshot;
 import my.side.trading.core.domain.portfolio.PortfolioSnapshotRepository;
 import my.side.trading.core.domain.strategy.StrategyStateRepository;
@@ -35,7 +36,7 @@ public class DashboardController {
     private final ExecutionJobRepository jobRepository;
     private final ExecutionGuard executionGuard;
     private final OperationsKpiService operationsKpiService;
-    private final PortfolioPerformanceService portfolioPerformanceService;
+    private final PortfolioPerformanceAnalyticsService portfolioPerformanceAnalyticsService;
     private final PortfolioSnapshotRepository portfolioSnapshotRepository;
     private final OperatingModeService operatingModeService;
 
@@ -62,7 +63,7 @@ public class DashboardController {
                 .toList();
 
         var operationsKpi = operationsKpiService.snapshot();
-        var performance = portfolioPerformanceService.getSummary();
+        var performance = portfolioPerformanceAnalyticsService.getSummary();
 
         return ApiResponse.success(DashboardResponse.of(
                 portfolio,
@@ -98,12 +99,17 @@ public class DashboardController {
                 .limit(normalizedLimit)
                 .map(DashboardHistoryResponse.PerformanceSnapshotItem::from)
                 .toList();
+        var performanceAnalyticsSnapshots = portfolioPerformanceAnalyticsService.getRecentSnapshots(normalizedLimit).stream()
+                .sorted(performanceAnalyticsSnapshotComparator())
+                .map(DashboardHistoryResponse.PerformanceAnalyticsSnapshotItem::from)
+                .toList();
 
         return ApiResponse.success(new DashboardHistoryResponse(
                 normalizedLimit,
                 jobs,
                 operatingAudits,
-                performanceSnapshots
+                performanceSnapshots,
+                performanceAnalyticsSnapshots
         ));
     }
 
@@ -112,7 +118,7 @@ public class DashboardController {
             @RequestParam(defaultValue = "60") int dailyLimit
     ) {
         return ApiResponse.success(DashboardPerformanceResponse.from(
-                portfolioPerformanceService.getReport(dailyLimit)
+                portfolioPerformanceAnalyticsService.getReport(dailyLimit)
         ));
     }
 
@@ -128,5 +134,9 @@ public class DashboardController {
 
     private Comparator<PortfolioSnapshot> performanceSnapshotComparator() {
         return Comparator.comparing(PortfolioSnapshot::asOfDate, Comparator.nullsLast(Comparator.reverseOrder()));
+    }
+
+    private Comparator<PerformanceAnalyticsSnapshot> performanceAnalyticsSnapshotComparator() {
+        return Comparator.comparing(PerformanceAnalyticsSnapshot::asOfDate, Comparator.nullsLast(Comparator.reverseOrder()));
     }
 }

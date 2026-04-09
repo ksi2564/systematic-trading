@@ -55,6 +55,16 @@ trading:
     fee-pct: 0.25
     max-attempts: 3
     retry-wait-ms: 2000
+  performance:
+    backfill:
+      default-days: 365
+    fx:
+      usd-krw-symbol: USDKRW
+    holding-cost:
+      symbols:
+        QQQ: 0
+        QLD: 0
+        TQQQ: 0
   operation:
     mode: PAPER
     auto-live-gate:

@@ -7,7 +7,7 @@ logging:
   file:
     path: /var/logs
   level:
-    # 운영 환경에서는 SQL 로그를 줄이거나 INFO로 변경
+    # 운영 환경에서는 SQL 로그를 줄이거나 INFO로 변경한다.
     org.hibernate.SQL: INFO
     my.side.trading: INFO
 
@@ -18,15 +18,13 @@ trading:
       - /public/api
     public-path-protection-mode: REVERSE_PROXY
     public-path-protection-note: 공개 포트폴리오 읽기 API는 리버스 프록시 또는 CDN 뒤에서만 노출한다.
-    # 예시 origin이다. 실제 배포에서는 공개 프론트엔드의 실제 HTTPS origin만 남기고
-    # portfolio.example.com 같은 샘플 값은 제거해야 한다.
-    public-read-allowed-origins:
-      - https://portfolio.example.com
+    # 쉼표로 구분한 실제 HTTPS origin 목록을 환경변수로 주입한다.
+    # example.com 계열 샘플값, wildcard, path 포함 origin은 prod에서 기동 실패한다.
+    public-read-allowed-origins: ${TRADING_PUBLIC_READ_ALLOWED_ORIGINS:}
     public-rate-limit-per-minute: 120
     public-cache-max-age-seconds: 300
     public-client-ip-header: X-Forwarded-For
-    # 예시 CIDR이다. 실제 배포에서는 앱 바로 앞단의 reverse proxy 또는 CDN egress CIDR만 남기고
-    # 사설망 예시값(10.0.0.0/8)은 제거해야 한다. 잘못 두면 forwarded header 신뢰 범위가 과도해진다.
-    public-trusted-proxy-ranges:
-      - 10.0.0.0/8
+    # 쉼표로 구분한 실제 reverse proxy 또는 CDN egress CIDR 목록만 허용한다.
+    # 10.0.0.0/8 같은 과도한 샘플 CIDR은 prod에서 기동 실패한다.
+    public-trusted-proxy-ranges: ${TRADING_PUBLIC_TRUSTED_PROXY_RANGES:}
     public-access-log-enabled: true

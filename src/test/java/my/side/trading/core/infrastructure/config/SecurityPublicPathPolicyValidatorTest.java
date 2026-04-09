@@ -23,7 +23,7 @@ class SecurityPublicPathPolicyValidatorTest {
             .withPropertyValues("trading.security.api-key=test-key");
 
     @Test
-    void prod에서는_dashboard를_공개경로로_열수없다() {
+    void shouldFailWhenDashboardPathIsExposedInProd() {
         contextRunner
                 .withPropertyValues(
                         "spring.profiles.active=prod",
@@ -39,7 +39,7 @@ class SecurityPublicPathPolicyValidatorTest {
     }
 
     @Test
-    void prod에서는_api상위경로를_공개경로로_열수없다() {
+    void shouldFailWhenApiPrefixIsExposedInProd() {
         contextRunner
                 .withPropertyValues(
                         "spring.profiles.active=prod",
@@ -55,14 +55,15 @@ class SecurityPublicPathPolicyValidatorTest {
     }
 
     @Test
-    void prod에서는_actuator하위경로도_공개경로로_열수없다() {
+    void shouldFailWhenActuatorSubPathIsExposedInProd() {
         contextRunner
                 .withPropertyValues(
                         "spring.profiles.active=prod",
                         "trading.security.public-path-prefixes[0]=/actuator/health",
                         "trading.security.public-path-protection-mode=REVERSE_PROXY",
-                        "trading.security.public-path-protection-note=리버스 프록시에서 내부 헬스체크만 허용",
-                        "trading.security.public-trusted-proxy-ranges[0]=10.0.0.0/8"
+                        "trading.security.public-path-protection-note=리버스 프록시 뒤에서만 헬스체크 허용",
+                        "trading.security.public-read-allowed-origins[0]=https://portfolio.myservice.com",
+                        "trading.security.public-trusted-proxy-ranges[0]=198.51.100.0/24"
                 )
                 .run(context -> {
                     assertThat(context).hasFailed();
@@ -72,7 +73,7 @@ class SecurityPublicPathPolicyValidatorTest {
     }
 
     @Test
-    void 공개경로를_열면_보호모드를_명시해야한다() {
+    void shouldRequireProtectionModeWhenPublicPathIsConfigured() {
         contextRunner
                 .withPropertyValues("trading.security.public-path-prefixes[0]=/swagger-ui")
                 .run(context -> {
@@ -83,7 +84,7 @@ class SecurityPublicPathPolicyValidatorTest {
     }
 
     @Test
-    void 공개경로를_열면_보호메모를_남겨야한다() {
+    void shouldRequireProtectionNoteWhenPublicPathIsConfigured() {
         contextRunner
                 .withPropertyValues(
                         "trading.security.public-path-prefixes[0]=/swagger-ui",
@@ -97,44 +98,46 @@ class SecurityPublicPathPolicyValidatorTest {
     }
 
     @Test
-    void prod에서도_swagger문서경로는_보호선언이있으면_명시적으로_열수있다() {
+    void shouldAllowSwaggerDocsInProdWhenProtectionMetadataIsPresent() {
         contextRunner
                 .withPropertyValues(
                         "spring.profiles.active=prod",
                         "trading.security.public-path-prefixes[0]=/swagger-ui",
                         "trading.security.public-path-prefixes[1]=/v3/api-docs",
                         "trading.security.public-path-protection-mode=VPN",
-                        "trading.security.public-path-protection-note=사내 VPN 뒤에서만 Swagger 문서를 공개"
+                        "trading.security.public-path-protection-note=사내 VPN 뒤에서만 Swagger 문서를 공개",
+                        "trading.security.public-read-allowed-origins[0]=https://docs.myservice.com"
                 )
                 .run(context -> assertThat(context).hasNotFailed());
     }
 
     @Test
-    void nonProd에서도_보호선언이있으면_dashboard공개경로설정이_차단되지않는다() {
+    void shouldAllowDashboardPathOutsideProd() {
         contextRunner
                 .withPropertyValues(
                         "trading.security.public-path-prefixes[0]=/api/dashboard",
                         "trading.security.public-path-protection-mode=PRIVATE_NETWORK",
-                        "trading.security.public-path-protection-note=개발 사설망 내부 점검용"
+                        "trading.security.public-path-protection-note=개발 사설망에서만 접근"
                 )
                 .run(context -> assertThat(context).hasNotFailed());
     }
 
     @Test
-    void prod에서도_public_api는_보호선언이있으면_열수있다() {
+    void shouldAllowPublicApiInProdWithConcreteOriginsAndProxyRanges() {
         contextRunner
                 .withPropertyValues(
                         "spring.profiles.active=prod",
                         "trading.security.public-path-prefixes[0]=/public/api",
                         "trading.security.public-path-protection-mode=REVERSE_PROXY",
-                        "trading.security.public-path-protection-note=공개 포트폴리오 읽기 API는 리버스 프록시 뒤에서만 노출",
-                        "trading.security.public-trusted-proxy-ranges[0]=10.0.0.0/8"
+                        "trading.security.public-path-protection-note=공개 포트폴리오 API는 리버스 프록시 뒤에서만 노출",
+                        "trading.security.public-read-allowed-origins[0]=https://portfolio.myservice.com",
+                        "trading.security.public-trusted-proxy-ranges[0]=198.51.100.0/24"
                 )
                 .run(context -> assertThat(context).hasNotFailed());
     }
 
     @Test
-    void reverseProxy모드에서는_신뢰프록시범위를_명시해야한다() {
+    void shouldRequireTrustedProxyRangesInReverseProxyMode() {
         contextRunner
                 .withPropertyValues(
                         "trading.security.public-path-prefixes[0]=/public/api",
@@ -145,6 +148,113 @@ class SecurityPublicPathPolicyValidatorTest {
                     assertThat(context).hasFailed();
                     assertThat(context.getStartupFailure())
                             .hasStackTraceContaining("public-trusted-proxy-ranges");
+                });
+    }
+
+    @Test
+    void shouldRequirePublicReadOriginsInProdWhenPublicApiIsEnabled() {
+        contextRunner
+                .withPropertyValues(
+                        "spring.profiles.active=prod",
+                        "trading.security.public-path-prefixes[0]=/public/api",
+                        "trading.security.public-path-protection-mode=REVERSE_PROXY",
+                        "trading.security.public-path-protection-note=공개 API는 리버스 프록시 뒤에서만 노출",
+                        "trading.security.public-trusted-proxy-ranges[0]=198.51.100.0/24"
+                )
+                .run(context -> {
+                    assertThat(context).hasFailed();
+                    assertThat(context.getStartupFailure())
+                            .hasStackTraceContaining("public-read-allowed-origins");
+                });
+    }
+
+    @Test
+    void shouldRejectWildcardOriginInProd() {
+        contextRunner
+                .withPropertyValues(
+                        "spring.profiles.active=prod",
+                        "trading.security.public-path-prefixes[0]=/public/api",
+                        "trading.security.public-path-protection-mode=REVERSE_PROXY",
+                        "trading.security.public-path-protection-note=공개 API는 리버스 프록시 뒤에서만 노출",
+                        "trading.security.public-read-allowed-origins[0]=https://*.example.com",
+                        "trading.security.public-trusted-proxy-ranges[0]=198.51.100.0/24"
+                )
+                .run(context -> {
+                    assertThat(context).hasFailed();
+                    assertThat(context.getStartupFailure())
+                            .hasStackTraceContaining("wildcard");
+                });
+    }
+
+    @Test
+    void shouldRejectNonHttpsOriginInProd() {
+        contextRunner
+                .withPropertyValues(
+                        "spring.profiles.active=prod",
+                        "trading.security.public-path-prefixes[0]=/public/api",
+                        "trading.security.public-path-protection-mode=REVERSE_PROXY",
+                        "trading.security.public-path-protection-note=공개 API는 리버스 프록시 뒤에서만 노출",
+                        "trading.security.public-read-allowed-origins[0]=http://portfolio.myservice.com",
+                        "trading.security.public-trusted-proxy-ranges[0]=198.51.100.0/24"
+                )
+                .run(context -> {
+                    assertThat(context).hasFailed();
+                    assertThat(context.getStartupFailure())
+                            .hasStackTraceContaining("HTTPS origin");
+                });
+    }
+
+    @Test
+    void shouldRejectOriginWithPathInProd() {
+        contextRunner
+                .withPropertyValues(
+                        "spring.profiles.active=prod",
+                        "trading.security.public-path-prefixes[0]=/public/api",
+                        "trading.security.public-path-protection-mode=REVERSE_PROXY",
+                        "trading.security.public-path-protection-note=공개 API는 리버스 프록시 뒤에서만 노출",
+                        "trading.security.public-read-allowed-origins[0]=https://portfolio.myservice.com/app",
+                        "trading.security.public-trusted-proxy-ranges[0]=198.51.100.0/24"
+                )
+                .run(context -> {
+                    assertThat(context).hasFailed();
+                    assertThat(context.getStartupFailure())
+                            .hasStackTraceContaining("path");
+                });
+    }
+
+    @Test
+    void shouldRejectSampleOriginHostInProd() {
+        contextRunner
+                .withPropertyValues(
+                        "spring.profiles.active=prod",
+                        "trading.security.public-path-prefixes[0]=/public/api",
+                        "trading.security.public-path-protection-mode=REVERSE_PROXY",
+                        "trading.security.public-path-protection-note=공개 API는 리버스 프록시 뒤에서만 노출",
+                        "trading.security.public-read-allowed-origins[0]=https://portfolio.example.com",
+                        "trading.security.public-trusted-proxy-ranges[0]=198.51.100.0/24"
+                )
+                .run(context -> {
+                    assertThat(context).hasFailed();
+                    assertThat(context.getStartupFailure())
+                            .hasStackTraceContaining("example.com");
+                });
+    }
+
+    @Test
+    void shouldRejectSampleProxyRangeInProd() {
+        contextRunner
+                .withPropertyValues(
+                        "spring.profiles.active=prod",
+                        "trading.security.public-path-prefixes[0]=/public/api",
+                        "trading.security.public-path-protection-mode=REVERSE_PROXY",
+                        "trading.security.public-path-protection-note=공개 API는 리버스 프록시 뒤에서만 노출",
+                        "trading.security.public-read-allowed-origins[0]=https://portfolio.myservice.com",
+                        "trading.security.public-trusted-proxy-ranges[0]=10.0.0.0/8"
+                )
+                .run(context -> {
+                    assertThat(context).hasFailed();
+                    assertThat(context.getStartupFailure())
+                            .hasStackTraceContaining("샘플 CIDR");
                 });
     }
 

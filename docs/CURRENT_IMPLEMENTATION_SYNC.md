@@ -139,6 +139,8 @@
 - 공개 경로의 client IP 해석은 신뢰 프록시 범위 안에서만 `trading.security.public-client-ip-header` 값을 사용한다.
 - `trading.security.public-access-log-enabled=true`면 공개 읽기 API 접근 로그를 별도 logger로 남긴다.
 - `prod` 프로필에서는 `/api/dashboard`, `/api/jobs`, `/execution`, `/kis`, `/actuator`를 공개 경로로 설정하면 기동 시 실패한다.
+- `prod`에서 공개 읽기 API를 열면 `TRADING_PUBLIC_READ_ALLOWED_ORIGINS`, `TRADING_PUBLIC_TRUSTED_PROXY_RANGES` 환경변수로 실제 운영값을 넣어야 한다.
+- `prod`에서는 wildcard origin, path가 포함된 origin, `example.com` 계열 샘플 origin, `10.0.0.0/8` 샘플 CIDR을 두면 기동 시 실패한다.
 
 ### 운영 모드 감사 / 전환 API
 

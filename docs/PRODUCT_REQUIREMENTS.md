@@ -52,6 +52,7 @@
 외부 노출이 필요한 경우에도 “조회 API는 공개 가능”을 기본 가정으로 두지 않는다. 별도 인증 계층, 리버스 프록시, 네트워크 제한 중 최소 하나 이상이 추가된 경우에만 예외적으로 허용하는 방향을 제품 원칙으로 둔다.
 
 공개 읽기 API를 운영할 때는 reverse proxy 또는 CDN 뒤에 두고, 애플리케이션에는 신뢰 프록시 allowlist와 브라우저 origin allowlist를 함께 설정하는 것을 기본 원칙으로 둔다.
+운영 환경에서는 샘플값을 코드에 남겨두지 않고 `TRADING_PUBLIC_READ_ALLOWED_ORIGINS`, `TRADING_PUBLIC_TRUSTED_PROXY_RANGES` 환경변수로 실제 값을 주입하는 것을 기본 원칙으로 둔다.
 
 운영 모드는 아래 3단계를 공통 용어로 사용한다.
 

@@ -27,7 +27,7 @@ public class KisBrokerDailyPerformanceReader implements BrokerDailyPerformanceRe
     public List<BrokerDailyPerformance> readDailyPerformances(LocalDate startDate, LocalDate endDate) {
         try {
             KisOverseasPeriodProfitResponse response = periodProfitService.getPeriodProfit(startDate, endDate);
-            if (response == null || response.output1() == null || response.output1().isEmpty()) {
+            if (response == null) {
                 return List.of();
             }
             if (!"0".equals(response.resultCode())) {
@@ -37,8 +37,11 @@ public class KisBrokerDailyPerformanceReader implements BrokerDailyPerformanceRe
                         response.message());
                 return List.of();
             }
+            if (response.items().isEmpty()) {
+                return List.of();
+            }
 
-            Map<LocalDate, List<KisOverseasPeriodProfitResponse.Item>> byDate = response.output1().stream()
+            Map<LocalDate, List<KisOverseasPeriodProfitResponse.Item>> byDate = response.items().stream()
                     .filter(item -> item.tradeDate() != null && !item.tradeDate().isBlank())
                     .collect(Collectors.groupingBy(
                             item -> LocalDate.parse(item.tradeDate(), YYYYMMDD),
@@ -51,7 +54,8 @@ public class KisBrokerDailyPerformanceReader implements BrokerDailyPerformanceRe
                             entry.getKey(),
                             entry.getValue().stream().map(item -> toDecimal(item.realizedPnl())).reduce(BigDecimal.ZERO, BigDecimal::add),
                             entry.getValue().stream().map(item -> toDecimal(item.fee())).reduce(BigDecimal.ZERO, BigDecimal::add),
-                            entry.getValue().stream().map(item -> toDecimal(item.tax())).reduce(BigDecimal.ZERO, BigDecimal::add)
+                            BigDecimal.ZERO,
+                            resolveFxRate(entry.getKey(), entry.getValue())
                     ))
                     .toList();
         } catch (Exception e) {
@@ -66,5 +70,20 @@ public class KisBrokerDailyPerformanceReader implements BrokerDailyPerformanceRe
             return BigDecimal.ZERO;
         }
         return new BigDecimal(value.replace(",", ""));
+    }
+
+    private BigDecimal resolveFxRate(LocalDate date, List<KisOverseasPeriodProfitResponse.Item> items) {
+        List<BigDecimal> distinctRates = items.stream()
+                .map(KisOverseasPeriodProfitResponse.Item::firstNoticeExchangeRate)
+                .map(this::toDecimal)
+                .filter(rate -> rate.signum() > 0)
+                .distinct()
+                .toList();
+        if (distinctRates.size() > 1) {
+            log.warn("KIS overseas period profit returned multiple first notice exchange rates for date={}: rates={}",
+                    date,
+                    distinctRates);
+        }
+        return distinctRates.isEmpty() ? BigDecimal.ZERO : distinctRates.getFirst();
     }
 }

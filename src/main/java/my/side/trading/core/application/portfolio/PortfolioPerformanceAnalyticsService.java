@@ -48,26 +48,27 @@ public class PortfolioPerformanceAnalyticsService {
                 .filter(item -> item.date().isEqual(asOfDate))
                 .findFirst()
                 .orElse(null);
-        BigDecimal fxRate = defaultScale(fxRateReader.readUsdKrwRates(asOfDate, asOfDate).get(asOfDate), 8);
+        BigDecimal valuationFxRate = defaultScale(resolveValuationFxRate(asOfDate, brokerPerformance), 8);
+        BigDecimal actualConversionFxRate = defaultScale(resolveActualConversionFxRate(brokerPerformance, valuationFxRate), 8);
 
         BigDecimal navUsd = defaultScale(portfolioSnapshot.totalValue(), 4);
-        BigDecimal navKrw = multiply(navUsd, fxRate, 4);
+        BigDecimal navKrw = multiply(navUsd, valuationFxRate, 4);
         BigDecimal realizedPnlUsd = defaultScale(brokerPerformance == null ? null : brokerPerformance.realizedPnlUsd(), 4);
         BigDecimal brokerFeeUsd = defaultScale(brokerPerformance == null ? null : brokerPerformance.brokerFeeUsd(), 4);
         BigDecimal taxUsd = defaultScale(brokerPerformance == null ? null : brokerPerformance.taxUsd(), 4);
-        BigDecimal realizedPnlKrw = multiply(realizedPnlUsd, fxRate, 4);
-        BigDecimal brokerFeeKrw = multiply(brokerFeeUsd, fxRate, 4);
-        BigDecimal taxKrw = multiply(taxUsd, fxRate, 4);
+        BigDecimal realizedPnlKrw = multiply(realizedPnlUsd, actualConversionFxRate, 4);
+        BigDecimal brokerFeeKrw = multiply(brokerFeeUsd, actualConversionFxRate, 4);
+        BigDecimal taxKrw = multiply(taxUsd, actualConversionFxRate, 4);
         boolean holdingCostConfigured = isHoldingCostConfigured();
         BigDecimal holdingCostEstimateUsd = defaultScale(calculateHoldingCostUsd(portfolioSnapshot), 4);
-        BigDecimal holdingCostEstimateKrw = multiply(holdingCostEstimateUsd, fxRate, 4);
-        boolean actualDataReady = brokerPerformance != null && fxRate.signum() > 0;
+        BigDecimal holdingCostEstimateKrw = multiply(holdingCostEstimateUsd, valuationFxRate, 4);
+        boolean actualDataReady = brokerPerformance != null && actualConversionFxRate.signum() > 0;
 
         return performanceAnalyticsSnapshotRepository.save(new PerformanceAnalyticsSnapshot(
                 asOfDate,
                 navUsd,
                 navKrw,
-                fxRate,
+                valuationFxRate,
                 realizedPnlUsd,
                 realizedPnlKrw,
                 brokerFeeUsd,
@@ -338,5 +339,32 @@ public class PortfolioPerformanceAnalyticsService {
             return BigDecimal.ZERO.setScale(scale, RoundingMode.HALF_UP);
         }
         return value.setScale(scale, RoundingMode.HALF_UP);
+    }
+
+    private BigDecimal resolveValuationFxRate(
+            LocalDate asOfDate,
+            BrokerDailyPerformanceReader.BrokerDailyPerformance brokerPerformance
+    ) {
+        BigDecimal rateFromFxReader = fxRateReader.readUsdKrwRates(asOfDate, asOfDate).get(asOfDate);
+        if (rateFromFxReader != null && rateFromFxReader.signum() > 0) {
+            return rateFromFxReader;
+        }
+        if (brokerPerformance != null && brokerPerformance.fxRate() != null && brokerPerformance.fxRate().signum() > 0) {
+            return brokerPerformance.fxRate();
+        }
+        return BigDecimal.ZERO;
+    }
+
+    private BigDecimal resolveActualConversionFxRate(
+            BrokerDailyPerformanceReader.BrokerDailyPerformance brokerPerformance,
+            BigDecimal valuationFxRate
+    ) {
+        if (brokerPerformance != null && brokerPerformance.fxRate() != null && brokerPerformance.fxRate().signum() > 0) {
+            return brokerPerformance.fxRate();
+        }
+        if (valuationFxRate != null && valuationFxRate.signum() > 0) {
+            return valuationFxRate;
+        }
+        return BigDecimal.ZERO;
     }
 }

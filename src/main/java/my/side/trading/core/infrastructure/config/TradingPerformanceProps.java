@@ -7,13 +7,11 @@ import java.math.BigDecimal;
 @ConfigurationProperties(prefix = "trading.performance")
 public record TradingPerformanceProps(
         BackfillProps backfill,
-        HoldingCostProps holdingCost,
-        FxProps fx
+        HoldingCostProps holdingCost
 ) {
     public TradingPerformanceProps {
         backfill = backfill == null ? new BackfillProps(365) : backfill;
         holdingCost = holdingCost == null ? new HoldingCostProps(new HoldingCostSymbolProps(null, null, null)) : holdingCost;
-        fx = fx == null ? new FxProps("USDKRW") : fx;
     }
 
     public record BackfillProps(
@@ -51,11 +49,4 @@ public record TradingPerformanceProps(
         }
     }
 
-    public record FxProps(
-            String usdKrwSymbol
-    ) {
-        public FxProps {
-            usdKrwSymbol = usdKrwSymbol == null || usdKrwSymbol.isBlank() ? "USDKRW" : usdKrwSymbol;
-        }
-    }
 }

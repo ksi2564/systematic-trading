@@ -12,7 +12,8 @@ public interface BrokerDailyPerformanceReader {
             LocalDate date,
             BigDecimal realizedPnlUsd,
             BigDecimal brokerFeeUsd,
-            BigDecimal taxUsd
+            BigDecimal taxUsd,
+            BigDecimal fxRate
     ) {
     }
 }

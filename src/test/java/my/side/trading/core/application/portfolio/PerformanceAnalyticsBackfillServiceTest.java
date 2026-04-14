@@ -28,8 +28,7 @@ class PerformanceAnalyticsBackfillServiceTest {
         TradingPerformanceProps props = new TradingPerformanceProps(
                 new TradingPerformanceProps.BackfillProps(365),
                 new TradingPerformanceProps.HoldingCostProps(
-                        new TradingPerformanceProps.HoldingCostSymbolProps(BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO)),
-                new TradingPerformanceProps.FxProps("USDKRW"));
+                        new TradingPerformanceProps.HoldingCostSymbolProps(BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO)));
 
         PortfolioPerformanceAnalyticsService analyticsService = new PortfolioPerformanceAnalyticsService(
                 new PortfolioPerformanceService(portfolioSnapshotRepository),
@@ -40,7 +39,8 @@ class PerformanceAnalyticsBackfillServiceTest {
                                 LocalDate.of(2026, 4, 2),
                                 new BigDecimal("10.0000"),
                                 new BigDecimal("1.0000"),
-                                new BigDecimal("0.5000"))
+                                new BigDecimal("0.5000"),
+                                new BigDecimal("1430.00000000"))
                 ),
                 (startDate, endDate) -> Map.of(
                         LocalDate.of(2026, 4, 2), new BigDecimal("1430.00000000"),
@@ -65,6 +65,10 @@ class PerformanceAnalyticsBackfillServiceTest {
         assertThat(analyticsSnapshotRepository.findAllOrderByAsOfDateAsc())
                 .extracting(snapshot -> snapshot.asOfDate())
                 .containsExactly(LocalDate.of(2026, 4, 2), LocalDate.of(2026, 4, 3));
+        assertThat(analyticsSnapshotRepository.findAllOrderByAsOfDateAsc().getFirst().fxRate())
+                .isEqualByComparingTo("1430.00000000");
+        assertThat(analyticsSnapshotRepository.findAllOrderByAsOfDateAsc().getLast().navKrw())
+                .isEqualByComparingTo("1440000.0000");
     }
 
     private static my.side.trading.core.domain.portfolio.PortfolioSnapshot snapshot(LocalDate date, String totalValue) {

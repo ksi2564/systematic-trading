@@ -83,6 +83,52 @@ class PortfolioPerformanceAnalyticsServiceTest {
     }
 
     @Test
+    void FX_API가_비어도_브로커_응답_환율로_actual_ready를_계산한다() {
+        FakePortfolioSnapshotRepository snapshotRepository = new FakePortfolioSnapshotRepository();
+        snapshotRepository.save(snapshot("2026-04-02", "1100.0000", "110.0000", "90.0000", "10.0000", "0", "0"));
+        FakePerformanceAnalyticsSnapshotRepository analyticsRepository = new FakePerformanceAnalyticsSnapshotRepository();
+
+        PortfolioPerformanceAnalyticsService service = new PortfolioPerformanceAnalyticsService(
+                new PortfolioPerformanceService(snapshotRepository),
+                snapshotRepository,
+                analyticsRepository,
+                rangeReader(List.of(broker("2026-04-02", "20.0000", "2.0000", "3.0000", "1410.00000000"))),
+                rangeFxReader(Map.of()),
+                performanceProps(BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO)
+        );
+
+        PerformanceAnalyticsSnapshot snapshot = service.captureDailyAnalytics(LocalDate.of(2026, 4, 2));
+
+        assertThat(snapshot.actualDataReady()).isTrue();
+        assertThat(snapshot.fxRate()).isEqualByComparingTo("1410.00000000");
+        assertThat(snapshot.realizedPnlKrw()).isEqualByComparingTo("28200.0000");
+    }
+
+    @Test
+    void 스냅샷평가환율과_실손익환율을_분리해서_계산한다() {
+        FakePortfolioSnapshotRepository snapshotRepository = new FakePortfolioSnapshotRepository();
+        snapshotRepository.save(snapshot("2026-04-02", "1100.0000", "110.0000", "90.0000", "10.0000", "0", "0"));
+        FakePerformanceAnalyticsSnapshotRepository analyticsRepository = new FakePerformanceAnalyticsSnapshotRepository();
+
+        PortfolioPerformanceAnalyticsService service = new PortfolioPerformanceAnalyticsService(
+                new PortfolioPerformanceService(snapshotRepository),
+                snapshotRepository,
+                analyticsRepository,
+                rangeReader(List.of(broker("2026-04-02", "20.0000", "2.0000", "3.0000", "1410.00000000"))),
+                rangeFxReader(Map.of(LocalDate.of(2026, 4, 2), new BigDecimal("1400.00000000"))),
+                performanceProps(BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO)
+        );
+
+        PerformanceAnalyticsSnapshot snapshot = service.captureDailyAnalytics(LocalDate.of(2026, 4, 2));
+
+        assertThat(snapshot.fxRate()).isEqualByComparingTo("1400.00000000");
+        assertThat(snapshot.navKrw()).isEqualByComparingTo("1540000.0000");
+        assertThat(snapshot.realizedPnlKrw()).isEqualByComparingTo("28200.0000");
+        assertThat(snapshot.brokerFeeKrw()).isEqualByComparingTo("2820.0000");
+        assertThat(snapshot.taxKrw()).isEqualByComparingTo("4230.0000");
+    }
+
+    @Test
     void 보유비용추정치는_순실성과와_분리된다() {
         FakePortfolioSnapshotRepository snapshotRepository = new FakePortfolioSnapshotRepository();
         snapshotRepository.save(snapshot("2026-04-01", "36500.0000", "100.0000", "100.0000", "0", "0", "0"));
@@ -121,8 +167,7 @@ class PortfolioPerformanceAnalyticsServiceTest {
     private TradingPerformanceProps performanceProps(BigDecimal qqq, BigDecimal qld, BigDecimal tqqq) {
         return new TradingPerformanceProps(
                 new TradingPerformanceProps.BackfillProps(365),
-                new TradingPerformanceProps.HoldingCostProps(new TradingPerformanceProps.HoldingCostSymbolProps(qqq, qld, tqqq)),
-                new TradingPerformanceProps.FxProps("USDKRW")
+                new TradingPerformanceProps.HoldingCostProps(new TradingPerformanceProps.HoldingCostSymbolProps(qqq, qld, tqqq))
         );
     }
 
@@ -132,11 +177,22 @@ class PortfolioPerformanceAnalyticsServiceTest {
             String brokerFeeUsd,
             String taxUsd
     ) {
+        return broker(date, realizedPnlUsd, brokerFeeUsd, taxUsd, "0");
+    }
+
+    private BrokerDailyPerformanceReader.BrokerDailyPerformance broker(
+            String date,
+            String realizedPnlUsd,
+            String brokerFeeUsd,
+            String taxUsd,
+            String fxRate
+    ) {
         return new BrokerDailyPerformanceReader.BrokerDailyPerformance(
                 LocalDate.parse(date),
                 new BigDecimal(realizedPnlUsd),
                 new BigDecimal(brokerFeeUsd),
-                new BigDecimal(taxUsd)
+                new BigDecimal(taxUsd),
+                new BigDecimal(fxRate)
         );
     }
 

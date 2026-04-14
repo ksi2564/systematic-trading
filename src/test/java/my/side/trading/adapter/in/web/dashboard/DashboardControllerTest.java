@@ -8,6 +8,7 @@ import my.side.trading.core.application.execution.ExecutionGuard;
 import my.side.trading.core.application.execution.ExecutionGuardSnapshot;
 import my.side.trading.core.application.operation.OperatingModeService;
 import my.side.trading.core.application.operation.OperationsKpiSnapshot;
+import my.side.trading.core.application.port.out.CurrentFxRateProvider;
 import my.side.trading.core.application.portfolio.PortfolioPerformanceAnalyticsReport;
 import my.side.trading.core.application.portfolio.PortfolioPerformanceAnalyticsService;
 import my.side.trading.core.application.portfolio.PortfolioPerformanceAnalyticsSummary;
@@ -54,6 +55,7 @@ class DashboardControllerTest {
         my.side.trading.core.application.operation.OperationsKpiService operationsKpiService =
                 mock(my.side.trading.core.application.operation.OperationsKpiService.class);
         PortfolioPerformanceAnalyticsService analyticsService = mock(PortfolioPerformanceAnalyticsService.class);
+        CurrentFxRateProvider currentFxRateProvider = mock(CurrentFxRateProvider.class);
         PortfolioSnapshotRepository portfolioSnapshotRepository = mock(PortfolioSnapshotRepository.class);
         OperatingModeService operatingModeService = mock(OperatingModeService.class);
 
@@ -82,6 +84,7 @@ class DashboardControllerTest {
                 false,
                 List.of()));
         when(analyticsService.getSummary()).thenReturn(sampleAnalyticsSummary());
+        when(currentFxRateProvider.getCurrentUsdKrwRate()).thenReturn(Optional.of(new BigDecimal("1435.5000")));
         when(operatingModeService.currentMode()).thenReturn(OperatingMode.MANUAL_LIVE);
         when(operatingModeService.recentHistory(5)).thenReturn(List.of(auditEvent()));
 
@@ -93,6 +96,7 @@ class DashboardControllerTest {
                 executionGuard,
                 operationsKpiService,
                 analyticsService,
+                currentFxRateProvider,
                 portfolioSnapshotRepository,
                 operatingModeService);
 
@@ -103,6 +107,10 @@ class DashboardControllerTest {
         assertThat(response.performance().latestNav()).isEqualByComparingTo("1000.0000");
         assertThat(response.performance().actualPerformanceUsd().netActualPnlAmount()).isEqualByComparingTo("12.0000");
         assertThat(response.performance().holdingCostEstimate().configured()).isTrue();
+        assertThat(response.realtimePortfolioValuation().available()).isTrue();
+        assertThat(response.realtimePortfolioValuation().totalValueUsd()).isEqualByComparingTo("10.0000");
+        assertThat(response.realtimePortfolioValuation().fxRate()).isEqualByComparingTo("1435.5000");
+        assertThat(response.realtimePortfolioValuation().totalValueKrw()).isEqualByComparingTo("14355.0000");
         assertThat(response.recentOperatingModeAudits()).hasSize(1);
     }
 
@@ -116,6 +124,7 @@ class DashboardControllerTest {
         my.side.trading.core.application.operation.OperationsKpiService operationsKpiService =
                 mock(my.side.trading.core.application.operation.OperationsKpiService.class);
         PortfolioPerformanceAnalyticsService analyticsService = mock(PortfolioPerformanceAnalyticsService.class);
+        CurrentFxRateProvider currentFxRateProvider = mock(CurrentFxRateProvider.class);
         PortfolioSnapshotRepository portfolioSnapshotRepository = mock(PortfolioSnapshotRepository.class);
         OperatingModeService operatingModeService = mock(OperatingModeService.class);
 
@@ -144,6 +153,7 @@ class DashboardControllerTest {
                 executionGuard,
                 operationsKpiService,
                 analyticsService,
+                currentFxRateProvider,
                 portfolioSnapshotRepository,
                 operatingModeService);
 
@@ -165,6 +175,7 @@ class DashboardControllerTest {
         my.side.trading.core.application.operation.OperationsKpiService operationsKpiService =
                 mock(my.side.trading.core.application.operation.OperationsKpiService.class);
         PortfolioPerformanceAnalyticsService analyticsService = mock(PortfolioPerformanceAnalyticsService.class);
+        CurrentFxRateProvider currentFxRateProvider = mock(CurrentFxRateProvider.class);
         PortfolioSnapshotRepository portfolioSnapshotRepository = mock(PortfolioSnapshotRepository.class);
         OperatingModeService operatingModeService = mock(OperatingModeService.class);
 
@@ -207,6 +218,7 @@ class DashboardControllerTest {
                 executionGuard,
                 operationsKpiService,
                 analyticsService,
+                currentFxRateProvider,
                 portfolioSnapshotRepository,
                 operatingModeService);
 

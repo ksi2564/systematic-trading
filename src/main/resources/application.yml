@@ -58,8 +58,6 @@ trading:
   performance:
     backfill:
       default-days: 365
-    fx:
-      usd-krw-symbol: USDKRW
     holding-cost:
       symbols:
         QQQ: 0

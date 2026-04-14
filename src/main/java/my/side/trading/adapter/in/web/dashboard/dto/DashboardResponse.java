@@ -12,6 +12,7 @@ import my.side.trading.core.domain.portfolio.Portfolio;
 import my.side.trading.core.domain.strategy.StrategyState;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.List;
 
 @Builder
@@ -21,6 +22,7 @@ public record DashboardResponse(
         CircuitBreakerInfo circuitBreaker,
         OperationsKpiSnapshot operationsKpi,
         PerformanceInfo performance,
+        RealtimePortfolioValuationInfo realtimePortfolioValuation,
         OperatingMode operatingMode,
         ExecutionGuardSnapshot guard,
         List<ExecutionJob> recentJobs,
@@ -153,6 +155,30 @@ public record DashboardResponse(
             BigDecimal pnlPct) {
     }
 
+    @Builder
+    public record RealtimePortfolioValuationInfo(
+            boolean available,
+            BigDecimal totalValueUsd,
+            BigDecimal fxRate,
+            BigDecimal totalValueKrw) {
+
+        public static RealtimePortfolioValuationInfo from(Portfolio portfolio, BigDecimal fxRate) {
+            BigDecimal totalValueUsd = portfolio == null
+                    ? null
+                    : portfolio.totalValue().setScale(4, RoundingMode.HALF_UP);
+            boolean available = totalValueUsd != null && fxRate != null && fxRate.signum() > 0;
+            BigDecimal totalValueKrw = available
+                    ? totalValueUsd.multiply(fxRate).setScale(4, RoundingMode.HALF_UP)
+                    : null;
+            return new RealtimePortfolioValuationInfo(
+                    available,
+                    totalValueUsd,
+                    fxRate,
+                    totalValueKrw
+            );
+        }
+    }
+
     public static DashboardResponse of(
             Portfolio portfolio,
             StrategyState strategyState,
@@ -160,6 +186,7 @@ public record DashboardResponse(
             BigDecimal qqq200Ma,
             OperationsKpiSnapshot operationsKpi,
             PortfolioPerformanceAnalyticsSummary performance,
+            RealtimePortfolioValuationInfo realtimePortfolioValuation,
             OperatingMode operatingMode,
             ExecutionGuardSnapshot guard,
             List<ExecutionJob> recentJobs,
@@ -170,6 +197,7 @@ public record DashboardResponse(
                 .circuitBreaker(new CircuitBreakerInfo(vix, qqq200Ma))
                 .operationsKpi(operationsKpi)
                 .performance(PerformanceInfo.from(performance))
+                .realtimePortfolioValuation(realtimePortfolioValuation)
                 .operatingMode(operatingMode)
                 .guard(guard)
                 .recentJobs(recentJobs)

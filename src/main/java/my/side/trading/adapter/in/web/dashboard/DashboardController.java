@@ -9,6 +9,7 @@ import my.side.trading.core.adapter.in.web.common.ApiResponse;
 import my.side.trading.core.application.execution.ExecutionGuard;
 import my.side.trading.core.application.operation.OperatingModeService;
 import my.side.trading.core.application.operation.OperationsKpiService;
+import my.side.trading.core.application.port.out.CurrentFxRateProvider;
 import my.side.trading.core.application.portfolio.PortfolioPerformanceAnalyticsService;
 import my.side.trading.core.application.portfolio.PortfolioService;
 import my.side.trading.core.domain.execution.order.ExecutionJob;
@@ -37,6 +38,7 @@ public class DashboardController {
     private final ExecutionGuard executionGuard;
     private final OperationsKpiService operationsKpiService;
     private final PortfolioPerformanceAnalyticsService portfolioPerformanceAnalyticsService;
+    private final CurrentFxRateProvider currentFxRateProvider;
     private final PortfolioSnapshotRepository portfolioSnapshotRepository;
     private final OperatingModeService operatingModeService;
 
@@ -64,6 +66,10 @@ public class DashboardController {
 
         var operationsKpi = operationsKpiService.snapshot();
         var performance = portfolioPerformanceAnalyticsService.getSummary();
+        var realtimePortfolioValuation = DashboardResponse.RealtimePortfolioValuationInfo.from(
+                portfolio,
+                currentFxRateProvider.getCurrentUsdKrwRate().orElse(null)
+        );
 
         return ApiResponse.success(DashboardResponse.of(
                 portfolio,
@@ -72,6 +78,7 @@ public class DashboardController {
                 qqq200Ma,
                 operationsKpi,
                 performance,
+                realtimePortfolioValuation,
                 operatingModeService.currentMode(),
                 executionGuard.snapshot(),
                 recentJobs,

@@ -22,6 +22,7 @@ public record YahooQuoteResponse(
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record Result(
             @JsonProperty("meta") Meta meta,
+            @JsonProperty("timestamp") List<Long> timestamp,
             @JsonProperty("indicators") Indicators indicators) {
     }
 
@@ -29,7 +30,8 @@ public record YahooQuoteResponse(
     public record Meta(
             @JsonProperty("regularMarketPrice") BigDecimal regularMarketPrice,
             @JsonProperty("previousClose") BigDecimal previousClose,
-            @JsonProperty("symbol") String symbol) {
+            @JsonProperty("symbol") String symbol,
+            @JsonProperty("exchangeTimezoneName") String exchangeTimezoneName) {
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)

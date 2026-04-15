@@ -37,7 +37,7 @@ public class StrategyEodScheduler {
     private boolean enabled;
 
     // KST 기준 미장 마감 이후 15분 여유
-    // 정리 예정: 추후 계절시간을 반영해야 한다.
+    // TODO: 추후 계절시간을 반영해야 한다.
     @Scheduled(cron = "0 15 06 * * TUE-SAT", zone = "Asia/Seoul") // 06:15 KST
     public void runScheduledEod() {
         if (!enabled) {

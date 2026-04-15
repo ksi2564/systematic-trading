@@ -7,7 +7,9 @@ import my.side.trading.core.domain.execution.ExecutionTriggerType;
 import my.side.trading.core.domain.operation.OperatingMode;
 import my.side.trading.core.domain.time.MarketStatus;
 import org.junit.jupiter.api.Test;
+import org.springframework.scheduling.annotation.Scheduled;
 
+import java.lang.reflect.Method;
 import java.time.LocalDate;
 import java.util.Optional;
 
@@ -16,6 +18,16 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 class RebalanceExecutionSchedulerTest {
+
+    @Test
+    void 자동_리밸런싱은_미국_동부시간_기준_정규장_개장_15분_뒤에_실행된다() throws NoSuchMethodException {
+        Method scheduledMethod = RebalanceExecutionScheduler.class.getMethod("runRebalance");
+        Scheduled scheduled = scheduledMethod.getAnnotation(Scheduled.class);
+
+        org.assertj.core.api.Assertions.assertThat(scheduled).isNotNull();
+        org.assertj.core.api.Assertions.assertThat(scheduled.cron()).isEqualTo("0 45 9 * * MON-FRI");
+        org.assertj.core.api.Assertions.assertThat(scheduled.zone()).isEqualTo("America/New_York");
+    }
 
     @Test
     void 휴장일이면_자동_리밸런싱을_건너뛴다() {

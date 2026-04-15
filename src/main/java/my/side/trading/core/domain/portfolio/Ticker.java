@@ -15,7 +15,7 @@ public enum Ticker {
      * 문자열로부터 Ticker를 생성한다.
      * 
      * @param symbol 종목 심볼 (예: "QQQ")
-     * @return 해당 Ticker 열거형
+     * @return 해당 Ticker Enum
      * @throws IllegalArgumentException 지원하지 않는 심볼인 경우
      */
     public static Ticker from(String symbol) {

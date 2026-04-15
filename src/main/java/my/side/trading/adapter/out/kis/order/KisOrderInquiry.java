@@ -18,7 +18,7 @@ import java.util.Optional;
 @RequiredArgsConstructor
 public class KisOrderInquiry implements OrderInquiry {
 
-    // 정리 예정: 추후 order에 exchange를 넣거나 Portfolio/Strategy에서 주입
+    // TODO: 추후 order에 exchange를 넣거나 Portfolio/Strategy에서 주입
     private static final String DEFAULT_EXCHANGE = "NASD";
 
     private final KisOverseasNccsService nccsService;

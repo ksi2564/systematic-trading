@@ -6,7 +6,7 @@ import java.math.BigDecimal;
 import java.util.List;
 
 /**
- * 테스트용 Fake QqqHistoricalDataProvider
+ * 테스트용 QqqHistoricalDataProvider 대역
  */
 public class FakeQqqHistoricalDataProvider implements QqqHistoricalDataProvider {
 
@@ -17,8 +17,8 @@ public class FakeQqqHistoricalDataProvider implements QqqHistoricalDataProvider 
     }
 
     /**
-     * 빈 리스트를 반환하는 기본 생성자 (기존 테스트 호환용)
-     * 이 경우 initializeState는 현재가를 ATH로 사용
+     * 빈 리스트를 반환하는 기본 생성자이다. (기존 테스트 호환용)
+     * 이 경우 initializeState는 현재가를 ATH로 사용한다.
      */
     public FakeQqqHistoricalDataProvider() {
         this.historicalPrices = List.of();

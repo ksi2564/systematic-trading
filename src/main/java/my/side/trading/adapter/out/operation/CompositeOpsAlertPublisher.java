@@ -21,7 +21,7 @@ public class CompositeOpsAlertPublisher implements OpsAlertPublisher {
             try {
                 channelPublisher.publish(alert);
             } catch (Exception e) {
-                log.warn("ops alert channel publish failed: type={}, publisher={}",
+                log.warn("ops alert 채널 전송에 실패했습니다: type={}, publisher={}",
                         alert.type(),
                         channelPublisher.getClass().getSimpleName(),
                         e);

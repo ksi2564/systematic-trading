@@ -51,14 +51,14 @@ public class RebalanceOrchestrator {
 
         Portfolio portfolio = portfolioService.getCurrentPortfolio();
 
-        // Circuit Breaker용 VIX 및 200MA 조회 (포트 인터페이스를 통해 추상화)
+        // 서킷 브레이커 판단용 VIX와 200MA를 포트 인터페이스로 조회한다.
         BigDecimal vix = marketDataProvider.getVixPrice().orElse(null);
         BigDecimal qqqMa200 = marketDataProvider.getQqq200Ma().orElse(null);
-        log.info("Circuit Breaker data: VIX={}, QQQ_200MA={}", vix, qqqMa200);
+        log.info("서킷 브레이커 데이터: VIX={}, QQQ_200MA={}", vix, qqqMa200);
 
         RebalanceDecision decision = decisionService.decide(state, portfolio, prevWeights, vix, qqqMa200);
         if (!decision.shouldRebalance()) {
-            log.info("skip rebalance: {}", decision.reason());
+            log.info("리밸런싱을 건너뜁니다: {}", decision.reason());
             return RebalanceRunResult.skipped(triggerType, executionGuard.currentMode(), decision.reason());
         }
 
@@ -78,12 +78,12 @@ public class RebalanceOrchestrator {
             ExecutionTriggerType triggerType,
             RebalanceDecision decision,
             my.side.trading.core.domain.execution.order.ExecutionJob job) {
-        log.info("rebalance job planned: jobId={}, triggerType={}", job.getId(), triggerType);
+        log.info("리밸런싱 job을 계획했습니다: jobId={}, triggerType={}", job.getId(), triggerType);
 
         var blockReason = executionGuard.getExecutionBlockReason(triggerType);
         if (blockReason.isPresent()) {
             ExecutionBlockReason reason = blockReason.get();
-            log.info("rebalance execution deferred: jobId={}, reason={}", job.getId(), reason.code());
+            log.info("리밸런싱 실행을 보류합니다: jobId={}, reason={}", job.getId(), reason.code());
             return RebalanceRunResult.plannedOnly(
                     triggerType,
                     executionGuard.currentMode(),

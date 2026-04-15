@@ -8,7 +8,7 @@ import org.springframework.test.context.TestPropertySource;
 class TradingApplicationTests {
 
     @Test
-    void contextLoads() {
+    void 스프링_컨텍스트가_로드된다() {
     }
 
 }

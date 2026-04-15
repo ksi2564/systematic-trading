@@ -12,8 +12,8 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * Yahoo Finance API를 통해 VIX 지수를 조회하는 서비스
- * MarketDataProvider 포트 인터페이스를 구현하여 core 계층에 추상화를 제공
+ * Yahoo Finance API로 VIX 지수를 조회하는 서비스.
+ * MarketDataProvider 포트를 구현해 코어 계층에 추상화를 제공한다.
  */
 @Slf4j
 @Service
@@ -39,7 +39,7 @@ public class YahooVixService implements MarketDataProvider {
      */
     public Optional<BigDecimal> getVixPrice() {
         if (!props.isVixEnabled()) {
-            log.debug("VIX filter is disabled");
+            log.debug("VIX 필터가 비활성화되어 있습니다.");
             return Optional.empty();
         }
 
@@ -53,21 +53,21 @@ public class YahooVixService implements MarketDataProvider {
                     .block();
 
             if (response == null) {
-                log.warn("Yahoo Finance VIX response is null");
+                log.warn("Yahoo Finance VIX 응답이 비어 있습니다.");
                 return Optional.empty();
             }
 
             BigDecimal vix = response.getCurrentPrice();
             if (vix == null) {
-                log.warn("VIX price not found in response");
+                log.warn("응답에서 VIX 가격을 찾지 못했습니다.");
                 return Optional.empty();
             }
 
-            log.info("VIX current price: {}", vix);
+            log.info("현재 VIX 가격={}", vix);
             return Optional.of(vix);
 
         } catch (Exception e) {
-            log.error("Failed to fetch VIX from Yahoo Finance", e);
+            log.error("Yahoo Finance에서 VIX 조회에 실패했습니다.", e);
             return Optional.empty();
         }
     }
@@ -80,7 +80,7 @@ public class YahooVixService implements MarketDataProvider {
      */
     public List<BigDecimal> getQqqHistoricalPrices(int days) {
         try {
-            // range: 1y (1년), interval: 1d (일봉)
+            // range=1y(1년), interval=1d(일봉)
             YahooQuoteResponse response = yahooWebClient.get()
                     .uri(uriBuilder -> uriBuilder
                             .path("/v8/finance/chart/{symbol}")
@@ -92,12 +92,12 @@ public class YahooVixService implements MarketDataProvider {
                     .block();
 
             if (response == null) {
-                log.warn("Yahoo Finance QQQ response is null");
+                log.warn("Yahoo Finance QQQ 응답이 비어 있습니다.");
                 return List.of();
             }
 
             List<BigDecimal> closes = response.getClosePrices();
-            log.info("Fetched {} daily closes for QQQ", closes.size());
+            log.info("QQQ 일별 종가 {}건을 조회했습니다.", closes.size());
 
             // 최근 days일만 반환
             if (closes.size() > days) {
@@ -106,7 +106,7 @@ public class YahooVixService implements MarketDataProvider {
             return closes;
 
         } catch (Exception e) {
-            log.error("Failed to fetch QQQ historical prices from Yahoo Finance", e);
+            log.error("Yahoo Finance에서 QQQ 과거 가격 조회에 실패했습니다.", e);
             return List.of();
         }
     }
@@ -121,7 +121,7 @@ public class YahooVixService implements MarketDataProvider {
         List<BigDecimal> prices = getQqqHistoricalPrices(period);
 
         if (prices.size() < period) {
-            log.warn("Insufficient data for {}MA calculation: {} days available", period, prices.size());
+            log.warn("{}MA 계산에 필요한 데이터가 부족합니다: availableDays={}", period, prices.size());
             return Optional.empty();
         }
 
@@ -129,7 +129,7 @@ public class YahooVixService implements MarketDataProvider {
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
         BigDecimal ma = sum.divide(BigDecimal.valueOf(period), 4, java.math.RoundingMode.HALF_UP);
 
-        log.info("QQQ {}MA: {}", period, ma);
+        log.info("QQQ {}MA={}", period, ma);
         return Optional.of(ma);
     }
 }

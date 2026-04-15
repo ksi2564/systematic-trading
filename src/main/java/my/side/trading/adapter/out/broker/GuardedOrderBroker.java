@@ -16,15 +16,15 @@ import org.springframework.stereotype.Component;
 public class GuardedOrderBroker implements OrderBroker {
 
     private final ExecutionGuard guard;
-    private final @Qualifier("kisOrderBroker") OrderBroker delegate; // 실제 KisOrderBroker가 주입
+    private final @Qualifier("kisOrderBroker") OrderBroker delegate; // 실제 KisOrderBroker를 주입한다.
 
     @Override
     public BrokerOrderResult place(ExecutionOrder order) {
         try {
             guard.requireOrderPlacementAllowed();
         } catch (ExecutionBlockedException e) {
-            // 여기서 "실패 주문"으로 오염시키지 않게, BLOCKED reason을 명확히 남김
-            // "BLOCKED:" prefix로 구분 중이므로 message 수정 시 유의!
+            // "실패 주문"으로 오염시키지 않도록 BLOCKED reason을 명확히 남긴다.
+            // "BLOCKED:" prefix로 구분하므로 message 수정 시 주의한다.
             return BrokerOrderResult.failure(null, "BLOCKED: " + e.getMessage());
         }
         return delegate.place(order);

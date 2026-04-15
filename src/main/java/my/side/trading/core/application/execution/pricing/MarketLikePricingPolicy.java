@@ -5,7 +5,7 @@ import my.side.trading.core.domain.execution.order.ExecutionOrderSide;
 import java.math.BigDecimal;
 
 /**
- * 주문가는 best bid/ask를 기준으로 하고, 틱 단위의 최소 보정만 허용한다.
+ * 주문가는 최우선 bid/ask를 기준으로 하고, 틱 단위의 최소 보정만 허용한다.
  */
 public final class MarketLikePricingPolicy {
     private static final BigDecimal HUNDREDTH = new BigDecimal("0.01");

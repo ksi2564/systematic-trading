@@ -4,8 +4,8 @@ import java.math.BigDecimal;
 import java.util.List;
 
 /**
- * QQQ 과거 가격 데이터 제공자 (Domain Port)
- * Application Layer가 외부 API에 직접 의존하지 않도록 추상화
+ * QQQ 과거 가격 데이터 제공자(도메인 포트)
+ * 애플리케이션 계층이 외부 API에 직접 의존하지 않도록 추상화한다.
  */
 public interface QqqHistoricalDataProvider {
 

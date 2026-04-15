@@ -36,7 +36,7 @@ public class PerformanceAnalyticsScheduler {
         LocalDate marketDate = marketCalendarService.currentMarketDate();
         var marketStatus = marketCalendarService.getMarketStatus(marketDate);
         if (!marketStatus.allowsScheduledEod()) {
-            log.info("[SCHED] performance analytics skipped by market calendar | marketDate={}, marketStatus={}",
+            log.info("[SCHED] 시장 캘린더 기준으로 성과 분석 수집을 건너뜁니다 | marketDate={}, marketStatus={}",
                     marketDate,
                     marketStatus);
             return;
@@ -45,7 +45,7 @@ public class PerformanceAnalyticsScheduler {
         try {
             portfolioPerformanceAnalyticsService.captureDailyAnalytics(marketDate);
         } catch (Exception e) {
-            log.error("Performance analytics capture failed: asOfDate={}", marketDate, e);
+            log.error("성과 분석 수집에 실패했습니다: asOfDate={}", marketDate, e);
             opsAlertPublisher.publish(new OpsAlert(
                     OpsAlertType.PERFORMANCE_DATA_MISSING,
                     OpsAlertSeverity.ERROR,

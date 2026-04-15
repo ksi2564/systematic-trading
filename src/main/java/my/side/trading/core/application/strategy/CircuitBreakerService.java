@@ -9,7 +9,7 @@ import org.springframework.stereotype.Service;
 import java.math.BigDecimal;
 
 /**
- * Circuit Breaker 로직 (안전장치)
+ * 서킷 브레이커 로직(안전장치)
  * - VIX 필터: VIX >= 35 시 레버리지 확대 중단
  * - 200MA 필터: QQQ < 200MA 시 TQQQ 비중 한 단계 낮게 유지
  */
@@ -29,7 +29,7 @@ public class CircuitBreakerService {
         }
         boolean triggered = vix.compareTo(props.getVixThreshold()) >= 0;
         if (triggered) {
-            log.warn("VIX Circuit Breaker triggered: VIX={} >= threshold={}", vix, props.getVixThreshold());
+            log.warn("VIX 서킷 브레이커가 발동했습니다: VIX={} >= threshold={}", vix, props.getVixThreshold());
         }
         return triggered;
     }
@@ -43,13 +43,13 @@ public class CircuitBreakerService {
         }
         boolean triggered = qqqClose.compareTo(ma) < 0;
         if (triggered) {
-            log.warn("200MA Circuit Breaker triggered: QQQ={} < MA{}={}", qqqClose, props.getMaPeriod(), ma);
+            log.warn("200MA 서킷 브레이커가 발동했습니다: QQQ={} < MA{}={}", qqqClose, props.getMaPeriod(), ma);
         }
         return triggered;
     }
 
     /**
-     * Circuit Breaker 적용하여 비중 조정
+     * 서킷 브레이커를 적용해 비중을 조정한다.
      *
      * @param original     원래 목표 비중
      * @param prevWeights  이전 비중 (VIX 트리거 시 TQQQ 확대 방지용)
@@ -65,22 +65,22 @@ public class CircuitBreakerService {
 
         WeightSet adjusted = original;
 
-        // 200MA 필터: TQQQ를 한 단계 낮게 유지 (bucket 기준)
+        // 200MA 필터: TQQQ를 한 단계 낮은 구간으로 유지
         if (maTriggered) {
             adjusted = reduceOneBucket(adjusted);
-            log.info("200MA filter applied: adjusted weights = {}", adjusted);
+            log.info("200MA 필터를 적용했습니다: adjusted={}", adjusted);
         }
 
         // VIX 필터: TQQQ 비중이 이전보다 높아지지 않도록 제한
         if (vixTriggered) {
             if (prevWeights == null) {
-                log.warn("VIX filter triggered but previous weights are unavailable. keeping adjusted weights={}", adjusted);
+                log.warn("VIX 필터가 발동했지만 이전 비중이 없어 현재 조정 비중을 유지합니다: adjusted={}", adjusted);
                 return adjusted;
             }
             if (adjusted.wTqqq().compareTo(prevWeights.wTqqq()) > 0) {
                 // TQQQ 비중이 늘어나려 하면 → 이전 비중으로 유지
                 adjusted = prevWeights;
-                log.info("VIX filter applied: keeping previous weights = {}", adjusted);
+                log.info("VIX 필터를 적용해 이전 비중을 유지합니다: adjusted={}", adjusted);
             }
         }
 

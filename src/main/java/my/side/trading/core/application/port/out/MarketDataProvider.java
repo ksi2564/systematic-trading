@@ -6,7 +6,7 @@ import java.util.Optional;
 /**
  * 외부 시장 데이터 제공자 포트 인터페이스
  * - VIX 지수, QQQ 200일 이동평균 등 시장 보조지표 조회용
- * - core 계층에서 adapter(Yahoo Finance 등)에 직접 의존하지 않기 위한 추상화
+ * - 코어 계층이 Yahoo Finance 같은 어댑터 구현에 직접 의존하지 않도록 하는 추상화
  */
 public interface MarketDataProvider {
 

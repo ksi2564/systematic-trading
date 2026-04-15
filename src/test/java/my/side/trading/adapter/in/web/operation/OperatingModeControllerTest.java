@@ -47,7 +47,7 @@ class OperatingModeControllerTest {
     }
 
     @Test
-    void getModeReturnsCurrentModeAndRecentHistory() throws Exception {
+    void 현재_모드와_최근_이력을_반환한다() throws Exception {
         OperatingModeAuditEvent auditEvent = auditEvent(1L, OperatingMode.AUTO_LIVE);
         when(operatingModeService.getCurrentStatus(5)).thenReturn(new OperatingModeStatus(
                 OperatingMode.AUTO_LIVE,
@@ -62,7 +62,7 @@ class OperatingModeControllerTest {
     }
 
     @Test
-    void postModeRejectsBlankRequestedBy() throws Exception {
+    void requestedBy가_비어있으면_거부한다() throws Exception {
         OperatingModeChangeRequest request = new OperatingModeChangeRequest(
                 OperatingMode.AUTO_LIVE,
                 "",
@@ -76,7 +76,7 @@ class OperatingModeControllerTest {
     }
 
     @Test
-    void postModeReturnsChangedState() throws Exception {
+    void 변경된_상태를_반환한다() throws Exception {
         OperatingModeAuditEvent auditEvent = auditEvent(2L, OperatingMode.AUTO_LIVE);
         when(operatingModeService.changeMode(eq(OperatingMode.AUTO_LIVE), eq("alice"), eq("promote")))
                 .thenReturn(new OperatingModeChangeResult(OperatingMode.AUTO_LIVE, true, true, auditEvent));
@@ -98,7 +98,7 @@ class OperatingModeControllerTest {
     }
 
     @Test
-    void historyUsesDefaultLimit20() throws Exception {
+    void 이력_조회는_기본_limit_20을_사용한다() throws Exception {
         when(operatingModeService.recentHistory(20)).thenReturn(List.of());
 
         mockMvc.perform(get("/api/operations/mode-history"))

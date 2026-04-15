@@ -17,7 +17,7 @@ import static org.mockito.Mockito.when;
 class PortfolioPerformanceSnapshotServiceTest {
 
     @Test
-    void capturesFirstSnapshot() {
+    void 첫_스냅샷을_저장한다() {
         PortfolioService portfolioService = mock(PortfolioService.class);
         FakePortfolioSnapshotRepository repository = new FakePortfolioSnapshotRepository();
         PortfolioPerformanceSnapshotService service = new PortfolioPerformanceSnapshotService(portfolioService, repository);
@@ -35,7 +35,7 @@ class PortfolioPerformanceSnapshotServiceTest {
     }
 
     @Test
-    void overwritesSameDaySnapshotAndRecomputesDrawdownFromPeakNav() {
+    void 동일일자_스냅샷을_덮어쓰고_고점_nav_기준_낙폭을_재계산한다() {
         PortfolioService portfolioService = mock(PortfolioService.class);
         FakePortfolioSnapshotRepository repository = new FakePortfolioSnapshotRepository();
         PortfolioPerformanceSnapshotService service = new PortfolioPerformanceSnapshotService(portfolioService, repository);

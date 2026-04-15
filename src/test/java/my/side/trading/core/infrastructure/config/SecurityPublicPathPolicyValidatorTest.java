@@ -23,7 +23,7 @@ class SecurityPublicPathPolicyValidatorTest {
             .withPropertyValues("trading.security.api-key=test-key");
 
     @Test
-    void shouldFailWhenDashboardPathIsExposedInProd() {
+    void 운영에서_대시보드_경로가_노출되면_실패한다() {
         contextRunner
                 .withPropertyValues(
                         "spring.profiles.active=prod",
@@ -39,7 +39,7 @@ class SecurityPublicPathPolicyValidatorTest {
     }
 
     @Test
-    void shouldFailWhenApiPrefixIsExposedInProd() {
+    void 운영에서_api_접두사가_노출되면_실패한다() {
         contextRunner
                 .withPropertyValues(
                         "spring.profiles.active=prod",
@@ -55,7 +55,7 @@ class SecurityPublicPathPolicyValidatorTest {
     }
 
     @Test
-    void shouldFailWhenActuatorSubPathIsExposedInProd() {
+    void 운영에서_actuator_하위경로가_노출되면_실패한다() {
         contextRunner
                 .withPropertyValues(
                         "spring.profiles.active=prod",
@@ -73,7 +73,7 @@ class SecurityPublicPathPolicyValidatorTest {
     }
 
     @Test
-    void shouldRequireProtectionModeWhenPublicPathIsConfigured() {
+    void 공개경로가_설정되면_보호모드를_필수로_요구한다() {
         contextRunner
                 .withPropertyValues("trading.security.public-path-prefixes[0]=/swagger-ui")
                 .run(context -> {
@@ -84,7 +84,7 @@ class SecurityPublicPathPolicyValidatorTest {
     }
 
     @Test
-    void shouldRequireProtectionNoteWhenPublicPathIsConfigured() {
+    void 공개경로가_설정되면_보호_메모를_필수로_요구한다() {
         contextRunner
                 .withPropertyValues(
                         "trading.security.public-path-prefixes[0]=/swagger-ui",
@@ -98,7 +98,7 @@ class SecurityPublicPathPolicyValidatorTest {
     }
 
     @Test
-    void shouldAllowSwaggerDocsInProdWhenProtectionMetadataIsPresent() {
+    void 운영에서_보호_메타데이터가_있으면_swagger_문서를_허용한다() {
         contextRunner
                 .withPropertyValues(
                         "spring.profiles.active=prod",
@@ -112,7 +112,7 @@ class SecurityPublicPathPolicyValidatorTest {
     }
 
     @Test
-    void shouldAllowDashboardPathOutsideProd() {
+    void 운영_외_환경에서는_대시보드_경로를_허용한다() {
         contextRunner
                 .withPropertyValues(
                         "trading.security.public-path-prefixes[0]=/api/dashboard",
@@ -123,7 +123,7 @@ class SecurityPublicPathPolicyValidatorTest {
     }
 
     @Test
-    void shouldAllowPublicApiInProdWithConcreteOriginsAndProxyRanges() {
+    void 운영에서_구체적인_origin과_프록시_대역이_있으면_공개_api를_허용한다() {
         contextRunner
                 .withPropertyValues(
                         "spring.profiles.active=prod",
@@ -137,7 +137,7 @@ class SecurityPublicPathPolicyValidatorTest {
     }
 
     @Test
-    void shouldRequireTrustedProxyRangesInReverseProxyMode() {
+    void reverse_proxy_모드에서는_신뢰_프록시_대역을_필수로_요구한다() {
         contextRunner
                 .withPropertyValues(
                         "trading.security.public-path-prefixes[0]=/public/api",
@@ -152,7 +152,7 @@ class SecurityPublicPathPolicyValidatorTest {
     }
 
     @Test
-    void shouldRequirePublicReadOriginsInProdWhenPublicApiIsEnabled() {
+    void 운영에서_공개_api가_활성화되면_공개_read_origin을_필수로_요구한다() {
         contextRunner
                 .withPropertyValues(
                         "spring.profiles.active=prod",
@@ -169,7 +169,7 @@ class SecurityPublicPathPolicyValidatorTest {
     }
 
     @Test
-    void shouldRejectWildcardOriginInProd() {
+    void 운영에서는_와일드카드_origin을_거부한다() {
         contextRunner
                 .withPropertyValues(
                         "spring.profiles.active=prod",
@@ -187,7 +187,7 @@ class SecurityPublicPathPolicyValidatorTest {
     }
 
     @Test
-    void shouldRejectNonHttpsOriginInProd() {
+    void 운영에서는_https가_아닌_origin을_거부한다() {
         contextRunner
                 .withPropertyValues(
                         "spring.profiles.active=prod",
@@ -205,7 +205,7 @@ class SecurityPublicPathPolicyValidatorTest {
     }
 
     @Test
-    void shouldRejectOriginWithPathInProd() {
+    void 운영에서는_경로가_포함된_origin을_거부한다() {
         contextRunner
                 .withPropertyValues(
                         "spring.profiles.active=prod",
@@ -223,7 +223,7 @@ class SecurityPublicPathPolicyValidatorTest {
     }
 
     @Test
-    void shouldRejectSampleOriginHostInProd() {
+    void 운영에서는_샘플_origin_host를_거부한다() {
         contextRunner
                 .withPropertyValues(
                         "spring.profiles.active=prod",
@@ -241,7 +241,7 @@ class SecurityPublicPathPolicyValidatorTest {
     }
 
     @Test
-    void shouldRejectSampleProxyRangeInProd() {
+    void 운영에서는_샘플_프록시_대역을_거부한다() {
         contextRunner
                 .withPropertyValues(
                         "spring.profiles.active=prod",

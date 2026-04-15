@@ -1,7 +1,7 @@
 package my.side.trading.core.domain.execution.order;
 
 /**
- * 트레이딩 시스템에서 실행 프로세스의 다양한 상태를 나타내는 Enum
+ * 트레이딩 시스템에서 실행 프로세스의 다양한 상태를 나타내는 열거형
  * 주문 세트를 실행하는 과정에서 실행 프로세스의 생명주기를 추적하는 데 사용
  */
 public enum ExecutionStatus {

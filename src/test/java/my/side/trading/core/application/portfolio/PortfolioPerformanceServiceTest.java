@@ -12,7 +12,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class PortfolioPerformanceServiceTest {
 
     @Test
-    void returnsUnavailableWhenNoSnapshotsExist() {
+    void 스냅샷이_없으면_사용불가를_반환한다() {
         PortfolioPerformanceService service = new PortfolioPerformanceService(new FakePortfolioSnapshotRepository());
 
         PortfolioPerformanceSummary summary = service.getSummary();
@@ -22,7 +22,7 @@ class PortfolioPerformanceServiceTest {
     }
 
     @Test
-    void calculatesSummaryFromSingleSnapshot() {
+    void 단일_스냅샷으로_요약을_계산한다() {
         FakePortfolioSnapshotRepository repository = new FakePortfolioSnapshotRepository();
         repository.save(snapshot(LocalDate.of(2026, 4, 7), "1000.0000", "0.0000"));
         PortfolioPerformanceService service = new PortfolioPerformanceService(repository);
@@ -39,7 +39,7 @@ class PortfolioPerformanceServiceTest {
     }
 
     @Test
-    void calculatesDrawdownAndMonthlyPnlAcrossSnapshots() {
+    void 여러_스냅샷으로_낙폭과_월간_손익을_계산한다() {
         FakePortfolioSnapshotRepository repository = new FakePortfolioSnapshotRepository();
         repository.save(snapshot(LocalDate.of(2026, 3, 28), "1000.0000", "0.0000"));
         repository.save(snapshot(LocalDate.of(2026, 3, 31), "1100.0000", "0.0000"));
@@ -62,7 +62,7 @@ class PortfolioPerformanceServiceTest {
     }
 
     @Test
-    void reportContainsRecentDailySnapshotsAndFullMonthlyPnls() {
+    void 보고서에_최근_일별_스냅샷과_전체_월간_손익이_포함된다() {
         FakePortfolioSnapshotRepository repository = new FakePortfolioSnapshotRepository();
         repository.save(snapshot(LocalDate.of(2026, 1, 31), "1000.0000", "0.0000"));
         repository.save(snapshot(LocalDate.of(2026, 2, 28), "1100.0000", "0.0000"));
@@ -81,7 +81,7 @@ class PortfolioPerformanceServiceTest {
     }
 
     @Test
-    void reportNormalizesDailyLimitAndHandlesNoSnapshots() {
+    void 일별_limit을_정규화하고_스냅샷이_없을때를_처리한다() {
         PortfolioPerformanceService service = new PortfolioPerformanceService(new FakePortfolioSnapshotRepository());
 
         PortfolioPerformanceReport report = service.getReport(0);

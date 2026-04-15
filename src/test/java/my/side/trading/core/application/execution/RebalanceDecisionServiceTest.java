@@ -74,8 +74,8 @@ class RebalanceDecisionServiceTest {
                                 true,
                                 1);
 
-                // 실제: QQQ 20%, QLD 10%, TQQQ 70% 같은 극단(의도적으로 tolerance 초과)
-                // total=1000, cash=0
+                // 실제: QQQ 20%, QLD 10%, TQQQ 70% 같은 극단(의도적으로 허용 오차 초과)
+                // 총자산=1000, 현금=0
                 Portfolio portfolio = new Portfolio(
                                 BigDecimal.ZERO,
                                 List.of(
@@ -91,11 +91,11 @@ class RebalanceDecisionServiceTest {
 
                 assertThat(decision.shouldRebalance()).isTrue();
                 assertThat(decision.intents()).isNotEmpty();
-                // TQQQ 비중 과다로 판매가 있어야함
+                // TQQQ 비중이 과다하므로 매도가 있어야 한다.
                 assertThat(decision.intents()).anyMatch(i -> i.side() == ExecutionOrderSide.SELL);
-                // QQQ, QLD 비중 부족으로 구매가 있어야함
+                // QQQ, QLD 비중이 부족하므로 매수가 있어야 한다.
                 assertThat(decision.intents()).anyMatch(i -> i.side() == ExecutionOrderSide.BUY);
-                // "SELL 먼저, 그 다음 BUY"를 검증
+                // "SELL 먼저, 그 다음 BUY" 순서를 검증한다.
                 boolean seenBuy = false;
                 for (OrderIntent i : decision.intents()) {
                         if (i.side() == ExecutionOrderSide.BUY) {
@@ -107,13 +107,13 @@ class RebalanceDecisionServiceTest {
                                                 .isEqualTo(ExecutionOrderSide.BUY);
                         }
                 }
-                // 첫 intent는 SELL이어야 한다 (SELL이 무조건 있는 intents이므로)
+                // 첫 intent는 SELL이어야 한다. (SELL이 반드시 있는 intents이므로)
                 assertThat(decision.intents().get(0).side()).isEqualTo(ExecutionOrderSide.SELL);
         }
 
         @Test
         void 커스텀_tolerancePct_설정으로_리밸런싱_조건_변경() {
-                // tolerancePct를 10%로 설정
+                // tolerancePct를 10%로 설정한다.
                 TradingStrategyProps customProps = new TradingStrategyProps(
                                 new BigDecimal("10.0"),
                                 List.of("QQQ", "QLD", "TQQQ"),
@@ -135,7 +135,7 @@ class RebalanceDecisionServiceTest {
                                 true,
                                 1);
 
-                // 실제: QQQ 92% -> 8% 편차, 10% tolerance 이내이므로 리밸런싱 안함
+                // 실제: QQQ 92% -> 8% 편차이므로 10% tolerance 이내에서는 리밸런싱하지 않는다.
                 Portfolio portfolio = new Portfolio(
                                 new BigDecimal("80"), // 현금 8%
                                 List.of(

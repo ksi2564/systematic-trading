@@ -60,7 +60,7 @@ public class ExecutionJobExecutor {
             job.completeIfAllTerminal(now);
             return jobRepository.save(job);
         } catch (Exception e) {
-            log.error("Job execution failed: jobId={}", jobId, e);
+            log.error("job 실행에 실패했습니다: jobId={}", jobId, e);
             throw e;
         }
     }
@@ -80,7 +80,7 @@ public class ExecutionJobExecutor {
             }
             return result.isBlocked();
         } catch (Exception e) {
-            log.error("Order processing error: orderId={}", order.getId(), e);
+            log.error("주문 처리 중 오류가 발생했습니다: orderId={}", order.getId(), e);
             job.rejectOrder(order.getId(), null, "Error: " + e.getMessage(), now);
             return false;
         }

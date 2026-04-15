@@ -14,7 +14,7 @@ class TradingSecurityPropsBindingTest {
             .withUserConfiguration(SecurityPropsConfig.class);
 
     @Test
-    void shouldFailWhenApiKeyMissing() {
+    void apiKey가_없으면_바인딩에_실패한다() {
         contextRunner
                 .withPropertyValues("trading.security.public-path-prefixes[0]=/actuator")
                 .run(context -> {
@@ -26,7 +26,7 @@ class TradingSecurityPropsBindingTest {
     }
 
     @Test
-    void shouldFailWhenApiKeyBlank() {
+    void apiKey가_비어있으면_바인딩에_실패한다() {
         contextRunner
                 .withPropertyValues(
                         "trading.security.api-key=",
@@ -40,7 +40,7 @@ class TradingSecurityPropsBindingTest {
     }
 
     @Test
-    void shouldBindWhenApiKeyPresent() {
+    void apiKey가_있으면_정상_바인딩된다() {
         contextRunner
                 .withPropertyValues(
                         "trading.security.api-key=test-key",
@@ -62,7 +62,7 @@ class TradingSecurityPropsBindingTest {
     }
 
     @Test
-    void shouldBindPublicPathProtectionMetadata() {
+    void 공개경로_보호_메타데이터를_바인딩한다() {
         contextRunner
                 .withPropertyValues(
                         "trading.security.api-key=test-key",
@@ -78,7 +78,7 @@ class TradingSecurityPropsBindingTest {
     }
 
     @Test
-    void shouldBindPublicReadOptions() {
+    void 공개_읽기_옵션을_바인딩한다() {
         contextRunner
                 .withPropertyValues(
                         "trading.security.api-key=test-key",
@@ -105,7 +105,7 @@ class TradingSecurityPropsBindingTest {
     }
 
     @Test
-    void shouldBindCommaSeparatedPublicReadOptions() {
+    void 쉼표로_구분된_공개_읽기_옵션을_바인딩한다() {
         contextRunner
                 .withPropertyValues(
                         "trading.security.api-key=test-key",

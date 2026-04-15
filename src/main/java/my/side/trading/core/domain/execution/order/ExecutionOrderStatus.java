@@ -1,7 +1,7 @@
 package my.side.trading.core.domain.execution.order;
 
 /**
- * 실행 주문의 생명주기 동안 가질 수 있는 다양한 상태를 나타내는 Enum
+ * 실행 주문의 생명주기 동안 가질 수 있는 다양한 상태를 나타내는 열거형
  * 각 주문이 가질 수 있는 특정 상태를 설명
  */
 public enum ExecutionOrderStatus {

@@ -39,12 +39,12 @@ public class StrategyStateEodService {
     }
 
     private StrategyState initializeState(LocalDate asOfDate, BigDecimal qqqClose) {
-        log.info("Initializing StrategyState from historical data...");
+        log.info("과거 데이터로 StrategyState를 초기화합니다.");
 
         List<BigDecimal> historicalPrices = qqqHistoricalDataProvider.getHistoricalClosePrices(ATH_LOOKUP_DAYS);
 
         if (historicalPrices.isEmpty()) {
-            log.warn("No historical data available, using current close as ATH");
+            log.warn("과거 데이터가 없어 현재 종가를 ATH로 사용합니다.");
             return createInitialState(asOfDate, qqqClose, qqqClose);
         }
 
@@ -56,7 +56,7 @@ public class StrategyStateEodService {
             ath = qqqClose;
         }
 
-        log.info("Calculated ATH from {} historical prices: {}", historicalPrices.size(), ath);
+        log.info("과거 가격 {}건으로 계산한 ATH={}", historicalPrices.size(), ath);
         return createInitialState(asOfDate, qqqClose, ath);
     }
 
@@ -82,7 +82,7 @@ public class StrategyStateEodService {
                 true,
                 CURRENT_STRATEGY_VERSION);
 
-        log.info("Created initial StrategyState: ATH={}, DD={}%, Phase={}", ath, dd, phase);
+        log.info("초기 StrategyState를 생성했습니다: ATH={}, DD={}%, phase={}", ath, dd, phase);
         return strategyStateRepository.save(initialState);
     }
 

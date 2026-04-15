@@ -13,9 +13,9 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 
 /**
- * 해당 코드는 수도 코드를 포함하고 있음
- * 현재는 실시간 호가만 가져오는 중..
- * TODO: 실시간 소켓 붙여야하는 서비스 정리 후, 해당 class 코드도 정리할 것
+ * 현재 구현은 수도 코드 성격의 흐름을 일부 포함한다.
+ * 지금은 실시간 호가 수신에만 집중하고 있다.
+ * 정리 예정: 실시간 소켓을 연결할 서비스 구조를 확정한 뒤 이 클래스도 정리한다.
  */
 @Slf4j
 @Component
@@ -25,12 +25,12 @@ public class KisRealtimeMessageHandler {
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final InMemoryRealtimePriceProvider priceProvider;
 
-    // 체결통보용 AES 키/IV (실시간-체결통보 구독 성공 시 세팅)
+    // 체결통보용 AES key/iv (실시간 체결통보 구독 성공 시 설정)
     private volatile String aesKey;
     private volatile String aesIv;
 
     public void handleMessage(String data) {
-        // 1. JSON 인지, 실데이터 문자열인지 구분
+        // 1. JSON인지 실데이터 문자열인지 구분
         if (data.startsWith("{")) {
             handleControlJson(data);
         } else {
@@ -39,7 +39,7 @@ public class KisRealtimeMessageHandler {
     }
 
     /**
-     * SUBSCRIBE SUCCESS, ERROR, PINGPONG 등 JSON 응답 처리
+     * SUBSCRIBE SUCCESS, ERROR, PINGPONG 등 제어 JSON 응답을 처리한다.
      */
     private void handleControlJson(String json) {
         try {
@@ -48,8 +48,8 @@ public class KisRealtimeMessageHandler {
             String trId = header.path("tr_id").asText();
 
             if ("PINGPONG".equals(trId)) {
-                log.debug("RECV PINGPONG");
-                // 필요하면 여기서 pong 전송
+                log.debug("PINGPONG을 수신했습니다.");
+                // 필요하면 여기서 pong을 전송한다.
                 return;
             }
 
@@ -58,18 +58,18 @@ public class KisRealtimeMessageHandler {
             String msg = body.path("msg1").asText();
 
             if (!"0".equals(rtCd)) {
-                log.warn("KIS WS ERROR: rt_cd={}, msg={}", rtCd, msg);
+                log.warn("KIS WS 오류 응답입니다: rt_cd={}, msg={}", rtCd, msg);
                 return;
             }
 
-            log.info("KIS WS SUBSCRIBE OK: tr_id={}, msg={}", trId, msg);
+            log.info("KIS WS 구독이 성공했습니다: tr_id={}, msg={}", trId, msg);
 
-            // 체결통보(TR_ID)에 대해서는 AES key/iv 저장
+            // 체결통보 TR_ID에 대해서는 AES key/iv를 저장한다.
             if (isSigningNoticeTrId(trId)) {
                 JsonNode output = body.path("output");
                 this.aesKey = output.path("key").asText();
                 this.aesIv = output.path("iv").asText();
-                // 보안: AES key/iv는 마스킹하여 로그 출력
+                // 보안상 AES key/iv는 마스킹해서 로그에 남긴다.
                 log.info("KIS WS AES KEY/IV 저장 완료 (key=***masked***, iv=***masked***)");
             }
 
@@ -79,14 +79,14 @@ public class KisRealtimeMessageHandler {
     }
 
     private boolean isSigningNoticeTrId(String trId) {
-        // 국내/해외 체결통보 TR_ID 들을 여기서 관리
+        // 국내/해외 체결통보 TR_ID를 여기서 관리한다.
         // 예시: H0STCNI0/H0STCNI9 (국내), 해외 체결통보 TR_ID도 필요시 추가
         return "H0STCNI0".equals(trId)
                 || "H0STCNI9".equals(trId);
     }
 
     /**
-     * "0|TR_ID|...|payload" 형태의 실데이터 처리
+     * "0|TR_ID|...|payload" 형태의 실데이터를 처리한다.
      */
     private void handleRealtimeString(String data) {
         // 예: 0|HDFSASP0|001|RNASQQQM^... (해외주식 실시간호가)
@@ -95,7 +95,7 @@ public class KisRealtimeMessageHandler {
         String[] parts = data.split("\\|", 4); // 앞 4개만 분리
 
         if (parts.length < 4) {
-            log.warn("KIS WS malformed realtime data: {}", data);
+            log.warn("KIS WS 실시간 데이터 형식이 올바르지 않습니다: {}", data);
             return;
         }
 
@@ -103,7 +103,7 @@ public class KisRealtimeMessageHandler {
         String countOrEtc = parts[2]; // 체결건수 등
         String payload = parts[3]; // 실제 데이터 (호가/체결/암호화데이터)
 
-        // 0/1 flag에 따라 성격이 좀 다르지만, TR_ID 기준으로 처리 분기하는게 더 직관적
+        // 0/1 flag보다 TR_ID 기준으로 분기하는 편이 더 직관적이다.
         switch (trId) {
             case "HDFSASP0": // 해외주식 실시간호가
                 handleOverseasQuote(payload);
@@ -119,15 +119,15 @@ public class KisRealtimeMessageHandler {
                 break;
 
             default:
-                log.warn("KIS WS unknown tr_id={}", trId);
+                log.warn("KIS WS에서 알 수 없는 tr_id를 받았습니다: {}", trId);
         }
     }
 
     /**
-     * 해외주식 실시간호가 (평문) 파싱 – '^' 기반 split
+     * 해외주식 실시간 호가(평문)를 '^' 기준으로 파싱한다.
      */
     private void handleOverseasQuote(String payload) {
-        // 공백 필드까지 포함해서 자르기
+        // 공백 필드까지 포함해 분리한다.
         String[] f = payload.split("\\^", -1);
 
         // RSYM ~ DASK1 까지 최소 17개 필드 필요
@@ -176,7 +176,7 @@ public class KisRealtimeMessageHandler {
                 bidVolumeChange1,
                 askVolumeChange1);
 
-        // 여기서 서비스/캐시/이벤트 퍼블리시 등으로 넘기기
+        // 여기서 서비스, 캐시, 이벤트 발행 등 후속 처리로 넘긴다.
         BigDecimal bestBid = BigDecimal.valueOf(quote.bidPrice1());
         BigDecimal bestAsk = BigDecimal.valueOf(quote.askPrice1());
         BigDecimal lastPrice = bestBid.add(bestAsk)
@@ -185,17 +185,17 @@ public class KisRealtimeMessageHandler {
     }
 
     /**
-     * 국내 체결가 예시 – 평문 '^' split
+     * 국내 체결가 예시를 평문 '^' 기준으로 분리해 처리한다.
      */
     private void handleDomesticTick(String countStr, String payload) {
         int tickCount = Integer.parseInt(countStr);
         String[] fields = payload.split("\\^");
-        // tickCount와 fields 길이를 보고 루프 돌면서 처리 (Python 예제와 동일한 패턴)
+        // tickCount와 fields 길이를 기준으로 순회 처리한다. (Python 예제와 같은 패턴)
         // ...
     }
 
     /**
-     * 암호화된 체결통보 payload 복호화 + '^' 파싱
+     * 암호화된 체결통보 payload를 복호화한 뒤 '^' 기준으로 파싱한다.
      */
     private void handleSigningNoticeEncrypted(String encryptedPayload) {
         if (aesKey == null || aesIv == null) {
@@ -206,7 +206,7 @@ public class KisRealtimeMessageHandler {
         String decrypted = KisAesUtil.decryptAesCbcBase64(aesKey, aesIv, encryptedPayload);
         String[] fields = decrypted.split("\\^");
 
-        // KIS 문서의 "실시간 체결통보" Layout 순서대로 필드 매핑
+        // KIS 문서의 "실시간 체결통보" layout 순서대로 필드를 매핑한다.
         // 예시: 고객ID | 계좌번호 | 주문번호 | ...
         String customerId = fields[0];
         String accountNo = fields[1];
@@ -215,11 +215,11 @@ public class KisRealtimeMessageHandler {
         String buySellType = fields[4];
         // ... 이후 필요한 만큼 필드 사용
 
-        // 보안: 계좌번호는 마스킹하여 로그 출력 (주문번호는 추적용으로 유지)
+        // 보안상 계좌번호는 마스킹해 로그에 남긴다. (주문번호는 추적용으로 유지)
         log.info("체결통보 수신: 계좌={}, 주문번호={}, 매도/매수={}",
                 maskAccountNo(accountNo), orderNo, buySellType);
 
-        // 여기서 이벤트 발행 or 서비스 콜 해서 알림/DB 기록 등 처리
+        // 여기서 이벤트 발행이나 서비스 호출로 알림/DB 기록 등을 처리한다.
     }
 
     /**

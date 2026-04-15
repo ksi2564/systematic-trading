@@ -31,7 +31,7 @@ public class KisBrokerDailyPerformanceReader implements BrokerDailyPerformanceRe
                 return List.of();
             }
             if (!"0".equals(response.resultCode())) {
-                log.warn("KIS overseas period profit failed: rt_cd={}, msg_cd={}, msg={}",
+                log.warn("KIS 해외 기간 손익 조회가 실패했습니다: rt_cd={}, msg_cd={}, msg={}",
                         response.resultCode(),
                         response.messageCode(),
                         response.message());
@@ -59,7 +59,7 @@ public class KisBrokerDailyPerformanceReader implements BrokerDailyPerformanceRe
                     ))
                     .toList();
         } catch (Exception e) {
-            log.warn("KIS overseas period profit read failed: startDate={}, endDate={}, reason={}",
+            log.warn("KIS 해외 기간 손익 조회 중 예외가 발생했습니다: startDate={}, endDate={}, reason={}",
                     startDate, endDate, e.toString());
             return List.of();
         }
@@ -80,7 +80,7 @@ public class KisBrokerDailyPerformanceReader implements BrokerDailyPerformanceRe
                 .distinct()
                 .toList();
         if (distinctRates.size() > 1) {
-            log.warn("KIS overseas period profit returned multiple first notice exchange rates for date={}: rates={}",
+            log.warn("KIS 해외 기간 손익 응답에 일자별 first notice exchange rate가 여러 개 있습니다: date={}, rates={}",
                     date,
                     distinctRates);
         }

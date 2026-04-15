@@ -19,7 +19,7 @@ public class InMemoryRealtimePriceProvider implements RealtimePriceProvider {
         return Optional.ofNullable(quoteMap.get(symbol));
     }
 
-    // WebSocket 핸들러에서 가격 갱신
+    // 웹소켓 핸들러에서 가격을 갱신한다.
     public void updatePrice(String symbol, BigDecimal price) {
         quoteMap.put(symbol, new RealtimeQuote(price, price, price));
     }

@@ -55,7 +55,11 @@ src/main/java/my/side/trading
 - 큰 결정은 문서로 남긴다. 기존 ADR 형식을 우선 따른다.
 - 새로운 라이브러리 추가는 필요성을 설명할 수 있어야 하며, 가급적 최소화한다.
 - 주석은 필요한 곳에만 짧고 구체적으로 추가한다.
-- 커밋 메시지는 한국어 Conventional Commits 형식을 선호한다.
+- 문서, 주석, 로그 문장, `@Test` 대상 검증 메서드명은 한글을 우선 사용한다.
+- 외부 스펙 코드, 티커, 암호화 규격명, 운영 식별자(`jobId`, `brokerOrderId`, `TR_ID`, `rt_cd` 등)는 원문 유지 대상이다.
+- 한글화 예외를 새로 추가해야 하면 추측으로 넓히지 말고, 테스트 하네스의 허용 규칙을 함께 갱신하고 이유를 남긴다.
+- 커밋 메시지는 한국어 Conventional Commits 형식을 사용한다. 예: `feat: 주문 재시도 정책 조정`, `chore: 로그 문구 한글화`
+- PR 제목도 커밋과 같은 형식의 Conventional Commits 제목을 사용한다. `[codex]` 같은 별도 prefix는 붙이지 않는다.
 
 ## 4. Testing and Validation
 

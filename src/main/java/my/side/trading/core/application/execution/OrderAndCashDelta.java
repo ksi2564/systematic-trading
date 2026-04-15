@@ -5,7 +5,7 @@ import my.side.trading.core.domain.execution.order.ExecutionOrder;
 import java.math.BigDecimal;
 
 /**
- * cashDelta:
+ * cashDelta 의미:
  * - BUY: 음수(현금 유출)
  * - SELL: 양수(현금 유입)
  */

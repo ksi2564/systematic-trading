@@ -91,7 +91,7 @@ public class KisRealtimeMessageHandler {
     private void handleRealtimeString(String data) {
         // 예: 0|HDFSASP0|001|RNASQQQM^... (해외주식 실시간호가)
         // 예: 1|H0STCNI0|001|<암호화된Base64문자열> (체결통보)
-        char flag = data.charAt(0); // '0' or '1'
+        char flag = data.charAt(0); // 플래그 값은 '0' 또는 '1'
         String[] parts = data.split("\\|", 4); // 앞 4개만 분리
 
         if (parts.length < 4) {

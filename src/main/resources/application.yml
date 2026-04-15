@@ -63,6 +63,13 @@ trading:
         QQQ: 0
         QLD: 0
         TQQQ: 0
+  fx:
+    yahoo:
+      current-cache-ttl: 30s
+      stale-success-ttl: 30m
+      request-timeout: 5s
+      history-cache-ttl: 365d
+      history-cache-maximum-size: 1200
   operation:
     mode: PAPER
     auto-live-gate:

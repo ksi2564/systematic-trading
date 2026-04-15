@@ -1,14 +1,21 @@
 package my.side.trading.adapter.out.yahoo;
 
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
+import com.github.benmanes.caffeine.cache.Ticker;
 import lombok.extern.slf4j.Slf4j;
 import my.side.trading.adapter.out.yahoo.dto.YahooQuoteResponse;
 import my.side.trading.core.application.port.out.CurrentFxRateProvider;
 import my.side.trading.core.application.port.out.FxRateReader;
+import my.side.trading.core.infrastructure.config.TradingFxProps;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 
 import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -17,6 +24,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicReference;
 
 @Slf4j
 @Primary
@@ -26,13 +34,38 @@ public class YahooUsdKrwRateAdapter implements FxRateReader, CurrentFxRateProvid
     private static final String YAHOO_FINANCE_BASE_URL = "https://query1.finance.yahoo.com";
     private static final String USD_KRW_SYMBOL = "KRW=X";
     private static final ZoneId DEFAULT_ZONE = ZoneOffset.UTC;
+    private static final String CURRENT_RATE_CACHE_KEY = "USD/KRW";
 
     private final WebClient yahooWebClient;
+    private final TradingFxProps props;
+    private final Clock clock;
+    private final Cache<String, CachedFxRate> currentRateCache;
+    private final Cache<LocalDate, BigDecimal> historicalRateCache;
+    private final AtomicReference<CachedFxRate> lastSuccessfulCurrentRate;
 
-    public YahooUsdKrwRateAdapter() {
-        this.yahooWebClient = WebClient.builder()
+    @Autowired
+    public YahooUsdKrwRateAdapter(TradingFxProps props) {
+        this(WebClient.builder()
                 .baseUrl(YAHOO_FINANCE_BASE_URL)
+                .build(), props, Clock.systemUTC());
+    }
+
+    YahooUsdKrwRateAdapter(WebClient yahooWebClient, TradingFxProps props, Clock clock) {
+        this.yahooWebClient = yahooWebClient;
+        this.props = props;
+        this.clock = clock;
+        Ticker ticker = () -> Instant.now(clock).toEpochMilli() * 1_000_000L;
+        this.currentRateCache = Caffeine.newBuilder()
+                .maximumSize(1)
+                .ticker(ticker)
+                .expireAfterWrite(props.yahoo().currentCacheTtl())
                 .build();
+        this.historicalRateCache = Caffeine.newBuilder()
+                .maximumSize(props.yahoo().historyCacheMaximumSize())
+                .ticker(ticker)
+                .expireAfterWrite(props.yahoo().historyCacheTtl())
+                .build();
+        this.lastSuccessfulCurrentRate = new AtomicReference<>();
     }
 
     @Override
@@ -51,18 +84,33 @@ public class YahooUsdKrwRateAdapter implements FxRateReader, CurrentFxRateProvid
                             .build(USD_KRW_SYMBOL))
                     .retrieve()
                     .bodyToMono(YahooQuoteResponse.class)
-                    .block();
+                    .block(props.yahoo().requestTimeout());
 
-            return extractHistoricalRates(response);
+            Map<LocalDate, BigDecimal> fetched = extractHistoricalRates(response);
+            if (!fetched.isEmpty()) {
+                fetched.forEach(historicalRateCache::put);
+                Map<LocalDate, BigDecimal> resolved = cachedHistoricalRatesBetween(startDate, endDate);
+                if (resolved.size() > fetched.size()) {
+                    log.info("Yahoo USD/KRW history cache supplemented missing dates: startDate={}, endDate={}, fetched={}, resolved={}",
+                            startDate, endDate, fetched.size(), resolved.size());
+                }
+                return resolved;
+            }
+            return fallbackHistoricalRates(startDate, endDate, "empty response");
         } catch (Exception e) {
             log.warn("Yahoo USD/KRW history read failed: startDate={}, endDate={}, reason={}",
                     startDate, endDate, e.toString());
-            return Map.of();
+            return fallbackHistoricalRates(startDate, endDate, e.toString());
         }
     }
 
     @Override
     public Optional<BigDecimal> getCurrentUsdKrwRate() {
+        CachedFxRate cached = currentRateCache.getIfPresent(CURRENT_RATE_CACHE_KEY);
+        if (cached != null) {
+            return Optional.of(cached.rate());
+        }
+
         try {
             YahooQuoteResponse response = yahooWebClient.get()
                     .uri(uriBuilder -> uriBuilder
@@ -70,20 +118,20 @@ public class YahooUsdKrwRateAdapter implements FxRateReader, CurrentFxRateProvid
                             .build(USD_KRW_SYMBOL))
                     .retrieve()
                     .bodyToMono(YahooQuoteResponse.class)
-                    .block();
+                    .block(props.yahoo().requestTimeout());
 
             if (response == null) {
-                return Optional.empty();
+                return fallbackCurrentRate("null response");
             }
 
             BigDecimal price = response.getCurrentPrice();
             if (price == null || price.signum() <= 0) {
-                return Optional.empty();
+                return fallbackCurrentRate("invalid price");
             }
-            return Optional.of(price);
+            return Optional.of(cacheCurrentRate(price));
         } catch (Exception e) {
             log.warn("Yahoo USD/KRW current read failed: reason={}", e.toString());
-            return Optional.empty();
+            return fallbackCurrentRate(e.toString());
         }
     }
 
@@ -124,6 +172,56 @@ public class YahooUsdKrwRateAdapter implements FxRateReader, CurrentFxRateProvid
         return rates;
     }
 
+    private BigDecimal cacheCurrentRate(BigDecimal price) {
+        CachedFxRate cached = new CachedFxRate(price, Instant.now(clock));
+        currentRateCache.put(CURRENT_RATE_CACHE_KEY, cached);
+        lastSuccessfulCurrentRate.set(cached);
+        return price;
+    }
+
+    private Optional<BigDecimal> fallbackCurrentRate(String reason) {
+        CachedFxRate stale = lastSuccessfulCurrentRate.get();
+        if (stale == null) {
+            log.warn("Yahoo USD/KRW current rate unavailable without cache: reason={}", reason);
+            return Optional.empty();
+        }
+
+        Duration age = Duration.between(stale.fetchedAt(), Instant.now(clock));
+        if (age.compareTo(props.yahoo().staleSuccessTtl()) > 0) {
+            log.warn("Yahoo USD/KRW current stale cache expired: age={}, reason={}", age, reason);
+            return Optional.empty();
+        }
+
+        log.warn("Yahoo USD/KRW current stale cache fallback applied: age={}, reason={}", age, reason);
+        return Optional.of(stale.rate());
+    }
+
+    private Map<LocalDate, BigDecimal> fallbackHistoricalRates(LocalDate startDate, LocalDate endDate, String reason) {
+        Map<LocalDate, BigDecimal> cached = cachedHistoricalRatesBetween(startDate, endDate);
+        if (cached.isEmpty()) {
+            log.warn("Yahoo USD/KRW history unavailable without cache: startDate={}, endDate={}, reason={}",
+                    startDate, endDate, reason);
+            return Map.of();
+        }
+
+        log.warn("Yahoo USD/KRW history cache fallback applied: startDate={}, endDate={}, cachedCount={}, reason={}",
+                startDate, endDate, cached.size(), reason);
+        return cached;
+    }
+
+    private Map<LocalDate, BigDecimal> cachedHistoricalRatesBetween(LocalDate startDate, LocalDate endDate) {
+        Map<LocalDate, BigDecimal> cached = new LinkedHashMap<>();
+        LocalDate cursor = startDate;
+        while (!cursor.isAfter(endDate)) {
+            BigDecimal rate = historicalRateCache.getIfPresent(cursor);
+            if (rate != null && rate.signum() > 0) {
+                cached.put(cursor, rate);
+            }
+            cursor = cursor.plusDays(1);
+        }
+        return cached;
+    }
+
     private long toEpochSecond(LocalDate date) {
         return date.atStartOfDay(DEFAULT_ZONE).toEpochSecond();
     }
@@ -139,5 +237,11 @@ public class YahooUsdKrwRateAdapter implements FxRateReader, CurrentFxRateProvid
                     meta.exchangeTimezoneName(), e.toString());
             return DEFAULT_ZONE;
         }
+    }
+
+    private record CachedFxRate(
+            BigDecimal rate,
+            Instant fetchedAt
+    ) {
     }
 }

@@ -9,6 +9,7 @@
 - `docs/PRODUCT_REQUIREMENTS.md`
 - `docs/STRATEGY_SPEC.md`
 - `docs/OPERATIONS_RUNBOOK.md`
+- `docs/LOW_COST_DEPLOYMENT_RUNBOOK.md`
 - `docs/DEVELOPER_ROADMAP.md`
 - `docs/decisions/001_code_review_security_and_refactoring.md`
 
@@ -36,6 +37,7 @@
 - 대시보드 요약 / Job 이력 조회
 - 공개 포트폴리오 요약 / 성과 읽기 API
 - API Key 필수 설정 기반 인증과 레이트 리밋
+- 단일 VM 배포용 `prod` 프로필과 서버 산출물 예시
 
 핵심 구현 포인트:
 
@@ -164,6 +166,22 @@
 - `GET /api/operations/parameter-registry`, `GET /api/operations/parameter-registry/history`, `POST /api/operations/parameter-registry/history`가 구현돼 있다.
 - 변경 기록에는 변경자, 사유, 상태, 근거, 검증 방법, 검증 요약, 다음 재검토일, 관련 산출물이 함께 저장된다.
 
+### 저비용 단일 VM 배포 산출물
+
+- `application-prod.yml`이 단일 VM 운영값을 기준으로 정리돼 있다.
+  - `server.address=127.0.0.1`
+  - `trading.security.public-path-prefixes=/public/api/v1`
+  - `trading.operation.mode=PAPER`
+  - `trading.scheduling.enabled=true`
+  - `trading.execution.enabled=false`
+- 저장소에는 아래 서버 산출물 예시가 추가돼 있다.
+  - `deploy/caddy/Caddyfile.example`
+  - `deploy/systemd/trading.service`
+  - `deploy/mysql/99-trading.cnf`
+  - `deploy/logrotate/trading`
+  - `deploy/scripts/*.sh`
+- 이 산출물은 단일 Ubuntu VM에서 reverse proxy, 로컬 MySQL, systemd 서비스, 일일 백업까지 바로 세팅할 수 있는 기준 템플릿이다.
+
 ## 4. 남아 있는 정책-구현 갭
 
 아래 항목은 현재 기준으로 실제 미구현이거나 미완성인 영역이다.
@@ -219,8 +237,9 @@
 
 현재 기준에서 후속 구현 우선순위는 아래가 합리적이다.
 
-1. 공개 운영 환경의 reverse proxy / CDN / TLS / 접근 로그 실제 적용
-2. 성과 측정 체계(NAV / PnL / MDD) 고도화
-3. `AUTO_LIVE` 승격 전 운영 리허설과 체크리스트 구체화
+1. 실제 VM에 reverse proxy / TLS / 방화벽 / 접근 로그를 적용하고 검증
+2. 백업 스케줄과 맥미니 오프사이트 전송을 실제 운영 환경에 연결
+3. 성과 측정 체계(NAV / PnL / MDD) 고도화
+4. `AUTO_LIVE` 승격 전 운영 리허설과 체크리스트 구체화
 
 로드맵 관리 기준 문서는 `docs/DEVELOPER_ROADMAP.md`다.

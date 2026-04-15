@@ -9,6 +9,7 @@
 - `docs/PRODUCT_REQUIREMENTS.md`
 - `docs/STRATEGY_SPEC.md`
 - `docs/CURRENT_IMPLEMENTATION_SYNC.md`
+- `docs/LOW_COST_DEPLOYMENT_RUNBOOK.md`
 - `docs/decisions/001_code_review_security_and_refactoring.md`
 
 ## 1. 운영 목적과 기본 원칙
@@ -22,6 +23,8 @@
 - 실행 결과는 추적 가능해야 한다.
 - 외부 시세와 브로커 연동 장애는 즉시 운영 이슈로 취급한다.
 - 공개 경로는 개발 편의가 아니라 운영 리스크 관점에서 검토한다.
+
+현재 기본 배포 형태는 `저비용 단일 VM + reverse proxy + SSH tunnel`이다. 구체적인 서버 산출물과 배포 절차는 `docs/LOW_COST_DEPLOYMENT_RUNBOOK.md`와 `deploy/README.md`를 기준으로 본다.
 
 ## 2. 운영 모드별 허용 행위
 

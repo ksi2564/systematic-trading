@@ -20,6 +20,9 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class PerformanceAnalyticsScheduler {
 
+    static final String MARKET_TIME_ZONE = "America/New_York";
+    static final String PERFORMANCE_ANALYTICS_CRON = "0 30 16 * * MON-FRI";
+
     private final MarketCalendarService marketCalendarService;
     private final PortfolioPerformanceAnalyticsService portfolioPerformanceAnalyticsService;
     private final OpsAlertPublisher opsAlertPublisher;
@@ -27,7 +30,8 @@ public class PerformanceAnalyticsScheduler {
     @Value("${trading.scheduling.enabled:false}")
     private boolean enabled;
 
-    @Scheduled(cron = "0 0 09 * * TUE-SAT", zone = "Asia/Seoul")
+    // 미국 동부시간 기준 EOD 직후 후속 배치로 실행한다.
+    @Scheduled(cron = PERFORMANCE_ANALYTICS_CRON, zone = MARKET_TIME_ZONE)
     public void captureDailyPerformanceAnalytics() {
         if (!enabled) {
             return;

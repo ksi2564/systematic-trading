@@ -19,13 +19,15 @@ import java.time.LocalDateTime;
 @ConditionalOnProperty(prefix = "trading.scheduling", name = "enabled", havingValue = "true")
 public class RebalanceExecutionScheduler {
 
+    static final String MARKET_TIME_ZONE = "America/New_York";
+    static final String REBALANCE_CRON = "0 45 9 * * MON-FRI";
+
     private final ExecutionGuard guard;
     private final RebalanceOrchestrator orchestrator;
     private final MarketCalendarService marketCalendarService;
 
-    // KST 기준 미장 개장 이후 15분 여유
-    // 정리 예정: 추후 계절시간을 반영해야 한다.
-    @Scheduled(cron = "0 45 23 * * MON-FRI", zone = "Asia/Seoul") // 23:45 KST
+    // 미국 동부시간 기준 정규장 개장 15분 뒤에 실행한다.
+    @Scheduled(cron = REBALANCE_CRON, zone = MARKET_TIME_ZONE)
     public void runRebalance() {
         LocalDate marketDate = marketCalendarService.currentMarketDate();
         var marketStatus = marketCalendarService.getMarketStatus(marketDate);

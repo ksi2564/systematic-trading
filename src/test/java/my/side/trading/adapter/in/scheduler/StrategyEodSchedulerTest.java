@@ -10,15 +10,27 @@ import my.side.trading.core.domain.operation.OpsAlertPublisher;
 import my.side.trading.core.domain.operation.OpsAlertType;
 import my.side.trading.core.domain.time.MarketStatus;
 import org.junit.jupiter.api.Test;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.lang.reflect.Method;
 import java.util.Optional;
 
 import static org.mockito.Mockito.*;
 
 class StrategyEodSchedulerTest {
+
+    @Test
+    void 스케줄_EOD는_미국_동부시간_기준_정규장_마감_15분_뒤에_실행된다() throws NoSuchMethodException {
+        Method scheduledMethod = StrategyEodScheduler.class.getMethod("runScheduledEod");
+        Scheduled scheduled = scheduledMethod.getAnnotation(Scheduled.class);
+
+        org.assertj.core.api.Assertions.assertThat(scheduled).isNotNull();
+        org.assertj.core.api.Assertions.assertThat(scheduled.cron()).isEqualTo("0 15 16 * * MON-FRI");
+        org.assertj.core.api.Assertions.assertThat(scheduled.zone()).isEqualTo("America/New_York");
+    }
 
     @Test
     void 데이터_미확정일이면_스케줄_EOD를_건너뛴다() {

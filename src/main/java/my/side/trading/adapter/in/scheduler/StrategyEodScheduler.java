@@ -26,6 +26,9 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class StrategyEodScheduler {
 
+    static final String MARKET_TIME_ZONE = "America/New_York";
+    static final String EOD_CRON = "0 15 16 * * MON-FRI";
+
     private final KisOverseasQuotedPriceService quotedPriceService;
     private final StrategyStateEodService eodService;
     private final PortfolioPerformanceSnapshotService portfolioPerformanceSnapshotService;
@@ -36,9 +39,8 @@ public class StrategyEodScheduler {
     @Value("${trading.scheduling.enabled:false}")
     private boolean enabled;
 
-    // KST 기준 미장 마감 이후 15분 여유
-    // TODO: 추후 계절시간을 반영해야 한다.
-    @Scheduled(cron = "0 15 06 * * TUE-SAT", zone = "Asia/Seoul") // 06:15 KST
+    // 미국 동부시간 기준 정규장 마감 15분 뒤에 실행한다.
+    @Scheduled(cron = EOD_CRON, zone = MARKET_TIME_ZONE)
     public void runScheduledEod() {
         if (!enabled) {
             return;

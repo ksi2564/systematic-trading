@@ -57,7 +57,7 @@ src/main/java/my/side/trading
 - 주석은 필요한 곳에만 짧고 구체적으로 추가한다.
 - 문서, 주석, 로그 문장, `@Test` 대상 검증 메서드명은 한글을 우선 사용한다.
 - 외부 스펙 코드, 티커, 암호화 규격명, 운영 식별자(`jobId`, `brokerOrderId`, `TR_ID`, `rt_cd` 등)는 원문 유지 대상이다.
-- 한글화 예외를 새로 추가해야 하면 추측으로 넓히지 말고, 테스트 하네스의 허용 규칙을 함께 갱신하고 이유를 남긴다.
+- `TODO`, `FIXME`, `XXX`, `Enum`, `enum` 같은 관용 표기와 언어 예약어는 영어로 유지해도 된다.
 - 커밋 메시지는 한국어 Conventional Commits 형식을 사용한다. 예: `feat: 주문 재시도 정책 조정`, `chore: 로그 문구 한글화`
 - PR 제목도 커밋과 같은 형식의 Conventional Commits 제목을 사용한다. `[codex]` 같은 별도 prefix는 붙이지 않는다.
 

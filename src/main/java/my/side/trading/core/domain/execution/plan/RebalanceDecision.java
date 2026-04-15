@@ -6,8 +6,8 @@ import java.util.List;
 
 /**
  * 리밸런싱 판단 결과
- * targetWeights: 목표 비중 (주문 시점에 실시간 가격으로 수량 계산)
- * intents: 주문 방향 (BUY/SELL) 정보
+ * targetWeights: 주문 시점에 실시간 가격으로 수량을 계산할 목표 비중
+ * intents: BUY/SELL 주문 방향 정보
  */
 public record RebalanceDecision(
         boolean shouldRebalance,

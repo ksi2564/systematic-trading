@@ -8,7 +8,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * 테스트용 Fake OrderFillChecker
+ * 테스트용 OrderFillChecker 대역
  */
 public class FakeOrderFillChecker implements OrderFillChecker {
 

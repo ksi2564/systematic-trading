@@ -61,7 +61,7 @@ public class RetryableOrderExecutor {
             var retryExposureViolation = riskLimitService.retryExposureViolation(projectedExposure);
             if (retryExposureViolation.isPresent()) {
                 String detail = retryExposureViolation.get().summary();
-                log.warn("[RETRY] retry exposure limit breached: symbol={}, detail={}", symbol, detail);
+                log.warn("[RETRY] 재시도 노출 한도를 초과했습니다: symbol={}, detail={}", symbol, detail);
                 return currentResultOnBlock(symbol, totalFilledQty, totalFilledAmount, lastBrokerOrderId, detail);
             }
 

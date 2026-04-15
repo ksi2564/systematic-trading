@@ -24,13 +24,13 @@ public class RebalanceExecutionScheduler {
     private final MarketCalendarService marketCalendarService;
 
     // KST 기준 미장 개장 이후 15분 여유
-    // TODO: 추후 계절시간 감안 필요
+    // 정리 예정: 추후 계절시간을 반영해야 한다.
     @Scheduled(cron = "0 45 23 * * MON-FRI", zone = "Asia/Seoul") // 23:45 KST
     public void runRebalance() {
         LocalDate marketDate = marketCalendarService.currentMarketDate();
         var marketStatus = marketCalendarService.getMarketStatus(marketDate);
         if (!marketStatus.allowsAutomatedRebalance()) {
-            log.info("[SCHED] automated rebalance skipped by market calendar | marketDate={}, marketStatus={}, mode={}",
+            log.info("[SCHED] 시장 캘린더 기준으로 자동 리밸런싱을 건너뜁니다 | marketDate={}, marketStatus={}, mode={}",
                     marketDate,
                     marketStatus,
                     guard.currentMode());
@@ -39,7 +39,7 @@ public class RebalanceExecutionScheduler {
 
         var blockReason = guard.getExecutionBlockReason(ExecutionTriggerType.AUTOMATED);
         if (blockReason.isPresent()) {
-            log.info("[SCHED] automated rebalance blocked -> skip | reason={}, mode={}",
+            log.info("[SCHED] 자동 리밸런싱이 차단되어 건너뜁니다 | reason={}, mode={}",
                     blockReason.get().code(),
                     guard.currentMode());
             return;

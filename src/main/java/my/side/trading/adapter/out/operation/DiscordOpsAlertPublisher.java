@@ -44,7 +44,7 @@ public class DiscordOpsAlertPublisher implements OpsAlertChannelPublisher {
                     .toBodilessEntity()
                     .block();
         } catch (Exception e) {
-            log.warn("discord ops alert publish failed: type={}", alert.type(), e);
+            log.warn("discord ops alert 전송에 실패했습니다: type={}", alert.type(), e);
         }
     }
 

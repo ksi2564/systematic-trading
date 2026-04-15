@@ -35,7 +35,7 @@ public record Portfolio(
     }
 
     /**
-     * Ticker enum을 사용하는 타입 안전한 weightOf 메서드
+     * Ticker Enum을 사용하는 타입 안전한 weightOf 메서드
      */
     public BigDecimal weightOf(Ticker ticker) {
         return weightOf(ticker.name());
@@ -49,7 +49,7 @@ public record Portfolio(
     }
 
     /**
-     * Ticker enum을 사용하는 타입 안전한 quantityOf 메서드
+     * Ticker Enum을 사용하는 타입 안전한 quantityOf 메서드
      */
     public BigDecimal quantityOf(Ticker ticker) {
         return quantityOf(ticker.name());

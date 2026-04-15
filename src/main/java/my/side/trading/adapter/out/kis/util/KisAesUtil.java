@@ -10,7 +10,8 @@ import java.util.Base64;
 
 public final class KisAesUtil {
 
-//    private KisAesUtil() {}
+    private KisAesUtil() {
+    }
 
     /**
      * KIS WebSocket 체결통보용 AES-256-CBC + Base64 복호화

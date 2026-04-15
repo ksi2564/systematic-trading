@@ -24,14 +24,14 @@ public class RebalanceDecisionService {
     private final CircuitBreakerService circuitBreakerService;
 
     /**
-     * 리밸런싱 판단 (기존 메서드 - Circuit Breaker 미적용)
+     * 리밸런싱을 판단한다. (기존 메서드, 서킷 브레이커 미적용)
      */
     public RebalanceDecision decide(StrategyState state, Portfolio portfolio) {
         return decide(state, portfolio, null, null);
     }
 
     /**
-     * 리밸런싱 판단 (Circuit Breaker 적용)
+     * 리밸런싱을 판단한다. (서킷 브레이커 적용)
      *
      * @param state     현재 전략 상태
      * @param portfolio 현재 포트폴리오

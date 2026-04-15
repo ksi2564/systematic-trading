@@ -42,7 +42,7 @@ class RetryableOrderExecutorTest {
 
     @Test
     @DisplayName("첫 시도에서 체결되면 성공을 반환한다")
-    void firstAttemptFilled() {
+    void 첫_시도에서_체결되면_성공을_반환한다() {
         ExecutionOrder order = createOrder("QQQ", ExecutionOrderSide.BUY, 10);
         broker.setNextOrderId("ORD001");
         fillChecker.setFullyFilled("ORD001", 10, new BigDecimal("1000"));
@@ -56,7 +56,7 @@ class RetryableOrderExecutorTest {
 
     @Test
     @DisplayName("미체결분은 재시도하면서 최신 호가로 재계산한다")
-    void repricesOnRetry() {
+    void 재시도하면서_최신_호가로_재계산한다() {
         ExecutionOrder order = createOrder("QQQ", ExecutionOrderSide.SELL, 5);
         broker.setOrderIds("ORD001", "ORD002");
         priceProvider.setQuoteSequence("QQQ",
@@ -77,7 +77,7 @@ class RetryableOrderExecutorTest {
 
     @Test
     @DisplayName("모든 재시도가 실패하면 failed를 반환한다")
-    void allAttemptsFailed() {
+    void 모든_재시도가_실패하면_실패_상태를_반환한다() {
         ExecutionOrder order = createOrder("TQQQ", ExecutionOrderSide.BUY, 3);
         broker.setOrderIds("ORD001", "ORD002", "ORD003");
 
@@ -93,7 +93,7 @@ class RetryableOrderExecutorTest {
 
     @Test
     @DisplayName("재시도 총 노출 한도를 넘기면 block 플래그와 함께 종료한다")
-    void blocksWhenRetryExposureExceeded() {
+    void 재시도_노출_한도를_넘기면_차단_플래그와_함께_종료한다() {
         executor = createExecutor(new BigDecimal("250.00"));
         executor.setWaitMs(0);
 
@@ -109,7 +109,7 @@ class RetryableOrderExecutorTest {
 
     @Test
     @DisplayName("버퍼 tick 시퀀스는 시도 횟수에 따라 증가한다")
-    void bufferSequence() {
+    void 버퍼_tick_시퀀스는_시도_횟수에_따라_증가한다() {
         assertThat(executor.getRetryTickOffset(1, ExecutionOrderSide.BUY)).isEqualTo(0);
         assertThat(executor.getRetryTickOffset(2, ExecutionOrderSide.BUY)).isEqualTo(1);
         assertThat(executor.getRetryTickOffset(3, ExecutionOrderSide.BUY)).isEqualTo(2);

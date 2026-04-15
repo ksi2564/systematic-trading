@@ -91,14 +91,14 @@ public class YahooUsdKrwRateAdapter implements FxRateReader, CurrentFxRateProvid
                 fetched.forEach(historicalRateCache::put);
                 Map<LocalDate, BigDecimal> resolved = cachedHistoricalRatesBetween(startDate, endDate);
                 if (resolved.size() > fetched.size()) {
-                    log.info("Yahoo USD/KRW history cache supplemented missing dates: startDate={}, endDate={}, fetched={}, resolved={}",
+                    log.info("Yahoo USD/KRW 이력 캐시가 누락 일자를 보완했습니다: startDate={}, endDate={}, fetched={}, resolved={}",
                             startDate, endDate, fetched.size(), resolved.size());
                 }
                 return resolved;
             }
-            return fallbackHistoricalRates(startDate, endDate, "empty response");
+            return fallbackHistoricalRates(startDate, endDate, "응답 비어 있음");
         } catch (Exception e) {
-            log.warn("Yahoo USD/KRW history read failed: startDate={}, endDate={}, reason={}",
+            log.warn("Yahoo USD/KRW 이력 조회에 실패했습니다: startDate={}, endDate={}, reason={}",
                     startDate, endDate, e.toString());
             return fallbackHistoricalRates(startDate, endDate, e.toString());
         }
@@ -121,16 +121,16 @@ public class YahooUsdKrwRateAdapter implements FxRateReader, CurrentFxRateProvid
                     .block(props.yahoo().requestTimeout());
 
             if (response == null) {
-                return fallbackCurrentRate("null response");
+                return fallbackCurrentRate("응답 null");
             }
 
             BigDecimal price = response.getCurrentPrice();
             if (price == null || price.signum() <= 0) {
-                return fallbackCurrentRate("invalid price");
+                return fallbackCurrentRate("유효하지 않은 가격");
             }
             return Optional.of(cacheCurrentRate(price));
         } catch (Exception e) {
-            log.warn("Yahoo USD/KRW current read failed: reason={}", e.toString());
+            log.warn("Yahoo USD/KRW 현재가 조회에 실패했습니다: reason={}", e.toString());
             return fallbackCurrentRate(e.toString());
         }
     }
@@ -182,29 +182,29 @@ public class YahooUsdKrwRateAdapter implements FxRateReader, CurrentFxRateProvid
     private Optional<BigDecimal> fallbackCurrentRate(String reason) {
         CachedFxRate stale = lastSuccessfulCurrentRate.get();
         if (stale == null) {
-            log.warn("Yahoo USD/KRW current rate unavailable without cache: reason={}", reason);
+            log.warn("Yahoo USD/KRW 현재가를 캐시 없이 복구할 수 없습니다: reason={}", reason);
             return Optional.empty();
         }
 
         Duration age = Duration.between(stale.fetchedAt(), Instant.now(clock));
         if (age.compareTo(props.yahoo().staleSuccessTtl()) > 0) {
-            log.warn("Yahoo USD/KRW current stale cache expired: age={}, reason={}", age, reason);
+            log.warn("Yahoo USD/KRW 현재가의 오래된 캐시 유효기간이 지났습니다: age={}, reason={}", age, reason);
             return Optional.empty();
         }
 
-        log.warn("Yahoo USD/KRW current stale cache fallback applied: age={}, reason={}", age, reason);
+        log.warn("Yahoo USD/KRW 현재가에 오래된 캐시 대체값을 적용합니다: age={}, reason={}", age, reason);
         return Optional.of(stale.rate());
     }
 
     private Map<LocalDate, BigDecimal> fallbackHistoricalRates(LocalDate startDate, LocalDate endDate, String reason) {
         Map<LocalDate, BigDecimal> cached = cachedHistoricalRatesBetween(startDate, endDate);
         if (cached.isEmpty()) {
-            log.warn("Yahoo USD/KRW history unavailable without cache: startDate={}, endDate={}, reason={}",
+            log.warn("Yahoo USD/KRW 이력을 캐시 없이 복구할 수 없습니다: startDate={}, endDate={}, reason={}",
                     startDate, endDate, reason);
             return Map.of();
         }
 
-        log.warn("Yahoo USD/KRW history cache fallback applied: startDate={}, endDate={}, cachedCount={}, reason={}",
+        log.warn("Yahoo USD/KRW 이력에 캐시 대체값을 적용합니다: startDate={}, endDate={}, cachedCount={}, reason={}",
                 startDate, endDate, cached.size(), reason);
         return cached;
     }
@@ -233,7 +233,7 @@ public class YahooUsdKrwRateAdapter implements FxRateReader, CurrentFxRateProvid
         try {
             return ZoneId.of(meta.exchangeTimezoneName());
         } catch (Exception e) {
-            log.debug("Yahoo USD/KRW timezone fallback applied: timezone={}, reason={}",
+            log.debug("Yahoo USD/KRW timezone 기본값을 적용합니다: timezone={}, reason={}",
                     meta.exchangeTimezoneName(), e.toString());
             return DEFAULT_ZONE;
         }

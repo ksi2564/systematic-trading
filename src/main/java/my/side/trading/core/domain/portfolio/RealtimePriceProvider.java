@@ -9,7 +9,7 @@ public interface RealtimePriceProvider {
 
     /**
      * 심볼별 최신 체결/호가 가격을 반환한다.
-     * WebSocket 핸들러에서 갱신된 캐시를 사용
+     * 웹소켓 핸들러에서 갱신한 캐시를 사용한다.
      */
     default Optional<BigDecimal> getLastPrice(String symbol) {
         return getQuote(symbol).map(RealtimeQuote::lastPrice);

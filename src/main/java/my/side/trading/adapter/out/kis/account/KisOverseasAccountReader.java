@@ -42,11 +42,11 @@ public class KisOverseasAccountReader implements OverseasAccountReader {
             KisOverseasPsAmountResponse ps = psAmountService.getPsAmount(PSAMOUNT_EXCHANGE, CASH_REF_SYMBOL, CASH_REF_PRICE);
 
             if (ps == null || ps.output() == null) {
-                log.warn("psamount response is null -> fallback to balance usableAmt");
+                log.warn("psamount 응답이 없어 balance usableAmt로 대체합니다.");
                 return extractUsdCashFromBalance(currencies);
             }
             if (!"0".equals(ps.resultCode())) {
-                log.warn("psamount failed rt_cd={}, msg_cd={}, msg1={} -> fallback fallback to balance usableAmt",
+                log.warn("psamount 호출이 실패해 balance usableAmt로 대체합니다. rt_cd={}, msg_cd={}, msg1={}",
                         ps.resultCode(), ps.messageCode(), ps.message());
                 return extractUsdCashFromBalance(currencies);
             }
@@ -56,12 +56,12 @@ public class KisOverseasAccountReader implements OverseasAccountReader {
 
             if (overseasOrderableAmount != null) return overseasOrderableAmount;
 
-            log.warn("overseasOrderableAmount null currency={}, msg={}/{} -> fallback to balance usableAmt",
+            log.warn("overseasOrderableAmount가 없어 balance usableAmt로 대체합니다. currency={}, msg={}/{}",
                     ps.output().tradeCurrencyCode(), ps.messageCode(), ps.message());
             return extractUsdCashFromBalance(currencies);
 
         } catch (Exception e) {
-            log.warn("psamount call failed -> fallback to balance usableAmt. reason={}", e.toString());
+            log.warn("psamount 호출에 실패해 balance usableAmt로 대체합니다. reason={}", e.toString());
             return extractUsdCashFromBalance(currencies);
         }
     }
@@ -79,8 +79,8 @@ public class KisOverseasAccountReader implements OverseasAccountReader {
     }
 
     /**
-     * 기존에 잔고에서 cash를 가져왔으나, 실제 주문 가능 금액과 상이한 값(현금 + 평가금액으로 보임)
-     * 보통의 경우엔 사용되지 않으나, psAmountService.getPsAmount()가 동작하지 않을 경우에만 fallback 용도로 사용
+     * 기존에는 잔고에서 cash를 가져왔지만 실제 주문 가능 금액과 다른 값일 수 있다. (현금 + 평가금액으로 보임)
+     * 평소에는 사용하지 않고, psAmountService.getPsAmount()가 동작하지 않을 때만 대체 경로로 사용한다.
      *
      * @param currencies
      * @return

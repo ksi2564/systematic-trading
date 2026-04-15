@@ -47,7 +47,7 @@ public class DeduplicatingOpsAlertPublisher implements OpsAlertPublisher {
             }
             delegate.publish(alert);
         } catch (Exception ignored) {
-            // Alert pipeline must never break the main flow.
+            // 경보 전송 파이프라인이 메인 흐름을 끊어서는 안 된다.
         }
     }
 }

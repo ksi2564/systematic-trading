@@ -48,7 +48,7 @@ public class ExecutionJobCreateService {
         }
 
         if (jobRepository.findBySignalDate(signalDate).isPresent()) {
-            log.warn("job already exists: signalDate={}", signalDate);
+            log.warn("이미 생성된 job이 있습니다: signalDate={}", signalDate);
             opsAlertPublisher.publish(new OpsAlert(
                     OpsAlertType.DUPLICATE_SIGNAL_JOB_DETECTED,
                     OpsAlertSeverity.WARN,
@@ -96,7 +96,7 @@ public class ExecutionJobCreateService {
             plannedNotional = plannedNotional.add(riskLimitService.orderNotional(planned.order()));
 
             if (remainingCash.signum() < 0) {
-                log.warn("remainingCash below zero; clamp to zero. symbol={}, side={}, qty={}, limitPrice={}, cashDelta={}, cashBefore={}",
+                log.warn("remainingCash가 0 미만이라 0으로 보정합니다. symbol={}, side={}, qty={}, limitPrice={}, cashDelta={}, cashBefore={}",
                         planned.order().getSymbol(),
                         planned.order().getSide(),
                         planned.order().getQuantity(),
@@ -106,7 +106,7 @@ public class ExecutionJobCreateService {
                 remainingCash = BigDecimal.ZERO;
             }
 
-            log.info("planned order: sym={}, side={}, qty={}, limit={}, cashDelta={}, remainingCash={}",
+            log.info("계획 주문을 생성했습니다: sym={}, side={}, qty={}, limit={}, cashDelta={}, remainingCash={}",
                     planned.order().getSymbol(),
                     planned.order().getSide(),
                     planned.order().getQuantity(),
@@ -116,7 +116,7 @@ public class ExecutionJobCreateService {
         }
 
         if (orders.isEmpty()) {
-            log.info("skip job creation: no executable orders. intents={}, reason={}",
+            log.info("실행 가능한 주문이 없어 job 생성을 건너뜁니다. intents={}, reason={}",
                     decision.intents().size(), decision.reason());
             return Optional.empty();
         }
@@ -124,7 +124,7 @@ public class ExecutionJobCreateService {
         ExecutionJob job = ExecutionJob.create(signalDate, executeAfter, orders);
         ExecutionJob saved = jobRepository.save(job);
 
-        log.info("job created: jobId={}, orders={}", saved.getId(), orders.size());
+        log.info("job을 생성했습니다: jobId={}, orders={}", saved.getId(), orders.size());
         return Optional.of(saved);
     }
 }

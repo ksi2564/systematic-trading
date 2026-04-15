@@ -8,7 +8,7 @@ import java.util.List;
 
 /**
  * Yahoo Finance API v8 응답 DTO
- * API: https://query1.finance.yahoo.com/v8/finance/chart/{symbol}
+ * API 엔드포인트: https://query1.finance.yahoo.com/v8/finance/chart/{symbol}
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record YahooQuoteResponse(

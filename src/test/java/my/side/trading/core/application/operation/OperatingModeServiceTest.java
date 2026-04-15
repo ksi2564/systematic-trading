@@ -18,7 +18,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class OperatingModeServiceTest {
 
     @Test
-    void bootstrapsConfiguredModeWhenControlMissing() {
+    void 제어값이_없으면_설정된_모드로_초기화한다() {
         FakeOperatingModeControlRepository controlRepository = new FakeOperatingModeControlRepository();
         FakeOperatingModeAuditRepository auditRepository = new FakeOperatingModeAuditRepository();
         OperatingModeService service = new OperatingModeService(
@@ -39,7 +39,7 @@ class OperatingModeServiceTest {
     }
 
     @Test
-    void downgradesAutoLiveBootstrapToManualLiveWhenApprovalRequired() {
+    void 승인_기록이_필요하면_auto_live_부트스트랩을_manual_live로_내린다() {
         FakeOperatingModeControlRepository controlRepository = new FakeOperatingModeControlRepository();
         FakeOperatingModeAuditRepository auditRepository = new FakeOperatingModeAuditRepository();
         OperatingModeService service = new OperatingModeService(
@@ -59,7 +59,7 @@ class OperatingModeServiceTest {
     }
 
     @Test
-    void manualPromotionToAutoLiveCreatesApprovalAudit() {
+    void 수동으로_auto_live에_승격하면_승인_감사를_남긴다() {
         FakeOperatingModeControlRepository controlRepository =
                 new FakeOperatingModeControlRepository(OperatingMode.MANUAL_LIVE);
         FakeOperatingModeAuditRepository auditRepository = new FakeOperatingModeAuditRepository();
@@ -82,7 +82,7 @@ class OperatingModeServiceTest {
     }
 
     @Test
-    void automaticDemotionRunsOnlyFromAutoLive() {
+    void 자동_강등은_auto_live에서만_실행된다() {
         FakeOperatingModeControlRepository controlRepository =
                 new FakeOperatingModeControlRepository(OperatingMode.AUTO_LIVE);
         FakeOperatingModeAuditRepository auditRepository = new FakeOperatingModeAuditRepository();
@@ -103,7 +103,7 @@ class OperatingModeServiceTest {
     }
 
     @Test
-    void automaticDemotionDoesNothingWhenAlreadyManualLive() {
+    void 이미_manual_live면_자동_강등을_수행하지_않는다() {
         FakeOperatingModeControlRepository controlRepository =
                 new FakeOperatingModeControlRepository(OperatingMode.MANUAL_LIVE);
         FakeOperatingModeAuditRepository auditRepository = new FakeOperatingModeAuditRepository();
@@ -119,7 +119,7 @@ class OperatingModeServiceTest {
     }
 
     @Test
-    void sameModeChangeIsNoOp() {
+    void 같은_모드로_변경하면_아무_동작도_하지_않는다() {
         FakeOperatingModeControlRepository controlRepository =
                 new FakeOperatingModeControlRepository(OperatingMode.PAPER);
         FakeOperatingModeAuditRepository auditRepository = new FakeOperatingModeAuditRepository();

@@ -35,7 +35,7 @@ public class LoggingOpsAlertPublisher implements OpsAlertChannelPublisher {
                     alert.message(),
                     details);
         } catch (Exception e) {
-            log.warn("ops alert logging failed: type={}", alert.type(), e);
+            log.warn("ops alert 로깅에 실패했습니다: type={}", alert.type(), e);
         }
     }
 }

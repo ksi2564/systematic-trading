@@ -38,7 +38,7 @@ public class ApiKeyAuthFilter implements Filter {
         // 2. 그 외 API는 API Key 검증
         String clientApiKey = httpRequest.getHeader(API_KEY_HEADER);
         if (!validApiKey.equals(clientApiKey)) {
-            log.warn("Invalid API Key access attempt. IP={}, Path={}", request.getRemoteAddr(), path);
+            log.warn("유효하지 않은 API Key 접근 시도입니다. IP={}, Path={}", request.getRemoteAddr(), path);
             httpResponse.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Invalid API Key");
             return;
         }

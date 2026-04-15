@@ -37,7 +37,7 @@ public class StrategyEodScheduler {
     private boolean enabled;
 
     // KST 기준 미장 마감 이후 15분 여유
-    // TODO: 추후 계절시간 감안 필요
+    // TODO: 추후 계절시간을 반영해야 한다.
     @Scheduled(cron = "0 15 06 * * TUE-SAT", zone = "Asia/Seoul") // 06:15 KST
     public void runScheduledEod() {
         if (!enabled) {
@@ -46,7 +46,7 @@ public class StrategyEodScheduler {
         LocalDate marketDate = marketCalendarService.currentMarketDate();
         var marketStatus = marketCalendarService.getMarketStatus(marketDate);
         if (!marketStatus.allowsScheduledEod()) {
-            log.info("[SCHED] eod skipped by market calendar | marketDate={}, marketStatus={}",
+            log.info("[SCHED] 시장 캘린더 기준으로 EOD를 건너뜁니다 | marketDate={}, marketStatus={}",
                     marketDate,
                     marketStatus);
             if (marketStatus == MarketStatus.DATA_UNCERTAIN) {
@@ -74,16 +74,16 @@ public class StrategyEodScheduler {
             QuotedPriceResponse res = quotedPriceService.getQuotedPrice("QQQ");
             BigDecimal close = new BigDecimal(res.item().prevClosePrice());
 
-            // VIX 및 200MA 조회 (Circuit Breaker 용)
+            // VIX와 200MA를 조회한다. (서킷 브레이커 판단용)
             BigDecimal vix = yahooVixService.getVixPrice().orElse(null);
             BigDecimal qqqMa200 = yahooVixService.getQqq200Ma().orElse(null);
 
-            log.info("Circuit Breaker data: VIX={}, QQQ_200MA={}", vix, qqqMa200);
+            log.info("서킷 브레이커 데이터: VIX={}, QQQ_200MA={}", vix, qqqMa200);
 
             eodService.runEod(asOfDate, close);
             capturePerformanceSnapshot(asOfDate);
 
-            log.info("EOD updated: asOfDate={}, qqqClose={}", asOfDate, close);
+            log.info("EOD를 갱신했습니다: asOfDate={}, qqqClose={}", asOfDate, close);
         } catch (Exception e) {
             opsAlertPublisher.publish(new OpsAlert(
                     OpsAlertType.EOD_FAILURE,
@@ -103,7 +103,7 @@ public class StrategyEodScheduler {
         try {
             portfolioPerformanceSnapshotService.captureDailySnapshot(asOfDate);
         } catch (Exception e) {
-            log.error("Performance snapshot capture failed: asOfDate={}", asOfDate, e);
+            log.error("성과 스냅샷 저장에 실패했습니다: asOfDate={}", asOfDate, e);
             opsAlertPublisher.publish(new OpsAlert(
                     OpsAlertType.PERFORMANCE_SNAPSHOT_FAILURE,
                     OpsAlertSeverity.ERROR,
@@ -118,14 +118,14 @@ public class StrategyEodScheduler {
     }
 
     /**
-     * VIX 현재가 조회 (외부 호출용)
+     * VIX 현재가를 조회한다. (외부 호출용)
      */
     public BigDecimal getVix() {
         return yahooVixService.getVixPrice().orElse(null);
     }
 
     /**
-     * QQQ 200MA 조회 (외부 호출용)
+     * QQQ 200MA를 조회한다. (외부 호출용)
      */
     public BigDecimal getQqq200Ma() {
         return yahooVixService.getQqq200Ma().orElse(null);

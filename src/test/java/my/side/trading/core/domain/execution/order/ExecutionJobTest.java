@@ -12,7 +12,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class ExecutionJobTest {
 
     @Test
-    void completes_when_all_orders_terminal_and_sets_failed_if_any_rejected() {
+    void 모든_주문이_종료되면_완료되고_거절이_있으면_실패로_표시한다() {
         LocalDateTime now = LocalDateTime.of(2025, 12, 21, 23, 45);
 
         ExecutionOrder o1 = ExecutionOrder.rehydrate(

@@ -22,13 +22,13 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(ExecutionBlockedException.class)
     public ResponseEntity<ApiResponse<Void>> handleExecutionBlockedException(ExecutionBlockedException ex) {
-        log.warn("Execution blocked: {}", ex.getReason().code());
+        log.warn("실행이 차단되었습니다: {}", ex.getReason().code());
         return new ResponseEntity<>(ApiResponse.error(ex.getReason().code()), HttpStatus.CONFLICT);
     }
 
     @ExceptionHandler(ParameterRegistryConflictException.class)
     public ResponseEntity<ApiResponse<Void>> handleParameterRegistryConflict(ParameterRegistryConflictException ex) {
-        log.warn("Parameter registry conflict: {}", ex.getMessage());
+        log.warn("파라미터 레지스트리 충돌: {}", ex.getMessage());
         return new ResponseEntity<>(ApiResponse.error(ex.getMessage()), HttpStatus.CONFLICT);
     }
 
@@ -41,25 +41,25 @@ public class GlobalExceptionHandler {
             String errorMessage = error.getDefaultMessage();
             errors.put(fieldName, errorMessage);
         });
-        log.warn("Validation failed: {}", errors);
+        log.warn("검증에 실패했습니다: {}", errors);
         return new ResponseEntity<>(ApiResponse.error("Validation failed", errors), HttpStatus.BAD_REQUEST);
     }
 
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
     public ResponseEntity<ApiResponse<Void>> handleMethodArgumentTypeMismatch(MethodArgumentTypeMismatchException ex) {
-        log.warn("Argument type mismatch: {}", ex.getMessage());
+        log.warn("인자 타입이 일치하지 않습니다: {}", ex.getMessage());
         return new ResponseEntity<>(ApiResponse.error("Invalid request parameter"), HttpStatus.BAD_REQUEST);
     }
 
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<ApiResponse<Void>> handleIllegalArgumentException(IllegalArgumentException ex) {
-        log.warn("Illegal argument: {}", ex.getMessage());
+        log.warn("잘못된 인자입니다: {}", ex.getMessage());
         return new ResponseEntity<>(ApiResponse.error(ex.getMessage()), HttpStatus.BAD_REQUEST);
     }
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<Void>> handleException(Exception ex) {
-        log.error("Unexpected error occurred", ex);
+        log.error("예상하지 못한 오류가 발생했습니다.", ex);
         return new ResponseEntity<>(ApiResponse.error("An unexpected error occurred"),
                 HttpStatus.INTERNAL_SERVER_ERROR);
     }

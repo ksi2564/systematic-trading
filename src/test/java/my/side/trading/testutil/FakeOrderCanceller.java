@@ -7,7 +7,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * 테스트용 Fake OrderCanceller
+ * 테스트용 OrderCanceller 대역
  */
 public class FakeOrderCanceller implements OrderCanceller {
 

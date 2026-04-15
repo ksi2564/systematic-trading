@@ -1,0 +1,20 @@
+api.example.com {
+    encode zstd gzip
+
+    log {
+        output file /var/log/caddy/trading-public-access.log
+        format console
+    }
+
+    @public_api path /public/api/v1 /public/api/v1/*
+    handle @public_api {
+        header Cache-Control "public, max-age=300, s-maxage=300, stale-while-revalidate=60"
+        reverse_proxy 127.0.0.1:8080 {
+            header_up X-Forwarded-For {remote_host}
+            header_up X-Forwarded-Proto {scheme}
+            header_up X-Forwarded-Host {host}
+        }
+    }
+
+    respond "not found" 404
+}

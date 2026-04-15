@@ -2,29 +2,47 @@ spring:
   config:
     activate:
       on-profile: prod
+  datasource:
+    url: ${SPRING_DATASOURCE_URL}
+    username: ${SPRING_DATASOURCE_USERNAME}
+    password: ${SPRING_DATASOURCE_PASSWORD}
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+
+server:
+  address: 127.0.0.1
+  port: ${SERVER_PORT:8080}
+  forward-headers-strategy: framework
 
 logging:
   file:
-    path: /var/logs
+    path: /var/log/trading
   level:
-    # 운영 환경에서는 SQL 로그를 줄이거나 INFO로 변경한다.
-    org.hibernate.SQL: INFO
+    org.hibernate.SQL: WARN
     my.side.trading: INFO
 
 trading:
+  scheduling:
+    enabled: true
+  execution:
+    enabled: false
   security:
-    # prod에서는 운영 API와 Actuator를 public-path-prefixes로 열면 기동 시 실패한다.
     public-path-prefixes:
-      - /public/api
+      - /public/api/v1
     public-path-protection-mode: REVERSE_PROXY
-    public-path-protection-note: 공개 포트폴리오 읽기 API는 리버스 프록시 또는 CDN 뒤에서만 노출한다.
-    # 쉼표로 구분한 실제 HTTPS origin 목록을 환경변수로 주입한다.
-    # example.com 계열 샘플값, wildcard, path 포함 origin은 prod에서 기동 실패한다.
+    public-path-protection-note: 공개 포트폴리오 API는 리버스 프록시 또는 CDN 뒤에서만 노출한다.
     public-read-allowed-origins: ${TRADING_PUBLIC_READ_ALLOWED_ORIGINS:}
     public-rate-limit-per-minute: 120
     public-cache-max-age-seconds: 300
     public-client-ip-header: X-Forwarded-For
-    # 쉼표로 구분한 실제 reverse proxy 또는 CDN egress CIDR 목록만 허용한다.
-    # 10.0.0.0/8 같은 과도한 샘플 CIDR은 prod에서 기동 실패한다.
     public-trusted-proxy-ranges: ${TRADING_PUBLIC_TRUSTED_PROXY_RANGES:}
     public-access-log-enabled: true
+  operation:
+    mode: PAPER
+    alerts:
+      enabled: true
+      discord:
+        enabled: true
+        webhook-url: ${TRADING_DISCORD_WEBHOOK_URL:}

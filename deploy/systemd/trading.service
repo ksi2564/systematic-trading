@@ -1,0 +1,21 @@
+[Unit]
+Description=QQQ 자동매매 백엔드
+After=network-online.target mysql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=trading
+Group=trading
+WorkingDirectory=/opt/trading/app
+EnvironmentFile=/etc/trading/trading.env
+ExecStart=/usr/bin/java -Xms256m -Xmx1024m -jar /opt/trading/app/trading.jar
+SuccessExitStatus=143
+Restart=always
+RestartSec=10
+TimeoutStopSec=30
+StandardOutput=append:/var/log/trading/stdout.log
+StandardError=append:/var/log/trading/stderr.log
+
+[Install]
+WantedBy=multi-user.target

@@ -36,7 +36,7 @@ trading:
     public-read-allowed-origins: ${TRADING_PUBLIC_READ_ALLOWED_ORIGINS:}
     public-rate-limit-per-minute: 120
     public-cache-max-age-seconds: 300
-    public-client-ip-header: X-Forwarded-For
+    public-client-ip-header: ${TRADING_PUBLIC_CLIENT_IP_HEADER:X-Forwarded-For}
     public-trusted-proxy-ranges: ${TRADING_PUBLIC_TRUSTED_PROXY_RANGES:}
     public-access-log-enabled: true
   operation:

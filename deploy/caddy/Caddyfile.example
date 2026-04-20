@@ -10,7 +10,8 @@ api.example.com {
     handle @public_api {
         header Cache-Control "public, max-age=300, s-maxage=300, stale-while-revalidate=60"
         reverse_proxy 127.0.0.1:8080 {
-            header_up X-Forwarded-For {remote_host}
+            header_up CF-Connecting-IP {http.request.header.CF-Connecting-IP}
+            header_up X-Forwarded-For {http.request.header.CF-Connecting-IP}
             header_up X-Forwarded-Proto {scheme}
             header_up X-Forwarded-Host {host}
         }

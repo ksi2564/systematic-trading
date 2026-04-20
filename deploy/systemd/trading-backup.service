@@ -1,0 +1,14 @@
+[Unit]
+Description=QQQ 자동매매 MySQL 백업 및 맥미니 동기화
+After=network-online.target mysql.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/trading/trading.env
+ExecStart=/opt/trading/bin/backup_mysql.sh
+ExecStartPost=/opt/trading/bin/sync_backup_to_mac.sh
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+

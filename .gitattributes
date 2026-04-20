@@ -1,3 +1,9 @@
 /gradlew text eol=lf
 *.bat text eol=crlf
 *.jar binary
+*.sh text eol=lf
+deploy/caddy/* text eol=lf
+deploy/env/* text eol=lf
+deploy/logrotate/* text eol=lf
+deploy/mysql/* text eol=lf
+deploy/systemd/* text eol=lf

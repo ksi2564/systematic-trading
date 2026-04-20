@@ -14,24 +14,29 @@
 - `env/trading.env.example`: `/etc/trading/trading.env` 예시
 - `caddy/Caddyfile.example`: 공개 API 전용 reverse proxy 예시
 - `systemd/trading.service`: 애플리케이션 서비스 유닛
+- `systemd/trading-backup.service`, `systemd/trading-backup.timer`: DB 백업과 맥미니 동기화 일일 타이머
 - `mysql/99-trading.cnf`: MySQL 로컬 바인딩 설정
 - `logrotate/trading`: 애플리케이션/Caddy 로그 롤링 설정
 - `scripts/backup_mysql.sh`: DB + 운영 설정 백업
 - `scripts/sync_backup_to_mac.sh`: 백업 산출물 맥미니 전송
 - `scripts/restore_mysql.sh`: 백업 SQL 복구
 - `scripts/bootstrap_ubuntu_24_04.sh`: 초기 패키지/디렉터리 준비 스크립트
+- `scripts/install_tailscale_ubuntu.sh`: VM을 Tailscale tailnet에 붙이는 보조 스크립트
+- `scripts/configure_cloudflare_ufw.sh`: Cloudflare 프록시 IP만 80/443에 접근하도록 UFW를 구성하는 보조 스크립트
 
 기본 배포 순서:
 
 1. `bootstrap_ubuntu_24_04.sh`로 VM 기본 패키지와 디렉터리를 준비한다.
-2. `mysql/99-trading.cnf`, `caddy/Caddyfile.example`, `systemd/trading.service`, `logrotate/trading`을 시스템 경로로 복사한다.
-3. `env/trading.env.example`를 `/etc/trading/trading.env`로 복사하고 실제 비밀값과 origin/CIDR을 채운다.
-4. 애플리케이션 jar를 `/opt/trading/app/trading.jar`에 배치한다.
-5. `systemctl daemon-reload && systemctl enable --now trading caddy mysql`로 서비스 자동기동을 켠다.
-6. `curl http://127.0.0.1:8080/actuator/health`와 `curl https://api.<domain>/public/api/v1/summary`로 내부/외부 경로를 각각 검증한다.
+2. `mysql/99-trading.cnf`, `caddy/Caddyfile.example`, `systemd/*.service`, `systemd/*.timer`, `logrotate/trading`을 시스템 경로로 복사한다.
+3. `scripts/*.sh` 중 운영에 필요한 스크립트를 `/opt/trading/bin/`에 `0755` 권한으로 복사한다.
+4. `env/trading.env.example`를 `/etc/trading/trading.env`로 복사하고 실제 비밀값과 origin/CIDR을 채운다.
+5. 애플리케이션 jar를 `/opt/trading/app/trading.jar`에 배치한다.
+6. `systemctl daemon-reload && systemctl enable --now mysql caddy trading trading-backup.timer`로 서비스와 백업 타이머 자동기동을 켠다.
+7. `curl http://127.0.0.1:8080/actuator/health`와 `curl https://api.<domain>/public/api/v1/summary`로 내부/외부 경로를 각각 검증한다.
 
 운영 검증:
 
 - 퍼블릭 경로에서 `/api/dashboard/summary`, `/api/operations/mode`, `/actuator/health`가 차단되는지 확인한다.
 - SSH 터널 뒤에서만 운영 API가 열리는지 확인한다.
-- 백업 스크립트와 맥미니 전송 스크립트를 cron 또는 systemd timer로 등록한다.
+- `systemctl list-timers trading-backup.timer`로 일일 백업 타이머를 확인한다.
+- `systemctl start trading-backup.service`로 백업 생성과 맥미니 전송을 수동 리허설한다.

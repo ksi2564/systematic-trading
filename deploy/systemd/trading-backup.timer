@@ -1,0 +1,12 @@
+[Unit]
+Description=QQQ 자동매매 일일 백업 타이머
+
+[Timer]
+OnCalendar=*-*-* 07:45:00
+RandomizedDelaySec=5m
+Persistent=true
+Unit=trading-backup.service
+
+[Install]
+WantedBy=timers.target
+

@@ -29,6 +29,7 @@ MYSQL_PWD="${SPRING_DATASOURCE_PASSWORD}" mysqldump \
   --host="${DB_HOST}" \
   --port="${DB_PORT}" \
   --user="${SPRING_DATASOURCE_USERNAME}" \
+  --no-tablespaces \
   --single-transaction \
   --quick \
   --routines \

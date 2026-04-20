@@ -26,6 +26,20 @@ class PublicRequestClientResolverTest {
     }
 
     @Test
+    void 로컬_caddy_뒤의_cloudflare_공개경로는_cf_connecting_ip를_사용한다() {
+        PublicRequestClientResolver resolver = new PublicRequestClientResolver(
+                List.of("/public/api"),
+                "CF-Connecting-IP",
+                List.of("127.0.0.1/32"));
+        HttpServletRequest request = mock(HttpServletRequest.class);
+        when(request.getRequestURI()).thenReturn("/public/api/v1/summary");
+        when(request.getRemoteAddr()).thenReturn("127.0.0.1");
+        when(request.getHeader("CF-Connecting-IP")).thenReturn("198.51.100.7");
+
+        assertThat(resolver.resolveClientIp(request)).isEqualTo("198.51.100.7");
+    }
+
+    @Test
     void 신뢰되지않은_프록시에서는_forwarded_ip를_무시한다() {
         PublicRequestClientResolver resolver = new PublicRequestClientResolver(
                 List.of("/public/api"),

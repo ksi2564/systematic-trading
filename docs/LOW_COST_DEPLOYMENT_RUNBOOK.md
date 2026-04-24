@@ -49,6 +49,8 @@
 - Cloudflare edge CIDR은 앱 설정이 아니라 VM 방화벽(UFW)에서 80/443 원본 접근 제한에 사용한다.
 - `prod`에서는 운영 API와 Actuator를 공개 경로로 열 수 없다.
 - 공개 프런트는 `Vercel Hobby`에 두고, 백엔드는 API만 제공한다.
+- Hikari connection validation 경고가 보이면 MySQL `wait_timeout`, `interactive_timeout`을 먼저 확인하고, Hikari `maxLifetime`이 DB idle timeout보다 짧게 잡혀 있는지 확인한다.
+- Hikari 조정 후에는 `/actuator/health`, DB health, `/api/dashboard/summary` 응답과 애플리케이션 로그에서 `No operations allowed after connection closed` 경고 재발 여부를 함께 확인한다.
 
 ## 4. 배포 절차
 

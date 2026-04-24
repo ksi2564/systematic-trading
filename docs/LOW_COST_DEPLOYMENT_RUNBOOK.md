@@ -78,7 +78,22 @@
 7. 운영 검증
    - SSH 터널 후 `/api/operations/mode`, `/api/dashboard/summary`, `/actuator/health`
 
-## 4.1 Cloudflare / Caddy 경계
+## 4.1 GitHub Actions 수동 운영 배포
+
+- `Deploy Production` workflow는 `master`에서만 수동 실행한다.
+- workflow는 GitHub-hosted runner에서 `./gradlew test bootJar`를 실행하고, 생성된 jar를 Tailscale 경유로 운영 VM에 전송한다.
+- GitHub Environment `production`에 approval rule을 설정해 실수로 배포되지 않게 한다.
+- 필요한 GitHub Secrets:
+  - `TS_OAUTH_CLIENT_ID`
+  - `TS_OAUTH_SECRET`
+  - `PROD_SSH_PRIVATE_KEY`
+- Tailscale OAuth client는 `tag:github-actions`를 부여할 수 있어야 하며, tailnet ACL은 해당 tag가 `wall-ant-prod-01:22`에만 접근하도록 제한한다.
+- 운영 VM에는 `PROD_SSH_PRIVATE_KEY`에 대응하는 public key를 `/home/ubuntu/.ssh/authorized_keys`에 등록한다.
+- workflow는 기존 jar를 `/opt/trading/app/trading.jar.<timestamp>.bak`로 보관한 뒤 `/opt/trading/app/trading.jar`를 교체하고 `trading.service`를 재시작한다.
+- 배포 후 workflow에서 `/actuator/health`, `/api/operations/mode`, `/api/dashboard/summary`와 최근 로그를 확인한다.
+- 실패 시 백업 jar 중 직전 파일을 다시 `/opt/trading/app/trading.jar`로 설치하고 `sudo systemctl restart trading`을 실행한다.
+
+## 4.2 Cloudflare / Caddy 경계
 
 - Cloudflare DNS에서 `api.<domain>`은 proxied 상태로 둔다.
 - Caddy는 `CF-Connecting-IP`를 Spring Boot로 전달하고, 앱은 `TRADING_PUBLIC_CLIENT_IP_HEADER=CF-Connecting-IP`로 실제 방문자 IP를 해석한다.

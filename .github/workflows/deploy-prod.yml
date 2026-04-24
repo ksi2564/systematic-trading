@@ -1,0 +1,149 @@
+name: Deploy Production
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+env:
+  PROD_HOST: 100.66.226.12
+  PROD_USER: ubuntu
+  PROD_JAR_PATH: /opt/trading/app/trading.jar
+
+jobs:
+  deploy:
+    name: Build and deploy production jar
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - name: Require master branch
+        if: github.ref_name != 'master'
+        run: |
+          echo "Production deploy can only run from master. Current ref: ${GITHUB_REF_NAME}"
+          exit 1
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+
+      - name: Build and test
+        run: |
+          chmod +x ./gradlew
+          ./gradlew test bootJar
+
+      - name: Resolve jar metadata
+        id: jar
+        shell: bash
+        run: |
+          set -euo pipefail
+          jar_path="$(ls build/libs/*.jar | grep -v -- '-plain\.jar$' | head -n 1)"
+          if [[ -z "${jar_path}" ]]; then
+            echo "bootJar output was not found."
+            exit 1
+          fi
+          jar_sha="$(sha256sum "${jar_path}" | awk '{print $1}')"
+          deploy_name="trading-${GITHUB_SHA::7}.jar"
+          echo "path=${jar_path}" >> "${GITHUB_OUTPUT}"
+          echo "sha=${jar_sha}" >> "${GITHUB_OUTPUT}"
+          echo "deploy_name=${deploy_name}" >> "${GITHUB_OUTPUT}"
+          echo "Built jar: ${jar_path}"
+          echo "SHA-256: ${jar_sha}"
+
+      - name: Connect to Tailscale
+        uses: tailscale/github-action@v4
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          tags: tag:github-actions
+          ping: ${{ env.PROD_HOST }}
+
+      - name: Prepare SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "${{ secrets.PROD_SSH_PRIVATE_KEY }}" > ~/.ssh/prod_deploy_key
+          chmod 600 ~/.ssh/prod_deploy_key
+          ssh-keyscan -T 10 -H "${PROD_HOST}" >> ~/.ssh/known_hosts
+
+      - name: Upload jar
+        run: |
+          scp -i ~/.ssh/prod_deploy_key \
+            -o BatchMode=yes \
+            "${{ steps.jar.outputs.path }}" \
+            "${PROD_USER}@${PROD_HOST}:/tmp/${{ steps.jar.outputs.deploy_name }}"
+
+      - name: Install jar and restart service
+        shell: bash
+        run: |
+          set -euo pipefail
+          remote_jar="/tmp/${{ steps.jar.outputs.deploy_name }}"
+          ssh -i ~/.ssh/prod_deploy_key \
+            -o BatchMode=yes \
+            "${PROD_USER}@${PROD_HOST}" \
+            "sudo bash -s -- '${remote_jar}' '${PROD_JAR_PATH}'" <<'REMOTE'
+          set -euo pipefail
+          remote_jar="$1"
+          prod_jar_path="$2"
+          ts="$(date +%Y%m%d-%H%M%S)"
+          cp -a "${prod_jar_path}" "${prod_jar_path}.${ts}.bak"
+          install -o trading -g trading -m 0644 "${remote_jar}" "${prod_jar_path}"
+          systemctl restart trading
+          systemctl is-active --quiet trading
+          REMOTE
+
+      - name: Verify deployment
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/prod_deploy_key \
+            -o BatchMode=yes \
+            "${PROD_USER}@${PROD_HOST}" \
+            "sudo bash -s -- '${PROD_JAR_PATH}' '${{ steps.jar.outputs.sha }}'" <<'REMOTE'
+          set -euo pipefail
+          prod_jar_path="$1"
+          expected_sha="$2"
+          . /etc/trading/trading.env
+
+          echo SERVICE_STATUS
+          systemctl is-active trading
+
+          echo JAR_SHA256
+          actual_sha="$(sha256sum "${prod_jar_path}" | awk '{print $1}')"
+          echo "${actual_sha}  ${prod_jar_path}"
+          if [ "${actual_sha}" != "${expected_sha}" ]; then
+            echo "Jar SHA-256 mismatch. expected=${expected_sha} actual=${actual_sha}"
+            exit 1
+          fi
+
+          echo ACTUATOR_HEALTH
+          curl -fsS -H "X-API-KEY: ${TRADING_API_KEY}" http://127.0.0.1:8080/actuator/health
+          echo
+
+          echo OPERATING_MODE
+          curl -fsS -H "X-API-KEY: ${TRADING_API_KEY}" http://127.0.0.1:8080/api/operations/mode
+          echo
+
+          echo DASHBOARD_SUMMARY
+          curl -fsS -H "X-API-KEY: ${TRADING_API_KEY}" http://127.0.0.1:8080/api/dashboard/summary
+          echo
+
+          echo HIKARI_WARNING_SCAN
+          grep -R "No operations allowed after connection closed" /var/log/trading /opt/trading/app 2>/dev/null || true
+
+          echo RECENT_ERRORS
+          journalctl -u trading --since "5 minutes ago" --no-pager \
+            | grep -Ei "ERROR|Exception|No operations allowed after connection closed" || true
+          REMOTE

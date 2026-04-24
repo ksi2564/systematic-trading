@@ -34,6 +34,26 @@
 6. `systemctl daemon-reload && systemctl enable --now mysql caddy trading trading-backup.timer`로 서비스와 백업 타이머 자동기동을 켠다.
 7. `curl http://127.0.0.1:8080/actuator/health`와 `curl https://api.<domain>/public/api/v1/summary`로 내부/외부 경로를 각각 검증한다.
 
+GitHub Actions 운영 배포:
+
+- 운영 배포 workflow는 `.github/workflows/deploy-prod.yml`의 `Deploy Production`이다.
+- 자동 배포는 사용하지 않고, `master`에서 `workflow_dispatch`로 수동 실행한다.
+- GitHub Environment `production`에 approval rule을 설정해 배포 전 사람 승인을 강제한다.
+- GitHub Secrets:
+  - `TS_OAUTH_CLIENT_ID`: Tailscale OAuth client ID
+  - `TS_OAUTH_SECRET`: Tailscale OAuth secret
+  - `PROD_SSH_PRIVATE_KEY`: 운영 VM `ubuntu` 계정에 등록된 배포 전용 SSH private key
+- Tailscale 준비:
+  - workflow runner는 `tailscale/github-action@v4`로 tailnet에 ephemeral node로 붙는다.
+  - OAuth client는 `tag:github-actions`를 부여할 수 있어야 한다.
+  - tailnet ACL은 `tag:github-actions`가 운영 VM `wall-ant-prod-01:22`에만 접근하도록 제한한다.
+- 서버 준비:
+  - `PROD_SSH_PRIVATE_KEY`의 public key를 `/home/ubuntu/.ssh/authorized_keys`에 등록한다.
+  - `ubuntu` 계정은 기존 운영 절차처럼 `sudo systemctl restart trading`, `install`, `cp`를 수행할 수 있어야 한다.
+- workflow는 Actions runner에서 `./gradlew test bootJar`로 jar를 만든 뒤 Tailscale IP `100.66.226.12`로 전송한다.
+- 원격에서는 기존 `/opt/trading/app/trading.jar`를 타임스탬프 백업으로 남기고 새 jar를 설치한 뒤 `trading.service`를 재시작한다.
+- 실패 시 직전 백업 jar를 `/opt/trading/app/trading.jar`로 복원하고 `sudo systemctl restart trading`을 실행한다.
+
 운영 검증:
 
 - 퍼블릭 경로에서 `/api/dashboard/summary`, `/api/operations/mode`, `/actuator/health`가 차단되는지 확인한다.

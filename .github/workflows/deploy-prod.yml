@@ -129,7 +129,17 @@ jobs:
           fi
 
           echo ACTUATOR_HEALTH
-          curl -fsS -H "X-API-KEY: ${TRADING_API_KEY}" http://127.0.0.1:8080/actuator/health
+          for attempt in $(seq 1 30); do
+            if curl -fsS -H "X-API-KEY: ${TRADING_API_KEY}" http://127.0.0.1:8080/actuator/health; then
+              break
+            fi
+            if [ "${attempt}" -eq 30 ]; then
+              echo "Actuator health did not become ready within 60 seconds."
+              exit 1
+            fi
+            echo "Actuator health is not ready yet. retry=${attempt}/30"
+            sleep 2
+          done
           echo
 
           echo OPERATING_MODE

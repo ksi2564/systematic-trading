@@ -2,6 +2,7 @@ package my.side.trading.adapter.out.kis.client;
 
 import com.github.benmanes.caffeine.cache.Cache;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import my.side.trading.adapter.out.kis.config.KisProps;
 import my.side.trading.adapter.out.kis.dto.*;
 import org.springframework.stereotype.Service;
@@ -9,6 +10,7 @@ import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
 
 @Service
+@Slf4j
 @RequiredArgsConstructor
 public class KisAuthService {
 
@@ -36,7 +38,7 @@ public class KisAuthService {
                     .bodyValue(KisTokenRequest.of(props.appKey(), props.appSecret()))
                     .retrieve()
                     .bodyToMono(KisTokenResponse.class)
-                    .block();
+                    .block(props.requestTimeout());
 
             if (response == null || response.accessToken() == null) {
                 throw new IllegalStateException("KIS 접근토큰 발급 실패: response null");
@@ -74,11 +76,12 @@ public class KisAuthService {
                                     String msg = "[KIS APPROVAL ERROR] status="
                                             + response.statusCode().value()
                                             + ", body=" + body;
-                                    System.err.println(msg);
+                                    log.warn("KIS approval key 발급이 실패했습니다: status={}, body={}",
+                                            response.statusCode().value(), body);
                                     return Mono.error(new IllegalStateException(msg));
                                 });
                     }
                 })
-                .block();
+                .block(props.requestTimeout());
     }
 }

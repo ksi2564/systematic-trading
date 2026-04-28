@@ -117,7 +117,7 @@ class DiscordOpsAlertPublisherTest {
                 new TradingOperationProps.AlertsProps(
                         true,
                         30,
-                        new TradingOperationProps.DiscordProps(true, webhookUrl, minSeverity)));
+                        new TradingOperationProps.DiscordProps(true, webhookUrl, minSeverity, null)));
     }
 
     private void startServer(ExchangeHandler handler) throws IOException {

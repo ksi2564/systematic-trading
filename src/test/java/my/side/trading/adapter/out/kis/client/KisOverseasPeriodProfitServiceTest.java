@@ -82,7 +82,7 @@ class KisOverseasPeriodProfitServiceTest {
         KisOverseasPeriodProfitService service = new KisOverseasPeriodProfitService(
                 webClient,
                 authService,
-                new KisProps("https://example.test", "appKey", "appSecret", "12345678-01", "12345678", "01")
+                new KisProps("https://example.test", "appKey", "appSecret", "12345678-01", "12345678", "01", null, null)
         );
 
         KisOverseasPeriodProfitResponse response = service.getPeriodProfit(

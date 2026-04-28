@@ -5,6 +5,7 @@ import my.side.trading.core.domain.operation.OpsAlertSeverity;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 import java.math.BigDecimal;
+import java.time.Duration;
 
 @ConfigurationProperties(prefix = "trading.operation")
 public record TradingOperationProps(
@@ -19,7 +20,7 @@ public record TradingOperationProps(
         autoLiveGate = autoLiveGate == null ? new AutoLiveGateProps(5, true, true, true) : autoLiveGate;
         kpi = kpi == null ? new KpiProps(true, 0, 0, new BigDecimal("5.0")) : kpi;
         riskLimits = riskLimits == null ? new RiskLimitProps(BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO) : riskLimits;
-        alerts = alerts == null ? new AlertsProps(false, 30) : alerts;
+        alerts = alerts == null ? new AlertsProps(false, 30, null) : alerts;
     }
 
     public record AutoLiveGateProps(
@@ -76,24 +77,26 @@ public record TradingOperationProps(
             long dedupeTtlMinutes,
             DiscordProps discord
     ) {
-        public AlertsProps(boolean enabled, long dedupeTtlMinutes) {
-            this(enabled, dedupeTtlMinutes, null);
-        }
-
         public AlertsProps {
             dedupeTtlMinutes = dedupeTtlMinutes <= 0 ? 30 : dedupeTtlMinutes;
-            discord = discord == null ? new DiscordProps(false, "", OpsAlertSeverity.ERROR) : discord;
+            discord = discord == null ? new DiscordProps(false, "", OpsAlertSeverity.ERROR, null) : discord;
         }
     }
 
     public record DiscordProps(
             boolean enabled,
             String webhookUrl,
-            OpsAlertSeverity minSeverity
+            OpsAlertSeverity minSeverity,
+            Duration requestTimeout
     ) {
+        private static final Duration DEFAULT_REQUEST_TIMEOUT = Duration.ofSeconds(5);
+
         public DiscordProps {
             webhookUrl = webhookUrl == null ? "" : webhookUrl;
             minSeverity = minSeverity == null ? OpsAlertSeverity.ERROR : minSeverity;
+            requestTimeout = requestTimeout == null || requestTimeout.isZero() || requestTimeout.isNegative()
+                    ? DEFAULT_REQUEST_TIMEOUT
+                    : requestTimeout;
         }
     }
 }

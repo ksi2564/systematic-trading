@@ -32,7 +32,7 @@ public class KisOverseasBalanceService {
                 .header("custtype", "P")
                 .retrieve()
                 .bodyToMono(KisOverseasBalanceResponse.class)
-                .block();
+                .block(props.requestTimeout());
 
     }
 }

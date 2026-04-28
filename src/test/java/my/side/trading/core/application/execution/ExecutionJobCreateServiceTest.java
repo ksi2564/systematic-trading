@@ -138,7 +138,7 @@ class ExecutionJobCreateServiceTest {
                                 maxDailyTurnoverPct,
                                 BigDecimal.ZERO,
                                 BigDecimal.ZERO),
-                        new TradingOperationProps.AlertsProps(false, 30)),
+                        new TradingOperationProps.AlertsProps(false, 30, null)),
                 repo);
         return new ExecutionJobCreateService(factory, repo, riskLimitService, alertPublisher);
     }

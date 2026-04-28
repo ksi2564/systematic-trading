@@ -69,7 +69,7 @@ class ExecutionJobExecutorTest {
                         BigDecimal.ZERO,
                         BigDecimal.ZERO,
                         BigDecimal.ZERO),
-                new TradingOperationProps.AlertsProps(false, 30));
+                new TradingOperationProps.AlertsProps(false, 30, null));
         OperatingModeReader operatingModeReader = new OperatingModeReader() {
             @Override
             public OperatingMode currentMode() {
@@ -190,7 +190,7 @@ class ExecutionJobExecutorTest {
                         BigDecimal.ZERO,
                         BigDecimal.ZERO,
                         new BigDecimal("0.10")),
-                new TradingOperationProps.AlertsProps(false, 30));
+                new TradingOperationProps.AlertsProps(false, 30, null));
         riskLimitService = new ExecutionRiskLimitService(strictRiskProps, jobRepository);
 
         RetryableOrderExecutor retryableExecutor = new RetryableOrderExecutor(

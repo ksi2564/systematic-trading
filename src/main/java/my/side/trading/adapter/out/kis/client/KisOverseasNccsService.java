@@ -32,6 +32,6 @@ public class KisOverseasNccsService {
                 .header("custtype", "P")
                 .retrieve()
                 .bodyToMono(KisOverseasNccsResponse.class)
-                .block();
+                .block(props.requestTimeout());
     }
 }

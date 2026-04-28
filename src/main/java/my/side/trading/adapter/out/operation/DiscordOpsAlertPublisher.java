@@ -42,7 +42,7 @@ public class DiscordOpsAlertPublisher implements OpsAlertChannelPublisher {
                     .bodyValue(toPayload(alert))
                     .retrieve()
                     .toBodilessEntity()
-                    .block();
+                    .block(discord.requestTimeout());
         } catch (Exception e) {
             log.warn("discord ops alert 전송에 실패했습니다: type={}", alert.type(), e);
         }

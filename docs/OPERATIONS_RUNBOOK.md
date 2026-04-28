@@ -212,6 +212,76 @@
 
 KIS 토큰/승인키 직접 반환 API와 직접 주문 테스트 API는 운영 안전을 위해 제공하지 않는다.
 주문은 `POST /api/jobs/manual-rebalance` 또는 `POST /api/jobs/{jobId}/execute` 경로를 통해 실행 가드와 리스크 한도를 거쳐야 한다.
+운영 실주문은 `ExecutionJobExecutor -> GuardedOrderBroker -> KisOrderBroker` 경로만 사용한다.
+
+### KIS 개발 진단 API
+
+아래 API는 `dev` 또는 `local` profile에서만 bean이 등록된다. `prod` profile에서는 등록되지 않아야 하며, 운영 직접 주문 API로 사용해서는 안 된다.
+
+| API | 용도 |
+| :--- | :--- |
+| `POST /kis/dev-diagnostics/orders/payload` | KIS 해외주식 주문 request body와 `tr_id`를 dry-run으로 생성 |
+| `GET /kis/dev-diagnostics/token` | KIS access token cache 상태 조회 |
+| `POST /kis/dev-diagnostics/token/refresh` | KIS access token 발급/사용 가능 여부 확인 |
+| `POST /kis/dev-diagnostics/approval-key/refresh` | WebSocket approval key 발급 가능 여부 확인 |
+
+진단 API 운영 원칙:
+
+- 모든 진단 API도 `X-API-KEY` 인증과 private rate limit을 통과해야 한다.
+- `orders/payload`는 `willExecute=false` 응답만 제공하며 KIS 주문 API를 호출하지 않는다.
+- access token과 approval key 원문은 반환하지 않고, 만료 시각, TTL, 길이, fingerprint 같은 진단용 메타데이터만 반환한다.
+- `/kis/overseas/order/...` 형태의 직접 주문 API는 제공하지 않는다.
+
+로컬 사용 방법:
+
+```powershell
+$env:SPRING_PROFILES_ACTIVE='local'
+$env:TRADING_API_KEY='local-dev-key'
+$env:KIS_APP_KEY='...'
+$env:KIS_APP_SECRET='...'
+$env:KIS_ACCOUNT_NO='...'
+$env:KIS_CANO='...'
+$env:KIS_ACNT_PRDT_CD='...'
+./gradlew.bat bootRun
+```
+
+기본 로컬 실행인 `./gradlew.bat bootRun`만으로는 `local` profile이 자동 활성화되지 않는다. 진단 API를 사용하려면 `SPRING_PROFILES_ACTIVE=local` 또는 `--spring.profiles.active=local`을 명시해야 한다.
+
+외부 KIS 호출 여부:
+
+| API | 외부 KIS 호출 | 주문 실행 |
+| :--- | :--- | :--- |
+| `POST /kis/dev-diagnostics/orders/payload` | 없음 | 없음 |
+| `GET /kis/dev-diagnostics/token` | 없음 | 없음 |
+| `POST /kis/dev-diagnostics/token/refresh` | 있음 | 없음 |
+| `POST /kis/dev-diagnostics/approval-key/refresh` | 있음 | 없음 |
+
+호출 예시:
+
+```powershell
+$apiKey='local-dev-key'
+
+curl.exe -s `
+  -H "X-API-KEY: $apiKey" `
+  http://127.0.0.1:8080/kis/dev-diagnostics/token
+
+curl.exe -s `
+  -X POST `
+  -H "X-API-KEY: $apiKey" `
+  http://127.0.0.1:8080/kis/dev-diagnostics/token/refresh
+
+curl.exe -s `
+  -X POST `
+  -H "X-API-KEY: $apiKey" `
+  http://127.0.0.1:8080/kis/dev-diagnostics/approval-key/refresh
+
+curl.exe -s `
+  -X POST `
+  -H "X-API-KEY: $apiKey" `
+  -H "Content-Type: application/json" `
+  -d '{"symbol":"QQQ","side":"BUY","quantity":1,"limitPrice":421.12}' `
+  http://127.0.0.1:8080/kis/dev-diagnostics/orders/payload
+```
 
 ## 8. 보안 정책
 

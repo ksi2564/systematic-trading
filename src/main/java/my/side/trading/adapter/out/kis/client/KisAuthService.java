@@ -9,6 +9,12 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.time.Instant;
+import java.util.HexFormat;
+
 @Service
 @Slf4j
 @RequiredArgsConstructor
@@ -56,6 +62,22 @@ public class KisAuthService {
         }
     }
 
+    public KisTokenDiagnosticsSnapshot inspectAccessTokenCache() {
+        KisToken cached = kisTokenCache.getIfPresent(TOKEN_CACHE_KEY);
+        return toSnapshot(cached);
+    }
+
+    public KisTokenDiagnosticsResult ensureAccessTokenForDiagnostics() {
+        KisToken before = kisTokenCache.getIfPresent(TOKEN_CACHE_KEY);
+        boolean cacheHit = before != null && before.isValid();
+        getAccessToken();
+        return new KisTokenDiagnosticsResult(
+                true,
+                cacheHit ? "CACHE" : "REMOTE",
+                inspectAccessTokenCache()
+        );
+    }
+
     /**
      * 실시간(WebSocket)용 approval_key 발급
      */
@@ -83,5 +105,36 @@ public class KisAuthService {
                     }
                 })
                 .block(props.requestTimeout());
+    }
+
+    private KisTokenDiagnosticsSnapshot toSnapshot(KisToken token) {
+        if (token == null) {
+            return KisTokenDiagnosticsSnapshot.empty();
+        }
+
+        long now = System.currentTimeMillis();
+        long ttlMillis = Math.max(0, token.expiresAtMills() - now);
+        String accessToken = token.accessToken();
+        return new KisTokenDiagnosticsSnapshot(
+                true,
+                token.isValid(),
+                Instant.ofEpochMilli(token.expiresAtMills()),
+                ttlMillis / 1000,
+                accessToken == null ? 0 : accessToken.length(),
+                fingerprint(accessToken)
+        );
+    }
+
+    private String fingerprint(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hash = digest.digest(value.getBytes(StandardCharsets.UTF_8));
+            return HexFormat.of().formatHex(hash).substring(0, 12);
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 digest를 사용할 수 없습니다.", e);
+        }
     }
 }

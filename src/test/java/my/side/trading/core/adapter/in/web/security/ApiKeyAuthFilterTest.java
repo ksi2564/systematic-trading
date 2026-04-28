@@ -73,6 +73,17 @@ class ApiKeyAuthFilterTest {
     }
 
     @Test
+    void KIS_진단_경로도_키_없으면_401_응답() throws ServletException, IOException {
+        when(request.getRequestURI()).thenReturn("/kis/dev-diagnostics/token");
+        when(request.getHeader("X-API-KEY")).thenReturn(null);
+
+        filter.doFilter(request, response, chain);
+
+        verify(response).sendError(HttpServletResponse.SC_UNAUTHORIZED, "Invalid API Key");
+        verify(chain, never()).doFilter(request, response);
+    }
+
+    @Test
     void 수동_리밸런싱_경로는_키_없으면_401_응답() throws ServletException, IOException {
         when(request.getRequestURI()).thenReturn("/api/jobs/manual-rebalance");
         when(request.getHeader("X-API-KEY")).thenReturn(null);

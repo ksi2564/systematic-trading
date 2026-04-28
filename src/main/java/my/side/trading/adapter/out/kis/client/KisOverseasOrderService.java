@@ -6,6 +6,7 @@ import my.side.trading.adapter.out.kis.config.KisProps;
 import my.side.trading.adapter.out.kis.dto.KisOverseasCancelResponse;
 import my.side.trading.adapter.out.kis.dto.OverseasOrderRequest;
 import my.side.trading.adapter.out.kis.dto.OverseasOrderResponse;
+import my.side.trading.core.domain.execution.order.ExecutionOrderSide;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.stereotype.Service;
@@ -20,13 +21,12 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class KisOverseasOrderService {
 
-    private static final String OVERSEAS_ORDER_PATH = "/uapi/overseas-stock/v1/trading/order";
-    private static final String OVERSEAS_CANCEL_PATH = "/uapi/overseas-stock/v1/trading/order-rvsecncl";
     private static final String DEFAULT_EXCHANGE = "NASD";
 
     private final WebClient kisWebClient;
     private final KisAuthService kisAuthService;
     private final KisProps kisProps;
+    private final KisOrderTrIdResolver trIdResolver;
 
     /**
      * 미국 주식 매수 주문 (해외주식 주문 API)
@@ -47,7 +47,7 @@ public class KisOverseasOrderService {
      */
     public KisOverseasCancelResponse cancelUsOrder(String orderNo) {
         String accessToken = kisAuthService.getAccessToken();
-        String trId = resolveCancelTrId();
+        String trId = trIdResolver.resolveCancelTrId();
 
         Map<String, String> requestBody = Map.of(
                 "CANO", kisProps.cano(),
@@ -60,7 +60,7 @@ public class KisOverseasOrderService {
 
         try {
             return kisWebClient.post()
-                    .uri(OVERSEAS_CANCEL_PATH)
+                    .uri(KisOverseasOrderApiSpec.OVERSEAS_CANCEL_PATH)
                     .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken)
                     .header("tr_id", trId)
                     .bodyValue(requestBody)
@@ -84,11 +84,11 @@ public class KisOverseasOrderService {
 
     private OverseasOrderResponse placeUsOrder(OverseasOrderRequest request, boolean buy) {
         String accessToken = kisAuthService.getAccessToken();
-        String trId = resolveUsTrId(buy);
+        String trId = trIdResolver.resolveUsOrderTrId(buy ? ExecutionOrderSide.BUY : ExecutionOrderSide.SELL);
 
         try {
             return kisWebClient.post()
-                    .uri(OVERSEAS_ORDER_PATH)
+                    .uri(KisOverseasOrderApiSpec.OVERSEAS_ORDER_PATH)
                     .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken)
                     .header("tr_id", trId)
                     .bodyValue(request)
@@ -108,28 +108,5 @@ public class KisOverseasOrderService {
                     e.getStatusCode(), e.getResponseBodyAsString());
             throw e;
         }
-    }
-
-    /**
-     * baseUrl을 보고 실전/모의 구분 후, 미국 매수/매도 TR_ID 선택
-     */
-    private String resolveUsTrId(boolean buy) {
-        String baseUrl = kisProps.baseUrl();
-        boolean virtual = baseUrl != null && baseUrl.contains("openapivts");
-
-        if (virtual) {
-            return buy ? "VTTT1002U" : "VTTT1001U";
-        } else {
-            return buy ? "TTTT1002U" : "TTTT1006U";
-        }
-    }
-
-    /**
-     * 주문취소 TR_ID (실전/모의 구분)
-     */
-    private String resolveCancelTrId() {
-        String baseUrl = kisProps.baseUrl();
-        boolean virtual = baseUrl != null && baseUrl.contains("openapivts");
-        return virtual ? "VTTT1004U" : "TTTT1004U";
     }
 }

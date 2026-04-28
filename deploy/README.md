@@ -54,6 +54,14 @@ GitHub Actions 운영 배포:
 - 원격에서는 기존 `/opt/trading/app/trading.jar`를 타임스탬프 백업으로 남기고 새 jar를 설치한 뒤 `trading.service`를 재시작한다.
 - 실패 시 직전 백업 jar를 `/opt/trading/app/trading.jar`로 복원하고 `sudo systemctl restart trading`을 실행한다.
 
+Flyway 스키마 관리:
+
+- 운영 프로파일은 Flyway를 사용하고 Hibernate는 `ddl-auto=validate`로만 스키마를 검증한다.
+- 이미 Hibernate `update`로 생성된 운영 DB에 처음 도입할 때는 `/etc/trading/trading.env`의 `SPRING_FLYWAY_BASELINE_ON_MIGRATE=true`를 유지한다.
+- 첫 배포가 성공해 `flyway_schema_history`가 생성된 뒤에는 `SPRING_FLYWAY_BASELINE_ON_MIGRATE=false`로 변경한다.
+- 신규 빈 DB에는 `src/main/resources/db/migration/V1__baseline_current_schema.sql`부터 순서대로 적용된다.
+- 이후 스키마 변경은 Hibernate 자동 변경이 아니라 `V2__...sql` 형식의 명시 migration으로 추가한다.
+
 운영 검증:
 
 - 퍼블릭 경로에서 `/api/dashboard/summary`, `/api/operations/mode`, `/actuator/health`가 차단되는지 확인한다.

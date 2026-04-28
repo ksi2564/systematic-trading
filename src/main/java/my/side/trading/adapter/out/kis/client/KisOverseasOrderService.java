@@ -72,9 +72,9 @@ public class KisOverseasOrderService {
                                 return Mono.error(new IllegalStateException(
                                         "[KIS CANCEL ERROR] status=%s, body=%s"
                                                 .formatted(resp.statusCode(), body)));
-                            }))
+                    }))
                     .bodyToMono(KisOverseasCancelResponse.class)
-                    .block();
+                    .block(kisProps.requestTimeout());
         } catch (WebClientResponseException e) {
             log.error("[KIS CANCEL EXCEPTION] status={}, body={}",
                     e.getStatusCode(), e.getResponseBodyAsString());
@@ -100,9 +100,9 @@ public class KisOverseasOrderService {
                                 return Mono.error(new IllegalStateException(
                                         "[KIS ORDER ERROR] status=%s, body=%s"
                                                 .formatted(resp.statusCode(), body)));
-                            }))
+                    }))
                     .bodyToMono(OverseasOrderResponse.class)
-                    .block();
+                    .block(kisProps.requestTimeout());
         } catch (WebClientResponseException e) {
             log.error("[KIS ORDER EXCEPTION] status={}, body={}",
                     e.getStatusCode(), e.getResponseBodyAsString());

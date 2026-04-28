@@ -206,13 +206,12 @@
 
 | API | 용도 |
 | :--- | :--- |
-| `GET /kis/token` | 토큰 확인 |
-| `GET /kis/approval-key` | 승인 키 확인 |
 | `GET /kis/overseas-balance` | 해외 잔고 조회 |
 | `GET /kis/quoted-price` | 종목 시세 조회 |
 | `GET /kis/realtime/overseas` | 실시간 시세 구독 |
-| `POST /kis/overseas/order/us/buy` | 미국주식 매수 요청 |
-| `POST /kis/overseas/order/us/sell` | 미국주식 매도 요청 |
+
+KIS 토큰/승인키 직접 반환 API와 직접 주문 테스트 API는 운영 안전을 위해 제공하지 않는다.
+주문은 `POST /api/jobs/manual-rebalance` 또는 `POST /api/jobs/{jobId}/execute` 경로를 통해 실행 가드와 리스크 한도를 거쳐야 한다.
 
 ## 8. 보안 정책
 

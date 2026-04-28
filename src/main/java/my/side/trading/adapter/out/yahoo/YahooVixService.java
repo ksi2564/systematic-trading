@@ -4,6 +4,7 @@ import lombok.extern.slf4j.Slf4j;
 import my.side.trading.adapter.out.yahoo.dto.YahooQuoteResponse;
 import my.side.trading.core.application.port.out.MarketDataProvider;
 import my.side.trading.core.infrastructure.config.TradingCircuitBreakerProps;
+import my.side.trading.core.infrastructure.config.TradingFxProps;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
 
@@ -24,9 +25,11 @@ public class YahooVixService implements MarketDataProvider {
 
     private final WebClient yahooWebClient;
     private final TradingCircuitBreakerProps props;
+    private final TradingFxProps fxProps;
 
-    public YahooVixService(TradingCircuitBreakerProps props) {
+    public YahooVixService(TradingCircuitBreakerProps props, TradingFxProps fxProps) {
         this.props = props;
+        this.fxProps = fxProps;
         this.yahooWebClient = WebClient.builder()
                 .baseUrl(YAHOO_FINANCE_BASE_URL)
                 .build();
@@ -50,7 +53,7 @@ public class YahooVixService implements MarketDataProvider {
                             .build(VIX_SYMBOL))
                     .retrieve()
                     .bodyToMono(YahooQuoteResponse.class)
-                    .block();
+                    .block(fxProps.yahoo().requestTimeout());
 
             if (response == null) {
                 log.warn("Yahoo Finance VIX 응답이 비어 있습니다.");
@@ -89,7 +92,7 @@ public class YahooVixService implements MarketDataProvider {
                             .build("QQQ"))
                     .retrieve()
                     .bodyToMono(YahooQuoteResponse.class)
-                    .block();
+                    .block(fxProps.yahoo().requestTimeout());
 
             if (response == null) {
                 log.warn("Yahoo Finance QQQ 응답이 비어 있습니다.");

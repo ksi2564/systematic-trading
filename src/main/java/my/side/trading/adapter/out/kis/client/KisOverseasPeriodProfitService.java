@@ -91,7 +91,7 @@ public class KisOverseasPeriodProfitService {
                 .header("tr_cont", trCont)
                 .exchangeToMono(response -> response.bodyToMono(KisOverseasPeriodProfitResponse.class)
                         .map(body -> new PageResult(extractTrCont(response), body)))
-                .block();
+                .block(props.requestTimeout());
     }
 
     private String extractTrCont(ClientResponse response) {

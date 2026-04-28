@@ -42,6 +42,6 @@ public class KisOverseasPsAmountService {
                 .header("custtype", "P")
                 .retrieve()
                 .bodyToMono(KisOverseasPsAmountResponse.class)
-                .block();
+                .block(props.requestTimeout());
     }
 }

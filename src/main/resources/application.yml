@@ -11,6 +11,8 @@ spring:
     hibernate:
       ddl-auto: update
     show-sql: true
+  flyway:
+    enabled: false
 
 management:
   endpoints:
@@ -39,6 +41,8 @@ kis:
   account-no: ${KIS_ACCOUNT_NO}
   cano: ${KIS_CANO}
   acnt-prdt-cd: ${KIS_ACNT_PRDT_CD}
+  connect-timeout: ${KIS_CONNECT_TIMEOUT:3s}
+  request-timeout: ${KIS_REQUEST_TIMEOUT:10s}
 
 trading:
   market-calendar:
@@ -89,6 +93,7 @@ trading:
         enabled: false
         webhook-url: ${TRADING_DISCORD_WEBHOOK_URL:}
         min-severity: ERROR
+        request-timeout: ${TRADING_DISCORD_REQUEST_TIMEOUT:5s}
     risk-limits:
       max-order-notional-usd: 0
       max-daily-turnover-pct: 0

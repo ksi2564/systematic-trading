@@ -16,8 +16,13 @@ spring:
       validation-timeout: ${SPRING_DATASOURCE_HIKARI_VALIDATION_TIMEOUT_MS:5000}
   jpa:
     hibernate:
-      ddl-auto: update
+      ddl-auto: validate
     show-sql: false
+  flyway:
+    enabled: true
+    baseline-on-migrate: ${SPRING_FLYWAY_BASELINE_ON_MIGRATE:true}
+    baseline-version: ${SPRING_FLYWAY_BASELINE_VERSION:1}
+    baseline-description: current_schema_before_flyway
 
 server:
   address: 127.0.0.1
@@ -54,3 +59,4 @@ trading:
       discord:
         enabled: true
         webhook-url: ${TRADING_DISCORD_WEBHOOK_URL:}
+        request-timeout: ${TRADING_DISCORD_REQUEST_TIMEOUT:5s}

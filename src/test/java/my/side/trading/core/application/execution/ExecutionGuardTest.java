@@ -118,7 +118,7 @@ class ExecutionGuardTest {
                         BigDecimal.ZERO,
                         BigDecimal.ZERO,
                         BigDecimal.ZERO),
-                new TradingOperationProps.AlertsProps(false, 30));
+                new TradingOperationProps.AlertsProps(false, 30, null));
         KillSwitchReader killSwitchReader = () -> killSwitchOn;
         OperationsKpiService operationsKpiService = mock(OperationsKpiService.class);
         when(operationsKpiService.hasAutoLiveBreach()).thenReturn(kpiBreached);

@@ -37,7 +37,7 @@ class PropertyBasedEffectiveParameterSnapshotProviderTest {
                                 new BigDecimal("12.5"),
                                 BigDecimal.ZERO,
                                 new BigDecimal("0.8")),
-                        new TradingOperationProps.AlertsProps(false, 30))
+                        new TradingOperationProps.AlertsProps(false, 30, null))
         );
 
         Map<ParameterRegistryKey, String> snapshots = provider.snapshotAll();

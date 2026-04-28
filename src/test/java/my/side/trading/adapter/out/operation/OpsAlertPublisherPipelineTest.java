@@ -87,7 +87,7 @@ class OpsAlertPublisherPipelineTest {
                 new TradingOperationProps.AlertsProps(
                         alertsEnabled,
                         30,
-                        new TradingOperationProps.DiscordProps(false, "", OpsAlertSeverity.ERROR)));
+                        new TradingOperationProps.DiscordProps(false, "", OpsAlertSeverity.ERROR, null)));
     }
 
     private OpsAlert sampleAlert() {

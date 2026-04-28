@@ -47,6 +47,6 @@ public class KisOverseasCcnlService {
                 .header("custtype", "P")
                 .retrieve()
                 .bodyToMono(KisOverseasCcnlResponse.class)
-                .block();
+                .block(props.requestTimeout());
     }
 }

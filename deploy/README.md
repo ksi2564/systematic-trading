@@ -57,8 +57,10 @@ GitHub Actions 운영 배포:
 Flyway 스키마 관리:
 
 - 운영 프로파일은 Flyway를 사용하고 Hibernate는 `ddl-auto=validate`로만 스키마를 검증한다.
-- 이미 Hibernate `update`로 생성된 운영 DB에 처음 도입할 때는 `/etc/trading/trading.env`의 `SPRING_FLYWAY_BASELINE_ON_MIGRATE=true`를 유지한다.
-- 첫 배포가 성공해 `flyway_schema_history`가 생성된 뒤에는 `SPRING_FLYWAY_BASELINE_ON_MIGRATE=false`로 변경한다.
+- 정상 운영값은 `/etc/trading/trading.env`의 `SPRING_FLYWAY_BASELINE_ON_MIGRATE=false`다.
+- 이미 Hibernate `update`로 생성된 운영 DB에 처음 도입하는 1회 배포에서만 `SPRING_FLYWAY_BASELINE_ON_MIGRATE=true`로 변경한다.
+- 첫 배포가 성공해 `flyway_schema_history`가 생성된 뒤에는 `SPRING_FLYWAY_BASELINE_ON_MIGRATE=false`로 되돌리고 `trading.service`를 재시작한다.
+- 전환 후 `flyway_schema_history`에 `version=1`, `description=current_schema_before_flyway`, `success=1` baseline row가 남아 있고 `/actuator/health`가 `UP`인지 확인한다.
 - 신규 빈 DB에는 `src/main/resources/db/migration/V1__baseline_current_schema.sql`부터 순서대로 적용된다.
 - 이후 스키마 변경은 Hibernate 자동 변경이 아니라 `V2__...sql` 형식의 명시 migration으로 추가한다.
 

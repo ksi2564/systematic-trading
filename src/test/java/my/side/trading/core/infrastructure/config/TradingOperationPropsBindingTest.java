@@ -19,6 +19,7 @@ class TradingOperationPropsBindingTest {
         contextRunner.run(context -> {
             assertThat(context).hasNotFailed();
             TradingOperationProps props = context.getBean(TradingOperationProps.class);
+            assertThat(props.alerts().discord().connectTimeout()).isEqualTo(Duration.ofSeconds(3));
             assertThat(props.alerts().discord().requestTimeout()).isEqualTo(Duration.ofSeconds(5));
         });
     }
@@ -31,10 +32,12 @@ class TradingOperationPropsBindingTest {
                         "trading.operation.alerts.discord.enabled=true",
                         "trading.operation.alerts.discord.webhook-url=https://discord.example.test/webhook",
                         "trading.operation.alerts.discord.min-severity=ERROR",
+                        "trading.operation.alerts.discord.connect-timeout=1500ms",
                         "trading.operation.alerts.discord.request-timeout=2s")
                 .run(context -> {
                     assertThat(context).hasNotFailed();
                     TradingOperationProps props = context.getBean(TradingOperationProps.class);
+                    assertThat(props.alerts().discord().connectTimeout()).isEqualTo(Duration.ofMillis(1500));
                     assertThat(props.alerts().discord().requestTimeout()).isEqualTo(Duration.ofSeconds(2));
                 });
     }

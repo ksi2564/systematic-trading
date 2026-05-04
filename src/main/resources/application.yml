@@ -94,6 +94,7 @@ trading:
         enabled: false
         webhook-url: ${TRADING_DISCORD_WEBHOOK_URL:}
         min-severity: ERROR
+        connect-timeout: ${TRADING_DISCORD_CONNECT_TIMEOUT:3s}
         request-timeout: ${TRADING_DISCORD_REQUEST_TIMEOUT:5s}
     risk-limits:
       max-order-notional-usd: 0

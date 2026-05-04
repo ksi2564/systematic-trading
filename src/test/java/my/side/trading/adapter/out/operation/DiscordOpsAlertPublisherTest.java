@@ -44,7 +44,7 @@ class DiscordOpsAlertPublisherTest {
 
         DiscordOpsAlertPublisher publisher = new DiscordOpsAlertPublisher(
                 operationProps(serverUrl(), OpsAlertSeverity.ERROR),
-                WebClient.builder());
+                WebClient.builder().build());
 
         publisher.publish(new OpsAlert(
                 OpsAlertType.UNRESOLVED_ORDER,
@@ -72,7 +72,7 @@ class DiscordOpsAlertPublisherTest {
 
         DiscordOpsAlertPublisher publisher = new DiscordOpsAlertPublisher(
                 operationProps(serverUrl(), OpsAlertSeverity.ERROR),
-                WebClient.builder());
+                WebClient.builder().build());
 
         publisher.publish(new OpsAlert(
                 OpsAlertType.KPI_BREACH,
@@ -93,7 +93,7 @@ class DiscordOpsAlertPublisherTest {
 
         DiscordOpsAlertPublisher publisher = new DiscordOpsAlertPublisher(
                 operationProps(serverUrl(), OpsAlertSeverity.ERROR),
-                WebClient.builder());
+                WebClient.builder().build());
 
         assertThatCode(() -> publisher.publish(new OpsAlert(
                 OpsAlertType.BROKER_API_FAILURE,
@@ -117,7 +117,7 @@ class DiscordOpsAlertPublisherTest {
                 new TradingOperationProps.AlertsProps(
                         true,
                         30,
-                        new TradingOperationProps.DiscordProps(true, webhookUrl, minSeverity, null)));
+                        new TradingOperationProps.DiscordProps(true, webhookUrl, minSeverity, null, null)));
     }
 
     private void startServer(ExchangeHandler handler) throws IOException {

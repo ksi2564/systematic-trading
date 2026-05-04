@@ -5,6 +5,7 @@ import my.side.trading.adapter.out.yahoo.dto.YahooQuoteResponse;
 import my.side.trading.core.application.port.out.MarketDataProvider;
 import my.side.trading.core.infrastructure.config.TradingCircuitBreakerProps;
 import my.side.trading.core.infrastructure.config.TradingFxProps;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
 
@@ -20,19 +21,20 @@ import java.util.Optional;
 @Service
 public class YahooVixService implements MarketDataProvider {
 
-    private static final String YAHOO_FINANCE_BASE_URL = "https://query1.finance.yahoo.com";
     private static final String VIX_SYMBOL = "^VIX";
 
     private final WebClient yahooWebClient;
     private final TradingCircuitBreakerProps props;
     private final TradingFxProps fxProps;
 
-    public YahooVixService(TradingCircuitBreakerProps props, TradingFxProps fxProps) {
+    public YahooVixService(
+            @Qualifier("yahooWebClient") WebClient yahooWebClient,
+            TradingCircuitBreakerProps props,
+            TradingFxProps fxProps
+    ) {
+        this.yahooWebClient = yahooWebClient;
         this.props = props;
         this.fxProps = fxProps;
-        this.yahooWebClient = WebClient.builder()
-                .baseUrl(YAHOO_FINANCE_BASE_URL)
-                .build();
     }
 
     /**

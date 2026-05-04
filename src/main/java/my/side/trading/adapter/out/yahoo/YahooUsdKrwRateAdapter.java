@@ -9,6 +9,7 @@ import my.side.trading.core.application.port.out.CurrentFxRateProvider;
 import my.side.trading.core.application.port.out.FxRateReader;
 import my.side.trading.core.infrastructure.config.TradingFxProps;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
@@ -31,7 +32,6 @@ import java.util.concurrent.atomic.AtomicReference;
 @Component
 public class YahooUsdKrwRateAdapter implements FxRateReader, CurrentFxRateProvider {
 
-    private static final String YAHOO_FINANCE_BASE_URL = "https://query1.finance.yahoo.com";
     private static final String USD_KRW_SYMBOL = "KRW=X";
     private static final ZoneId DEFAULT_ZONE = ZoneOffset.UTC;
     private static final String CURRENT_RATE_CACHE_KEY = "USD/KRW";
@@ -44,10 +44,8 @@ public class YahooUsdKrwRateAdapter implements FxRateReader, CurrentFxRateProvid
     private final AtomicReference<CachedFxRate> lastSuccessfulCurrentRate;
 
     @Autowired
-    public YahooUsdKrwRateAdapter(TradingFxProps props) {
-        this(WebClient.builder()
-                .baseUrl(YAHOO_FINANCE_BASE_URL)
-                .build(), props, Clock.systemUTC());
+    public YahooUsdKrwRateAdapter(@Qualifier("yahooWebClient") WebClient yahooWebClient, TradingFxProps props) {
+        this(yahooWebClient, props, Clock.systemUTC());
     }
 
     YahooUsdKrwRateAdapter(WebClient yahooWebClient, TradingFxProps props, Clock clock) {

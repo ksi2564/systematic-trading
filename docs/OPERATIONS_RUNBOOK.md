@@ -342,6 +342,26 @@ curl.exe -s `
 3. 필요하면 `trading.execution.enabled`를 비활성화하거나 Kill Switch를 켠다.
 4. 복구 전까지는 수동 주문 실행도 보수적으로 제한한다.
 
+KIS HTTP timeout은 `kis` 설정에서 관리한다.
+
+- 연결 timeout: `kis.connect-timeout` (`KIS_CONNECT_TIMEOUT`)
+- 요청 대기 timeout: `kis.request-timeout` (`KIS_REQUEST_TIMEOUT`)
+
+주문성 API 장애는 조회성 API 장애보다 보수적으로 다룬다.
+
+- `/uapi/overseas-stock/v1/trading/order`, `/uapi/overseas-stock/v1/trading/order-rvsecncl`에는 자동 HTTP retry를 적용하지 않는다.
+- 주문 요청 후 timeout 또는 network error가 발생하면 주문 미접수로 단정하지 않는다.
+- `brokerOrderId`가 있으면 `inquire-ccnl`에서 해당 주문번호를 확인한다.
+- `brokerOrderId`가 없으면 신규 자동 주문을 멈추고 `inquire-nccs`, `inquire-ccnl`에서 같은 symbol/side와 주문 시각 근처 내역을 확인한다.
+- 주문 접수 여부가 불명확하면 `AUTO_LIVE`를 유지하지 말고 수동 정리 계획을 세운다.
+
+KIS 장애 로그와 알림은 추적 가능한 최소 필드만 남긴다.
+
+- 권장 필드: `symbol`, `side`, `tr_id`, `failureKind`, `failureCode`, `brokerOrderId`
+- 금지 필드: access token, app secret, app key, 계좌번호 원문, approval key, AES key/iv
+- KIS 응답 body를 남겨야 할 때는 계좌 식별자와 인증 관련 값 포함 여부를 먼저 확인하고 마스킹한다.
+- 상세 정책은 `docs/decisions/004_kis_http_policy.md`를 기준으로 한다.
+
 ### Yahoo 데이터 결측
 
 1. VIX 또는 200MA 조회 실패 여부를 로그에서 확인한다.

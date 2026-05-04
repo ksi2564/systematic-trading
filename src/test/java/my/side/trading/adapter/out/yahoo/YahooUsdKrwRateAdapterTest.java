@@ -122,6 +122,7 @@ class YahooUsdKrwRateAdapterTest {
         return new TradingFxProps(new TradingFxProps.YahooProps(
                 Duration.ofSeconds(30),
                 Duration.ofMinutes(30),
+                Duration.ofSeconds(1),
                 Duration.ofSeconds(2),
                 Duration.ofDays(365),
                 1_200

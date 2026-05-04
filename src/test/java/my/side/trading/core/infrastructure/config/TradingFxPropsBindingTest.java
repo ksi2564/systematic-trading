@@ -21,6 +21,7 @@ class TradingFxPropsBindingTest {
             TradingFxProps props = context.getBean(TradingFxProps.class);
             assertThat(props.yahoo().currentCacheTtl()).isEqualTo(Duration.ofSeconds(30));
             assertThat(props.yahoo().staleSuccessTtl()).isEqualTo(Duration.ofMinutes(30));
+            assertThat(props.yahoo().connectTimeout()).isEqualTo(Duration.ofSeconds(3));
             assertThat(props.yahoo().requestTimeout()).isEqualTo(Duration.ofSeconds(5));
             assertThat(props.yahoo().historyCacheTtl()).isEqualTo(Duration.ofDays(365));
             assertThat(props.yahoo().historyCacheMaximumSize()).isEqualTo(1_200L);
@@ -33,6 +34,7 @@ class TradingFxPropsBindingTest {
                 .withPropertyValues(
                         "trading.fx.yahoo.current-cache-ttl=45s",
                         "trading.fx.yahoo.stale-success-ttl=5s",
+                        "trading.fx.yahoo.connect-timeout=1500ms",
                         "trading.fx.yahoo.request-timeout=2s",
                         "trading.fx.yahoo.history-cache-ttl=30d",
                         "trading.fx.yahoo.history-cache-maximum-size=365")
@@ -41,6 +43,7 @@ class TradingFxPropsBindingTest {
                     TradingFxProps props = context.getBean(TradingFxProps.class);
                     assertThat(props.yahoo().currentCacheTtl()).isEqualTo(Duration.ofSeconds(45));
                     assertThat(props.yahoo().staleSuccessTtl()).isEqualTo(Duration.ofSeconds(45));
+                    assertThat(props.yahoo().connectTimeout()).isEqualTo(Duration.ofMillis(1500));
                     assertThat(props.yahoo().requestTimeout()).isEqualTo(Duration.ofSeconds(2));
                     assertThat(props.yahoo().historyCacheTtl()).isEqualTo(Duration.ofDays(30));
                     assertThat(props.yahoo().historyCacheMaximumSize()).isEqualTo(365L);

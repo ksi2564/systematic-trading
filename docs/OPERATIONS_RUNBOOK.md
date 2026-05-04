@@ -348,6 +348,11 @@ curl.exe -s `
 2. 보조 지표가 비어 있는 상태에서 전략 판단 결과가 왜곡될 수 있는지 점검한다.
 3. 필요하면 EOD 계산을 재실행하고, 반복되면 `PAPER` 또는 `MANUAL_LIVE`로 전환한다.
 
+Yahoo HTTP timeout은 `trading.fx.yahoo` 설정에서 관리한다.
+
+- 연결 timeout: `trading.fx.yahoo.connect-timeout` (`TRADING_FX_YAHOO_CONNECT_TIMEOUT`)
+- 요청 대기 timeout: `trading.fx.yahoo.request-timeout` (`TRADING_FX_YAHOO_REQUEST_TIMEOUT`)
+
 ### 부분 체결 지속
 
 1. 최근 Job과 주문 상태를 조회한다.

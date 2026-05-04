@@ -79,7 +79,7 @@ public record TradingOperationProps(
     ) {
         public AlertsProps {
             dedupeTtlMinutes = dedupeTtlMinutes <= 0 ? 30 : dedupeTtlMinutes;
-            discord = discord == null ? new DiscordProps(false, "", OpsAlertSeverity.ERROR, null) : discord;
+            discord = discord == null ? new DiscordProps(false, "", OpsAlertSeverity.ERROR, null, null) : discord;
         }
     }
 
@@ -87,16 +87,24 @@ public record TradingOperationProps(
             boolean enabled,
             String webhookUrl,
             OpsAlertSeverity minSeverity,
+            Duration connectTimeout,
             Duration requestTimeout
     ) {
+        private static final Duration DEFAULT_CONNECT_TIMEOUT = Duration.ofSeconds(3);
         private static final Duration DEFAULT_REQUEST_TIMEOUT = Duration.ofSeconds(5);
 
         public DiscordProps {
             webhookUrl = webhookUrl == null ? "" : webhookUrl;
             minSeverity = minSeverity == null ? OpsAlertSeverity.ERROR : minSeverity;
-            requestTimeout = requestTimeout == null || requestTimeout.isZero() || requestTimeout.isNegative()
-                    ? DEFAULT_REQUEST_TIMEOUT
-                    : requestTimeout;
+            connectTimeout = normalizeDuration(connectTimeout, DEFAULT_CONNECT_TIMEOUT);
+            requestTimeout = normalizeDuration(requestTimeout, DEFAULT_REQUEST_TIMEOUT);
+        }
+
+        private static Duration normalizeDuration(Duration value, Duration defaultValue) {
+            if (value == null || value.isZero() || value.isNegative()) {
+                return defaultValue;
+            }
+            return value;
         }
     }
 }

@@ -3,6 +3,7 @@ package my.side.trading.adapter.out.operation;
 import lombok.extern.slf4j.Slf4j;
 import my.side.trading.core.domain.operation.OpsAlert;
 import my.side.trading.core.infrastructure.config.TradingOperationProps;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
@@ -17,9 +18,11 @@ public class DiscordOpsAlertPublisher implements OpsAlertChannelPublisher {
     private final TradingOperationProps operationProps;
     private final WebClient webClient;
 
-    public DiscordOpsAlertPublisher(TradingOperationProps operationProps, WebClient.Builder webClientBuilder) {
+    public DiscordOpsAlertPublisher(
+            TradingOperationProps operationProps,
+            @Qualifier("discordWebClient") WebClient webClient) {
         this.operationProps = operationProps;
-        this.webClient = webClientBuilder.build();
+        this.webClient = webClient;
     }
 
     @Override

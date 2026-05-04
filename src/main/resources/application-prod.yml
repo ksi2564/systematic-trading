@@ -59,4 +59,5 @@ trading:
       discord:
         enabled: true
         webhook-url: ${TRADING_DISCORD_WEBHOOK_URL:}
+        connect-timeout: ${TRADING_DISCORD_CONNECT_TIMEOUT:3s}
         request-timeout: ${TRADING_DISCORD_REQUEST_TIMEOUT:5s}

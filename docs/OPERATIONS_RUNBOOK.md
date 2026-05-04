@@ -445,6 +445,7 @@ Yahoo HTTP timeout은 `trading.fx.yahoo` 설정에서 관리한다.
 - 퍼블리셔 파이프라인은 `DeduplicatingOpsAlertPublisher -> CompositeOpsAlertPublisher -> channel publisher` 구조다.
 - 로그 채널은 `WARN`, `ERROR`를 모두 기록한다.
 - Discord 채널은 `trading.operation.alerts.discord.min-severity` 이상만 전송하고, 기본값은 `ERROR`다.
+- Discord HTTP timeout은 `trading.operation.alerts.discord.connect-timeout` (`TRADING_DISCORD_CONNECT_TIMEOUT`)과 `trading.operation.alerts.discord.request-timeout` (`TRADING_DISCORD_REQUEST_TIMEOUT`)으로 관리한다.
 - dedupe는 `dedupeKey + TTL` 기준으로 동작한다.
 - 알림 전송 실패는 EOD / 주문 / execution guard 본 흐름을 실패시키지 않는다.
 

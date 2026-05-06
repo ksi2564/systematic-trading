@@ -128,6 +128,19 @@ public class ExecutionOrder {
         this.status = ExecutionOrderStatus.CONFIRMATION_REQUIRED;
     }
 
+    public void resolveConfirmationAsAccepted(String brokerOrderId, String message) {
+        requireStatus(ExecutionOrderStatus.CONFIRMATION_REQUIRED);
+        requireBrokerOrderId(brokerOrderId);
+        this.brokerOrderId = brokerOrderId;
+        this.message = message;
+        this.status = ExecutionOrderStatus.ACCEPTED;
+    }
+
+    public void keepConfirmationRequired(String message) {
+        requireStatus(ExecutionOrderStatus.CONFIRMATION_REQUIRED);
+        this.message = message;
+    }
+
     public void cancel(String message) {
         if (isTerminal()) throw new IllegalStateException("터미널 상태는 취소 불가: " + status);
         this.message = message;

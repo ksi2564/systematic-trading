@@ -2,8 +2,10 @@ package my.side.trading.adapter.in.web.execution;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import my.side.trading.adapter.in.web.execution.dto.OrderConfirmationResponse;
 import my.side.trading.adapter.in.scheduler.StrategyEodScheduler;
 import my.side.trading.core.adapter.in.web.common.ApiResponse;
+import my.side.trading.core.application.execution.ExecutionOrderConfirmationService;
 import my.side.trading.core.application.execution.ExecutionJobExecutor;
 import my.side.trading.core.application.orchestration.RebalanceOrchestrator;
 import my.side.trading.core.application.orchestration.RebalanceRunResult;
@@ -23,6 +25,7 @@ import java.time.LocalDateTime;
 public class ExecutionJobController {
 
     private final ExecutionJobExecutor executor;
+    private final ExecutionOrderConfirmationService confirmationService;
     private final RebalanceOrchestrator rebalanceOrchestrator;
     private final StrategyEodScheduler eodScheduler;
 
@@ -30,6 +33,16 @@ public class ExecutionJobController {
     public ApiResponse<ExecutionJob> execute(@PathVariable Long jobId) {
         log.info("수동 작업 실행 요청: jobId={}", jobId);
         return ApiResponse.success(executor.execute(jobId, LocalDateTime.now(), ExecutionTriggerType.MANUAL));
+    }
+
+    @PostMapping("/{jobId}/orders/{orderId}/confirm")
+    public ApiResponse<OrderConfirmationResponse> confirmOrder(
+            @PathVariable Long jobId,
+            @PathVariable Long orderId
+    ) {
+        log.info("주문 확인 요청: jobId={}, orderId={}", jobId, orderId);
+        return ApiResponse.success(OrderConfirmationResponse.from(
+                confirmationService.confirm(jobId, orderId, LocalDateTime.now())));
     }
 
     @PostMapping("/manual-rebalance")

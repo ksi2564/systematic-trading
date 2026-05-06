@@ -5,10 +5,16 @@ import my.side.trading.adapter.out.kis.config.KisProps;
 import my.side.trading.adapter.out.kis.dto.KisOverseasNccsResponse;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
+import reactor.util.retry.Retry;
+
+import java.time.Duration;
 
 @Service
 @RequiredArgsConstructor
 public class KisOverseasNccsService {
+
+    private static final int QUERY_RETRY_COUNT = 2;
+    private static final Duration QUERY_RETRY_BACKOFF = Duration.ofMillis(200);
 
     private final WebClient kisWebClient;
     private final KisAuthService kisAuthService;
@@ -32,6 +38,7 @@ public class KisOverseasNccsService {
                 .header("custtype", "P")
                 .retrieve()
                 .bodyToMono(KisOverseasNccsResponse.class)
+                .retryWhen(Retry.fixedDelay(QUERY_RETRY_COUNT, QUERY_RETRY_BACKOFF))
                 .block(props.requestTimeout());
     }
 }

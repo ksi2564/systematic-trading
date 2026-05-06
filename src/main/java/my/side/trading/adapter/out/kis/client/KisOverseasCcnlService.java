@@ -5,7 +5,9 @@ import my.side.trading.adapter.out.kis.config.KisProps;
 import my.side.trading.adapter.out.kis.dto.KisOverseasCcnlResponse;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
+import reactor.util.retry.Retry;
 
+import java.time.Duration;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 
@@ -14,15 +16,22 @@ import java.time.format.DateTimeFormatter;
 public class KisOverseasCcnlService {
 
     private static final DateTimeFormatter YYYYMMDD = DateTimeFormatter.BASIC_ISO_DATE;
+    private static final int QUERY_RETRY_COUNT = 2;
+    private static final Duration QUERY_RETRY_BACKOFF = Duration.ofMillis(200);
 
     private final WebClient kisWebClient;
     private final KisAuthService kisAuthService;
     private final KisProps props;
 
     public KisOverseasCcnlResponse inquireCcnl(String ovrsExcgCd, String pdno, LocalDate localDate) {
+        return inquireCcnl(ovrsExcgCd, pdno, localDate, null);
+    }
+
+    public KisOverseasCcnlResponse inquireCcnl(String ovrsExcgCd, String pdno, LocalDate localDate, String brokerOrderId) {
         String accessToken = kisAuthService.getAccessToken();
 
         String ymd = localDate.format(YYYYMMDD);
+        String odno = brokerOrderId == null || brokerOrderId.isBlank() ? "" : brokerOrderId;
 
         return kisWebClient.get()
                 .uri(uriBuilder -> uriBuilder
@@ -38,7 +47,7 @@ public class KisOverseasCcnlService {
                         .queryParam("SORT_SQN", "DS")
                         .queryParam("ORD_DT", "")
                         .queryParam("ORD_GNO_BRNO", "")
-                        .queryParam("ODNO", "")
+                        .queryParam("ODNO", odno)
                         .queryParam("CTX_AREA_NK200", "")
                         .queryParam("CTX_AREA_FK200", "")
                         .build())
@@ -47,6 +56,7 @@ public class KisOverseasCcnlService {
                 .header("custtype", "P")
                 .retrieve()
                 .bodyToMono(KisOverseasCcnlResponse.class)
+                .retryWhen(Retry.fixedDelay(QUERY_RETRY_COUNT, QUERY_RETRY_BACKOFF))
                 .block(props.requestTimeout());
     }
 }

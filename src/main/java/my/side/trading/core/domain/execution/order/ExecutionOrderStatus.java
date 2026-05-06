@@ -8,6 +8,7 @@ public enum ExecutionOrderStatus {
     PLANNED,    // 주문 수량이 확정되었으나 아직 전송되지 않은 상태
     REQUESTED,  // 주문이 전송된 상태
     ACCEPTED,   // 주문 요청이 수락된 상태
+    CONFIRMATION_REQUIRED, // 브로커 접수 여부 확인이 필요한 상태
     REJECTED,   // 주문 요청이 거절된 상태
     CANCELED,   // 주문이 취소된 상태
     SKIPPED     // 주문배치가 OFF 상태

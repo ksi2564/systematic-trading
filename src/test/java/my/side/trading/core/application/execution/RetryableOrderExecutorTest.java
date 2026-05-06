@@ -108,6 +108,21 @@ class RetryableOrderExecutorTest {
     }
 
     @Test
+    @DisplayName("주문 확인 필요 결과가 오면 추가 재시도를 중단한다")
+    void 주문_확인_필요_결과가_오면_추가_재시도를_중단한다() {
+        ExecutionOrder order = createOrder("QQQ", ExecutionOrderSide.BUY, 10);
+        broker.setNextResult(BrokerOrderResult.confirmationRequired(null, "timeout"));
+
+        ExecutionResult result = executor.executeWithRetry(order);
+
+        assertThat(result.isFailed()).isTrue();
+        assertThat(result.isBlocked()).isTrue();
+        assertThat(result.blockReason()).isEqualTo(ExecutionBlockReason.ORDER_CONFIRMATION_REQUIRED);
+        assertThat(broker.placedOrders()).hasSize(1);
+    }
+
+
+    @Test
     @DisplayName("버퍼 tick 시퀀스는 시도 횟수에 따라 증가한다")
     void 버퍼_tick_시퀀스는_시도_횟수에_따라_증가한다() {
         assertThat(executor.getRetryTickOffset(1, ExecutionOrderSide.BUY)).isEqualTo(0);
@@ -147,6 +162,7 @@ class RetryableOrderExecutorTest {
     private static class FakeBroker implements OrderBroker {
         private String[] orderIds = { "ORD001" };
         private int callCount = 0;
+        private BrokerOrderResult nextResult;
         private final java.util.List<ExecutionOrder> placedOrders = new java.util.ArrayList<>();
 
         void setNextOrderId(String orderId) {
@@ -157,9 +173,17 @@ class RetryableOrderExecutorTest {
             this.orderIds = orderIds;
         }
 
+        void setNextResult(BrokerOrderResult nextResult) {
+            this.nextResult = nextResult;
+        }
+
         @Override
         public BrokerOrderResult place(ExecutionOrder order) {
             placedOrders.add(order);
+            if (nextResult != null) {
+                callCount++;
+                return nextResult;
+            }
             String orderId = orderIds[Math.min(callCount, orderIds.length - 1)];
             callCount++;
             return BrokerOrderResult.success(orderId, "주문 접수");

@@ -121,6 +121,13 @@ public class ExecutionOrder {
         this.status = ExecutionOrderStatus.REJECTED;
     }
 
+    public void requireConfirmation(String brokerOrderId, String message) {
+        requireStatus(ExecutionOrderStatus.REQUESTED);
+        this.brokerOrderId = (brokerOrderId == null || brokerOrderId.isBlank()) ? null : brokerOrderId;
+        this.message = message;
+        this.status = ExecutionOrderStatus.CONFIRMATION_REQUIRED;
+    }
+
     public void cancel(String message) {
         if (isTerminal()) throw new IllegalStateException("터미널 상태는 취소 불가: " + status);
         this.message = message;
@@ -129,6 +136,7 @@ public class ExecutionOrder {
 
     public boolean isTerminal() {
         return status == ExecutionOrderStatus.ACCEPTED
+                || status == ExecutionOrderStatus.CONFIRMATION_REQUIRED
                 || status == ExecutionOrderStatus.REJECTED
                 || status == ExecutionOrderStatus.CANCELED
                 || status == ExecutionOrderStatus.SKIPPED;

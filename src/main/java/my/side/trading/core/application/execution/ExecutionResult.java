@@ -41,6 +41,10 @@ public record ExecutionResult(
         return new ExecutionResult(ResultType.FAILED, null, 0, BigDecimal.ZERO, symbol, null, null);
     }
 
+    public static ExecutionResult failed(String symbol, String brokerOrderId) {
+        return new ExecutionResult(ResultType.FAILED, brokerOrderId, 0, BigDecimal.ZERO, symbol, null, null);
+    }
+
     public ExecutionResult withBlock(ExecutionBlockReason reason, String detailMessage) {
         return new ExecutionResult(type, brokerOrderId, filledQty, filledAmount, symbol, reason, detailMessage);
     }

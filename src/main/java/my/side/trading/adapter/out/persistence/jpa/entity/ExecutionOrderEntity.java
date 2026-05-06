@@ -41,7 +41,7 @@ public class ExecutionOrderEntity {
     private BigDecimal limitPrice;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "status", length = 16, nullable = false)
+    @Column(name = "status", length = 32, nullable = false)
     private ExecutionOrderStatus status;
 
     @Column(name = "broker_order_id", length = 32)

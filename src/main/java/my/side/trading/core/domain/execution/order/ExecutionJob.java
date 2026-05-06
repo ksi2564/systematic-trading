@@ -75,9 +75,9 @@ public class ExecutionJob {
         this.completedAt = null;
     }
 
-    public void markOrderRequested(Long orderId, String message) {
+    public void markOrderRequested(Long orderId, String message, LocalDateTime requestedMarketAt) {
         requireRunning();
-        findOrderById(orderId).markRequested(message);
+        findOrderById(orderId).markRequested(message, requestedMarketAt);
     }
 
     public void remarkOrderRequested(Long orderId, String message) {
@@ -85,9 +85,9 @@ public class ExecutionJob {
         findOrderById(orderId).remarkRequested(message);
     }
 
-    public void markOrderRequested(String symbol, ExecutionOrderSide side, String message) {
+    public void markOrderRequested(String symbol, ExecutionOrderSide side, String message, LocalDateTime requestedMarketAt) {
         requireRunning();
-        findOrderBySymbolSide(symbol, side).markRequested(message);
+        findOrderBySymbolSide(symbol, side).markRequested(message, requestedMarketAt);
     }
 
     public void acceptOrder(Long orderId, String brokerOrderId, String message, LocalDateTime now) {

@@ -13,6 +13,7 @@ import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -40,7 +41,9 @@ class KisOrderInquiryTest {
     void brokerOrderId가_있으면_주문체결내역_주문번호를_우선_확인한다() {
         ExecutionOrder order = confirmationRequiredOrder("QQQ", ExecutionOrderSide.BUY, 3, "OD123");
         when(ccnlService.inquireCcnl(eq("NASD"), eq("QQQ"), any(LocalDate.class), eq("OD123")))
-                .thenReturn(ccnl(item("OD123", "QQQ", "02", "3")));
+                .thenReturn(ccnl(
+                        item("OD122", "QQQ", "02", "3"),
+                        item("OD123", "QQQ", "02", "3")));
 
         OrderInquiryResult result = inquiry.confirm(order);
 
@@ -60,6 +63,43 @@ class KisOrderInquiryTest {
         assertThat(result.status()).isEqualTo(OrderInquiryResult.Status.FOUND);
         assertThat(result.brokerOrderId()).isEqualTo("OD124");
         verify(ccnlService, never()).inquireCcnl(eq("NASD"), eq("QQQ"), any(LocalDate.class));
+    }
+
+    @Test
+    void 요청시장시각이_있으면_전후_5분_후보만_찾는다() {
+        ExecutionOrder order = confirmationRequiredOrder(
+                "QQQ",
+                ExecutionOrderSide.BUY,
+                3,
+                null,
+                LocalDateTime.of(2025, 12, 21, 23, 45));
+        when(nccsService.inquireNccs("NASD"))
+                .thenReturn(nccs(
+                        nccsItem("OLD", "QQQ", "02", "3", "20251221", "233900"),
+                        nccsItem("OD126", "QQQ", "02", "3", "20251221", "234900")));
+
+        OrderInquiryResult result = inquiry.confirm(order);
+
+        assertThat(result.status()).isEqualTo(OrderInquiryResult.Status.FOUND);
+        assertThat(result.brokerOrderId()).isEqualTo("OD126");
+    }
+
+    @Test
+    void 요청시장시각이_있고_window_밖이면_후보로_보지_않는다() {
+        ExecutionOrder order = confirmationRequiredOrder(
+                "QQQ",
+                ExecutionOrderSide.BUY,
+                3,
+                null,
+                LocalDateTime.of(2025, 12, 21, 23, 45));
+        when(nccsService.inquireNccs("NASD"))
+                .thenReturn(nccs(nccsItem("OD126", "QQQ", "02", "3", "20251221", "235100")));
+        when(ccnlService.inquireCcnl(eq("NASD"), eq("QQQ"), eq(LocalDate.of(2025, 12, 21))))
+                .thenReturn(ccnl());
+
+        OrderInquiryResult result = inquiry.confirm(order);
+
+        assertThat(result.status()).isEqualTo(OrderInquiryResult.Status.NOT_FOUND);
     }
 
     @Test
@@ -93,6 +133,16 @@ class KisOrderInquiryTest {
             long quantity,
             String brokerOrderId
     ) {
+        return confirmationRequiredOrder(symbol, side, quantity, brokerOrderId, null);
+    }
+
+    private ExecutionOrder confirmationRequiredOrder(
+            String symbol,
+            ExecutionOrderSide side,
+            long quantity,
+            String brokerOrderId,
+            LocalDateTime requestedMarketAt
+    ) {
         return ExecutionOrder.rehydrate(
                 1L,
                 symbol,
@@ -102,27 +152,41 @@ class KisOrderInquiryTest {
                 new BigDecimal("100"),
                 ExecutionOrderStatus.CONFIRMATION_REQUIRED,
                 brokerOrderId,
-                "timeout");
+                "timeout",
+                requestedMarketAt);
     }
 
-    private KisOverseasCcnlResponse ccnl(KisOverseasCcnlResponse.Item item) {
-        return new KisOverseasCcnlResponse("0", "OK", "정상", List.of(item));
+    private KisOverseasCcnlResponse ccnl(KisOverseasCcnlResponse.Item... items) {
+        return new KisOverseasCcnlResponse("0", "OK", "정상", List.of(items));
     }
 
     private KisOverseasCcnlResponse.Item item(String orderNo, String symbol, String sideCode, String orderQty) {
         return new KisOverseasCcnlResponse.Item(orderNo, symbol, sideCode, orderQty, "100", "0", orderQty);
     }
 
-    private KisOverseasNccsResponse nccs(KisOverseasNccsResponse.Item item) {
-        return new KisOverseasNccsResponse("0", "OK", "정상", List.of(item));
+    private KisOverseasNccsResponse nccs(KisOverseasNccsResponse.Item... items) {
+        return new KisOverseasNccsResponse("0", "OK", "정상", List.of(items));
     }
 
     private KisOverseasNccsResponse.Item nccsItem(String orderNo, String symbol, String sideCode, String orderQty) {
+        return nccsItem(orderNo, symbol, sideCode, orderQty, null, null);
+    }
+
+    private KisOverseasNccsResponse.Item nccsItem(
+            String orderNo,
+            String symbol,
+            String sideCode,
+            String orderQty,
+            String orderDate,
+            String orderTime
+    ) {
         return new KisOverseasNccsResponse.Item(
+                orderDate,
                 orderNo,
                 symbol,
                 sideCode,
                 sideCode.equals("02") ? "매수" : "매도",
+                orderTime,
                 orderQty,
                 "0",
                 orderQty,

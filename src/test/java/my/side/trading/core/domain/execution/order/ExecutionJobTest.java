@@ -39,17 +39,20 @@ class ExecutionJobTest {
 
         job.start(now);
 
-        job.markOrderRequested(1L, "주문요청");
+        job.markOrderRequested(1L, "주문요청", now);
         job.rejectOrder(1L, null, "fail", now);
 
         assertThat(job.getCompletedAt()).as("아직 모든 주문이 terminal이 아니므로 완료되면 안 됨").isNull();
         assertThat(job.getStatus()).as("모든 주문이 terminal이 아니면 최종 FAILED 확정하지 않음")
                 .isNotEqualTo(ExecutionStatus.FAILED);
+        assertThat(o1.getRequestedMarketAt()).isEqualTo(now);
 
-        job.markOrderRequested(2L, "주문요청");
+        job.markOrderRequested(2L, "주문요청", now);
         job.acceptOrder(2L, "BID-2", "ok", now);
 
         assertThat(job.getStatus()).isEqualTo(ExecutionStatus.FAILED);
         assertThat(job.getCompletedAt()).isEqualTo(now);
+        assertThat(o2.getRequestedMarketAt()).isEqualTo(now);
+        assertThat(o2.changeQty(2).getRequestedMarketAt()).isEqualTo(now);
     }
 }

@@ -97,7 +97,8 @@ public class ExecutionOrderFactory {
                 limitPrice,
                 original.getStatus(),
                 null,
-                null);
+                null,
+                original.getRequestedMarketAt());
     }
 
     private BigDecimal getWeightForSymbol(WeightSet weights, String symbol) {

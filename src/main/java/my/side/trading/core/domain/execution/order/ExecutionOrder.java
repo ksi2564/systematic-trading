@@ -3,6 +3,7 @@ package my.side.trading.core.domain.execution.order;
 import lombok.Getter;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 
 @Getter
 public class ExecutionOrder {
@@ -16,6 +17,7 @@ public class ExecutionOrder {
     private ExecutionOrderStatus status;
     private String brokerOrderId;           // KIS 주문번호(주문번호, 주문시각)
     private String message;                 // 응답 메세지
+    private LocalDateTime requestedMarketAt; // 주문 요청 시장시각
 
     private ExecutionOrder(
             Long id,
@@ -26,7 +28,8 @@ public class ExecutionOrder {
             BigDecimal limitPrice,
             ExecutionOrderStatus status,
             String brokerOrderId,
-            String message
+            String message,
+            LocalDateTime requestedMarketAt
     ) {
         if (quantity <= 0) throw new IllegalArgumentException("주식 수량은 1개 이상이어야 주문 가능");
         if (symbol == null || symbol.isBlank()) throw new IllegalArgumentException("symbol은 필수");
@@ -43,6 +46,7 @@ public class ExecutionOrder {
         this.status = (status == null) ? ExecutionOrderStatus.PLANNED : status;
         this.brokerOrderId = brokerOrderId;
         this.message = message;
+        this.requestedMarketAt = requestedMarketAt;
     }
 
     public static ExecutionOrder create(
@@ -61,6 +65,7 @@ public class ExecutionOrder {
                 limitPrice,
                 ExecutionOrderStatus.PLANNED,
                 null,
+                null,
                 null
         );
     }
@@ -76,6 +81,21 @@ public class ExecutionOrder {
             String brokerOrderId,
             String message
     ) {
+        return rehydrate(id, symbol, side, quantity, refPrice, limitPrice, status, brokerOrderId, message, null);
+    }
+
+    public static ExecutionOrder rehydrate(
+            Long id,
+            String symbol,
+            ExecutionOrderSide side,
+            long quantity,
+            BigDecimal refPrice,
+            BigDecimal limitPrice,
+            ExecutionOrderStatus status,
+            String brokerOrderId,
+            String message,
+            LocalDateTime requestedMarketAt
+    ) {
         return new ExecutionOrder(
                 id,
                 symbol,
@@ -85,13 +105,16 @@ public class ExecutionOrder {
                 limitPrice,
                 status,
                 brokerOrderId,
-                message
+                message,
+                requestedMarketAt
         );
     }
 
-    public void markRequested(String message) {
+    public void markRequested(String message, LocalDateTime requestedMarketAt) {
         requireStatus(ExecutionOrderStatus.PLANNED);
+        if (requestedMarketAt == null) throw new IllegalArgumentException("requestedMarketAt은 필수");
         this.message = message;
+        this.requestedMarketAt = requestedMarketAt;
         this.status = ExecutionOrderStatus.REQUESTED;
     }
 
@@ -156,7 +179,7 @@ public class ExecutionOrder {
     }
 
     public ExecutionOrder changeQty(long newQuantity) {
-        return rehydrate(id, symbol, side, newQuantity, refPrice, limitPrice, status, brokerOrderId, message);
+        return rehydrate(id, symbol, side, newQuantity, refPrice, limitPrice, status, brokerOrderId, message, requestedMarketAt);
     }
 
     private void requireStatus(ExecutionOrderStatus expected) {

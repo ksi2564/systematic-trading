@@ -73,7 +73,13 @@ public class ExecutionJobExecutor {
             result = applySlippageGuard(order, result);
             publishExecutionAlerts(job, order, result);
 
-            if (result.isSuccess() || result.isPartial()) {
+            if (result.isBlocked() && result.blockReason() == ExecutionBlockReason.ORDER_CONFIRMATION_REQUIRED) {
+                job.requireOrderConfirmation(
+                        order.getId(),
+                        result.brokerOrderId(),
+                        orderMessage("Confirmation required", result),
+                        now);
+            } else if (result.isSuccess() || result.isPartial()) {
                 job.acceptOrder(order.getId(), result.brokerOrderId(), orderMessage("Success", result), now);
             } else {
                 job.rejectOrder(order.getId(), result.brokerOrderId(), orderMessage("Failed", result), now);

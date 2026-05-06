@@ -180,6 +180,37 @@ class ExecutionJobExecutorTest {
     }
 
     @Test
+    void 주문_확인_필요가_발생하면_현재_주문을_확인필요로_남기고_나머지는_skip한다() {
+        ExecutionOrder firstOrder = order(1L, "QQQ", ExecutionOrderSide.BUY, 10);
+        ExecutionOrder secondOrder = order(2L, "TQQQ", ExecutionOrderSide.BUY, 10);
+        ExecutionJob job = ExecutionJob.rehydrate(
+                1L,
+                LocalDate.of(2025, 12, 21),
+                LocalDateTime.of(2025, 12, 21, 23, 45),
+                ExecutionStatus.PENDING,
+                List.of(firstOrder, secondOrder),
+                null,
+                null);
+
+        jobRepository.save(job);
+        orderBroker.willReturn(1L, BrokerOrderResult.confirmationRequired(null, "timeout"));
+
+        ExecutionJob executed = executor.execute(1L, LocalDateTime.of(2025, 12, 21, 23, 45), ExecutionTriggerType.AUTOMATED);
+
+        assertThat(executed.getOrders().stream()
+                .filter(o -> o.getId().equals(1L))
+                .findFirst()
+                .orElseThrow()
+                .getStatus()).isEqualTo(ExecutionOrderStatus.CONFIRMATION_REQUIRED);
+        assertThat(executed.getOrders().stream()
+                .filter(o -> o.getId().equals(2L))
+                .findFirst()
+                .orElseThrow()
+                .getStatus()).isEqualTo(ExecutionOrderStatus.SKIPPED);
+        assertThat(executed.getStatus()).isEqualTo(ExecutionStatus.FAILED);
+    }
+
+    @Test
     void 리스크_한도_위반_슬리피지가_나오면_남은_주문을_skip한다() {
         TradingOperationProps strictRiskProps = new TradingOperationProps(
                 OperatingMode.AUTO_LIVE,

@@ -102,6 +102,12 @@ public class ExecutionJob {
         completeIfAllTerminal(now);
     }
 
+    public void requireOrderConfirmation(Long orderId, String brokerOrderId, String message, LocalDateTime now) {
+        requireRunning();
+        findOrderById(orderId).requireConfirmation(brokerOrderId, message);
+        completeIfAllTerminal(now);
+    }
+
     public void cancelOrder(Long orderId, String message, LocalDateTime now) {
         requireRunning();
         findOrderById(orderId).cancel(message);
@@ -121,7 +127,9 @@ public class ExecutionJob {
         boolean allTerminal = orders.stream().allMatch(ExecutionOrder::isTerminal);
         if (!allTerminal) return;
 
-        boolean anyFailed = orders.stream().anyMatch(o -> o.getStatus() == ExecutionOrderStatus.REJECTED);
+        boolean anyFailed = orders.stream().anyMatch(o ->
+                o.getStatus() == ExecutionOrderStatus.REJECTED
+                        || o.getStatus() == ExecutionOrderStatus.CONFIRMATION_REQUIRED);
         this.status = anyFailed ? ExecutionStatus.FAILED : ExecutionStatus.COMPLETED;
         this.completedAt = now;
     }

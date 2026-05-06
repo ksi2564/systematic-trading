@@ -39,7 +39,9 @@ public class OperationsKpiService {
 
         int duplicateSignalJobCount = duplicateSignalJobCount(jobs);
         int unresolvedOrderCount = countOrders(jobs, status ->
-                status == ExecutionOrderStatus.REQUESTED || status == ExecutionOrderStatus.REJECTED);
+                status == ExecutionOrderStatus.REQUESTED
+                        || status == ExecutionOrderStatus.REJECTED
+                        || status == ExecutionOrderStatus.CONFIRMATION_REQUIRED);
         int rejectedOrderCount = countOrders(jobs, status -> status == ExecutionOrderStatus.REJECTED);
         int attemptedOrderCount = countOrders(jobs, status ->
                 status == ExecutionOrderStatus.ACCEPTED

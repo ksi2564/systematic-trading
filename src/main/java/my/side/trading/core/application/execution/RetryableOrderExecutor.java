@@ -78,6 +78,12 @@ public class RetryableOrderExecutor {
             BrokerOrderResult placeResult = orderBroker.place(retryOrder);
             cumulativeExposure = projectedExposure;
 
+            if (placeResult.confirmationRequired()) {
+                log.error("[RETRY] 주문 확인 필요: symbol={}, message={}", symbol, placeResult.message());
+                return ExecutionResult.failed(symbol, placeResult.brokerOrderId())
+                        .withBlock(ExecutionBlockReason.ORDER_CONFIRMATION_REQUIRED, placeResult.message());
+            }
+
             if (!placeResult.success()) {
                 log.warn("[RETRY] 주문 실패: symbol={}, message={}", symbol, placeResult.message());
                 continue;

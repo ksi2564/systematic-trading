@@ -108,6 +108,18 @@ public class ExecutionJob {
         completeIfAllTerminal(now);
     }
 
+    public void resolveOrderConfirmation(Long orderId, String brokerOrderId, String message, LocalDateTime now) {
+        if (now == null) throw new IllegalArgumentException("now는 필수");
+        findOrderById(orderId).resolveConfirmationAsAccepted(brokerOrderId, message);
+        recomputeTerminalStatus(now);
+    }
+
+    public void keepOrderConfirmationRequired(Long orderId, String message, LocalDateTime now) {
+        if (now == null) throw new IllegalArgumentException("now는 필수");
+        findOrderById(orderId).keepConfirmationRequired(message);
+        recomputeTerminalStatus(now);
+    }
+
     public void cancelOrder(Long orderId, String message, LocalDateTime now) {
         requireRunning();
         findOrderById(orderId).cancel(message);
@@ -123,7 +135,10 @@ public class ExecutionJob {
     public void completeIfAllTerminal(LocalDateTime now) {
         if (now == null) throw new IllegalArgumentException("now는 필수");
         if (status != ExecutionStatus.RUNNING) return;
+        recomputeTerminalStatus(now);
+    }
 
+    private void recomputeTerminalStatus(LocalDateTime now) {
         boolean allTerminal = orders.stream().allMatch(ExecutionOrder::isTerminal);
         if (!allTerminal) return;
 

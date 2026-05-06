@@ -198,6 +198,7 @@
 | `POST /api/jobs/manual-rebalance` | 현재 시점 기준 리밸런싱 전체 실행 |
 | `POST /api/jobs/eod-calculation` | EOD 계산 수동 실행 |
 | `POST /api/jobs/{jobId}/execute` | 특정 Job 재실행 |
+| `POST /api/jobs/{jobId}/orders/{orderId}/confirm` | `CONFIRMATION_REQUIRED` 주문의 브로커 접수 여부 수동 확인 |
 | `GET /api/dashboard/summary` | 포트폴리오, 전략 상태, 보조 지표, 최근 Job 요약 조회 |
 | `GET /api/dashboard/history` | Job 이력, 운영 모드 감사 이력, 최근 성과 스냅샷 조회 |
 | `GET /api/dashboard/performance` | 성과 요약, 일별 NAV/DD 시계열, 월별 손익 조회 |
@@ -354,6 +355,47 @@ KIS HTTP timeout은 `kis` 설정에서 관리한다.
 - `brokerOrderId`가 있으면 `inquire-ccnl`에서 해당 주문번호를 확인한다.
 - `brokerOrderId`가 없으면 신규 자동 주문을 멈추고 `inquire-nccs`, `inquire-ccnl`에서 같은 symbol/side와 주문 시각 근처 내역을 확인한다.
 - 주문 접수 여부가 불명확하면 `AUTO_LIVE`를 유지하지 말고 수동 정리 계획을 세운다.
+
+`CONFIRMATION_REQUIRED` 주문은 아래 절차로 확인한다.
+
+1. 먼저 신규 자동 주문을 중지하고, `AUTO_LIVE`를 유지하지 말아야 할 상황인지 확인한다.
+2. 필요하면 `POST /api/operations/mode`로 `MANUAL_LIVE` 또는 `PAPER`로 낮춘 뒤 확인 작업을 진행한다.
+3. 대시보드 또는 Job 이력에서 `jobId`, `orderId`, `symbol`, `side`, `quantity`, `brokerOrderId`를 확인한다.
+4. `POST /api/jobs/{jobId}/orders/{orderId}/confirm`을 호출한다.
+5. 응답을 기준으로 주문 상태와 후속 조치를 기록한다.
+
+호출 조건:
+
+- `X-API-KEY` 인증이 필요하다.
+- 요청 body는 사용하지 않는다.
+- `CONFIRMATION_REQUIRED` 상태 주문에만 사용할 수 있다.
+- 직접 KIS 주문 API를 재호출하거나 동일 주문을 재전송하는 절차가 아니다.
+
+응답 해석:
+
+| `data.inquiryStatus` | 주문 상태 변화 | 운영 조치 |
+| :--- | :--- | :--- |
+| `FOUND` | 해당 주문이 `ACCEPTED`로 해소된다. | `data.brokerOrderId`와 브로커 화면/체결 내역을 대조한 뒤 미정리 주문 여부를 다시 확인한다. |
+| `NOT_FOUND` | `CONFIRMATION_REQUIRED` 상태를 유지한다. | 주문 미접수로 단정하지 말고 브로커 화면, KIS 조회, 계좌 체결 내역을 추가 확인한다. |
+| `INQUIRY_FAILED` | `CONFIRMATION_REQUIRED` 상태를 유지한다. | KIS 조회 장애로 보고 운영 모드를 보수적으로 낮춘 상태에서 재시도 또는 수동 확인한다. |
+
+현재 구현 기준:
+
+- `brokerOrderId`가 있으면 `inquire-ccnl`에서 주문번호 exact match를 우선 확인한다.
+- `brokerOrderId`가 없으면 `inquire-nccs`, `inquire-ccnl`에서 symbol/side/quantity가 같은 후보를 찾는다.
+- 주문 요청 시각 기준 window 매칭과 조회 API pagination(`CTX_AREA_*`) 처리는 아직 별도 v2 작업이다.
+- `NOT_FOUND` 또는 `INQUIRY_FAILED` 결과는 자동 `REJECTED` 처리 사유가 아니다.
+
+호출 예시:
+
+```powershell
+$apiKey='local-dev-key'
+
+curl.exe -s `
+  -X POST `
+  -H "X-API-KEY: $apiKey" `
+  http://127.0.0.1:8080/api/jobs/7/orders/3/confirm
+```
 
 KIS 장애 로그와 알림은 추적 가능한 최소 필드만 남긴다.
 

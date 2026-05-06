@@ -15,6 +15,7 @@ import my.side.trading.core.domain.operation.OperatingModeReader;
 import my.side.trading.core.domain.operation.OpsAlertPublisher;
 import my.side.trading.core.domain.operation.OpsAlertType;
 import my.side.trading.core.infrastructure.config.TradingExecutionProps;
+import my.side.trading.core.infrastructure.config.TradingMarketCalendarProps;
 import my.side.trading.core.infrastructure.config.TradingOperationProps;
 import my.side.trading.testutil.FakeExecutionJobRepository;
 import my.side.trading.testutil.FakeOrderBroker;
@@ -26,9 +27,13 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.argThat;
@@ -47,6 +52,8 @@ class ExecutionJobExecutorTest {
     private ExecutionJobExecutor executor;
     private ExecutionRiskLimitService riskLimitService;
     private OpsAlertPublisher alertPublisher;
+    private TradingMarketCalendarProps marketCalendarProps;
+    private Clock fixedClock;
 
     @BeforeEach
     void setUp() {
@@ -56,6 +63,8 @@ class ExecutionJobExecutorTest {
         canceller = new FakeOrderCanceller();
         orderInquiry = new FakeOrderInquiry();
         alertPublisher = mock(OpsAlertPublisher.class);
+        marketCalendarProps = new TradingMarketCalendarProps("America/New_York", List.of(), List.of(), List.of());
+        fixedClock = Clock.fixed(Instant.parse("2025-12-22T04:45:00Z"), ZoneOffset.UTC);
 
         OperationsKpiService operationsKpiService = mock(OperationsKpiService.class);
         when(operationsKpiService.hasAutoLiveBreach()).thenReturn(false);
@@ -91,7 +100,7 @@ class ExecutionJobExecutorTest {
         riskLimitService = new ExecutionRiskLimitService(operationProps, jobRepository);
 
         FakeRealtimePriceProvider priceProvider = FakeRealtimePriceProvider.withLastPrices(
-                java.util.Map.of("QQQ", new BigDecimal("100.00"), "TQQQ", new BigDecimal("100.00")));
+                Map.of("QQQ", new BigDecimal("100.00"), "TQQQ", new BigDecimal("100.00")));
         ExecutionOrderFactory orderFactory = new ExecutionOrderFactory(
                 priceProvider,
                 new MarketLikePricingPolicy(new BigDecimal("0.01"), 0, 0, 1, 1, new BigDecimal("0.25"), 3, 2000));
@@ -105,7 +114,15 @@ class ExecutionJobExecutorTest {
                 riskLimitService);
         retryableExecutor.setWaitMs(0);
 
-        executor = new ExecutionJobExecutor(jobRepository, retryableExecutor, orderInquiry, guard, riskLimitService, alertPublisher);
+        executor = new ExecutionJobExecutor(
+                jobRepository,
+                retryableExecutor,
+                orderInquiry,
+                guard,
+                riskLimitService,
+                alertPublisher,
+                marketCalendarProps,
+                fixedClock);
     }
 
     @Test
@@ -120,6 +137,8 @@ class ExecutionJobExecutorTest {
 
         assertThat(executed.getOrders().get(0).getBrokerOrderId()).isEqualTo("0123456789");
         assertThat(executed.getOrders().get(0).getStatus()).isEqualTo(ExecutionOrderStatus.ACCEPTED);
+        assertThat(executed.getOrders().get(0).getRequestedMarketAt())
+                .isEqualTo(LocalDateTime.of(2025, 12, 21, 23, 45));
         assertThat(executed.getStatus()).isEqualTo(ExecutionStatus.COMPLETED);
     }
 
@@ -203,6 +222,11 @@ class ExecutionJobExecutorTest {
                 .orElseThrow()
                 .getStatus()).isEqualTo(ExecutionOrderStatus.CONFIRMATION_REQUIRED);
         assertThat(executed.getOrders().stream()
+                .filter(o -> o.getId().equals(1L))
+                .findFirst()
+                .orElseThrow()
+                .getRequestedMarketAt()).isEqualTo(LocalDateTime.of(2025, 12, 21, 23, 45));
+        assertThat(executed.getOrders().stream()
                 .filter(o -> o.getId().equals(2L))
                 .findFirst()
                 .orElseThrow()
@@ -230,12 +254,20 @@ class ExecutionJobExecutorTest {
                 canceller,
                 new ExecutionOrderFactory(
                         FakeRealtimePriceProvider.withLastPrices(
-                                java.util.Map.of("QQQ", new BigDecimal("100.00"), "TQQQ", new BigDecimal("100.00"))),
+                                Map.of("QQQ", new BigDecimal("100.00"), "TQQQ", new BigDecimal("100.00"))),
                         new MarketLikePricingPolicy(new BigDecimal("0.01"), 0, 0, 1, 1, new BigDecimal("0.25"), 3, 2000)),
                 new MarketLikePricingPolicy(new BigDecimal("0.01"), 0, 0, 1, 1, new BigDecimal("0.25"), 3, 2000),
                 riskLimitService);
         retryableExecutor.setWaitMs(0);
-        executor = new ExecutionJobExecutor(jobRepository, retryableExecutor, orderInquiry, guard, riskLimitService, alertPublisher);
+        executor = new ExecutionJobExecutor(
+                jobRepository,
+                retryableExecutor,
+                orderInquiry,
+                guard,
+                riskLimitService,
+                alertPublisher,
+                marketCalendarProps,
+                fixedClock);
 
         ExecutionOrder sellOrder = order(1L, "TQQQ", ExecutionOrderSide.SELL, 5);
         ExecutionOrder buyOrder = order(2L, "QQQ", ExecutionOrderSide.BUY, 10);

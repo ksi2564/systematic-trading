@@ -7,6 +7,7 @@ import my.side.trading.core.domain.execution.order.ExecutionOrderSide;
 import my.side.trading.core.domain.execution.order.ExecutionOrderStatus;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "execution_order")
@@ -50,6 +51,9 @@ public class ExecutionOrderEntity {
     @Column(name = "message", length = 128)
     private String message;
 
+    @Column(name = "requested_market_at")
+    private LocalDateTime requestedMarketAt;
+
     public ExecutionOrder toDomain() {
         return ExecutionOrder.rehydrate(
                 id,
@@ -60,7 +64,8 @@ public class ExecutionOrderEntity {
                 limitPrice,
                 status,
                 brokerOrderId,
-                message
+                message,
+                requestedMarketAt
         );
     }
 
@@ -76,6 +81,7 @@ public class ExecutionOrderEntity {
                 .status(o.getStatus())
                 .brokerOrderId(o.getBrokerOrderId())
                 .message(o.getMessage())
+                .requestedMarketAt(o.getRequestedMarketAt())
                 .build();
     }
 }

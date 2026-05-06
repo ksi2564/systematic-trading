@@ -1,6 +1,5 @@
 package my.side.trading.core.application.execution;
 
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import my.side.trading.core.domain.execution.ExecutionTriggerType;
 import my.side.trading.core.domain.execution.order.ExecutionJob;
@@ -12,16 +11,19 @@ import my.side.trading.core.domain.operation.OpsAlert;
 import my.side.trading.core.domain.operation.OpsAlertPublisher;
 import my.side.trading.core.domain.operation.OpsAlertSeverity;
 import my.side.trading.core.domain.operation.OpsAlertType;
+import my.side.trading.core.infrastructure.config.TradingMarketCalendarProps;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.util.LinkedHashMap;
+import java.time.Clock;
 import java.time.LocalDateTime;
+import java.time.ZonedDateTime;
 import java.util.Comparator;
 import java.util.List;
 
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class ExecutionJobExecutor {
 
     private final ExecutionJobRepository jobRepository;
@@ -30,6 +32,49 @@ public class ExecutionJobExecutor {
     private final ExecutionGuard guard;
     private final ExecutionRiskLimitService riskLimitService;
     private final OpsAlertPublisher opsAlertPublisher;
+    private final TradingMarketCalendarProps marketCalendarProps;
+    private final Clock clock;
+
+    @Autowired
+    public ExecutionJobExecutor(
+            ExecutionJobRepository jobRepository,
+            RetryableOrderExecutor orderExecutor,
+            OrderInquiry orderInquiry,
+            ExecutionGuard guard,
+            ExecutionRiskLimitService riskLimitService,
+            OpsAlertPublisher opsAlertPublisher,
+            TradingMarketCalendarProps marketCalendarProps
+    ) {
+        this(
+                jobRepository,
+                orderExecutor,
+                orderInquiry,
+                guard,
+                riskLimitService,
+                opsAlertPublisher,
+                marketCalendarProps,
+                Clock.systemUTC());
+    }
+
+    ExecutionJobExecutor(
+            ExecutionJobRepository jobRepository,
+            RetryableOrderExecutor orderExecutor,
+            OrderInquiry orderInquiry,
+            ExecutionGuard guard,
+            ExecutionRiskLimitService riskLimitService,
+            OpsAlertPublisher opsAlertPublisher,
+            TradingMarketCalendarProps marketCalendarProps,
+            Clock clock
+    ) {
+        this.jobRepository = jobRepository;
+        this.orderExecutor = orderExecutor;
+        this.orderInquiry = orderInquiry;
+        this.guard = guard;
+        this.riskLimitService = riskLimitService;
+        this.opsAlertPublisher = opsAlertPublisher;
+        this.marketCalendarProps = marketCalendarProps;
+        this.clock = clock;
+    }
 
     public ExecutionJob execute(Long jobId, LocalDateTime now) {
         return execute(jobId, now, ExecutionTriggerType.MANUAL);
@@ -67,7 +112,7 @@ public class ExecutionJobExecutor {
 
     private boolean processOrder(ExecutionJob job, ExecutionOrder order, LocalDateTime now) {
         try {
-            job.markOrderRequested(order.getId(), "Starting execution");
+            job.markOrderRequested(order.getId(), "Starting execution", currentMarketTime());
 
             ExecutionResult result = orderExecutor.executeWithRetry(order);
             result = applySlippageGuard(order, result);
@@ -90,6 +135,12 @@ public class ExecutionJobExecutor {
             job.rejectOrder(order.getId(), null, "Error: " + e.getMessage(), now);
             return false;
         }
+    }
+
+    private LocalDateTime currentMarketTime() {
+        return ZonedDateTime.now(clock)
+                .withZoneSameInstant(marketCalendarProps.marketZone())
+                .toLocalDateTime();
     }
 
     private ExecutionResult applySlippageGuard(ExecutionOrder order, ExecutionResult result) {

@@ -12,7 +12,12 @@ import my.side.trading.core.domain.execution.order.OrderInquiryResult;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.Optional;
 
 @Component
@@ -21,6 +26,9 @@ public class KisOrderInquiry implements OrderInquiry {
 
     // TODO: 추후 order에 exchange를 넣거나 Portfolio/Strategy에서 주입
     private static final String DEFAULT_EXCHANGE = "NASD";
+    private static final Duration REQUEST_TIME_WINDOW = Duration.ofMinutes(5);
+    private static final DateTimeFormatter YYYYMMDD = DateTimeFormatter.BASIC_ISO_DATE;
+    private static final DateTimeFormatter HHMMSS = DateTimeFormatter.ofPattern("HHmmss");
 
     private final KisOverseasNccsService nccsService;
     private final KisOverseasCcnlService ccnlService;
@@ -46,7 +54,7 @@ public class KisOrderInquiry implements OrderInquiry {
         KisOverseasCcnlResponse ccnl = ccnlService.inquireCcnl(
                 DEFAULT_EXCHANGE,
                 order.getSymbol(),
-                LocalDate.now(),
+                inquiryDate(order),
                 brokerOrderId);
         if (isSuccessful(ccnl) && ccnl.output() != null) {
             Optional<KisOverseasCcnlResponse.Item> hit = ccnl.output().stream()
@@ -71,6 +79,7 @@ public class KisOrderInquiry implements OrderInquiry {
                     .filter(i -> symbol.equals(i.pdno()))
                     .filter(i -> sideCode.equals(i.sideCode()))
                     .filter(i -> sameQuantity(order.getQuantity(), i.orderQty()))
+                    .filter(i -> matchesRequestWindow(order, i.orderDate(), i.orderTime()))
                     .findFirst();
 
             if (hit.isPresent()) {
@@ -78,12 +87,13 @@ public class KisOrderInquiry implements OrderInquiry {
             }
         }
 
-        KisOverseasCcnlResponse ccnl = ccnlService.inquireCcnl(DEFAULT_EXCHANGE, symbol, LocalDate.now());
+        KisOverseasCcnlResponse ccnl = ccnlService.inquireCcnl(DEFAULT_EXCHANGE, symbol, inquiryDate(order));
         if (isSuccessful(ccnl) && ccnl.output() != null) {
             Optional<KisOverseasCcnlResponse.Item> hit = ccnl.output().stream()
                     .filter(i -> symbol.equals(i.pdno()))
                     .filter(i -> sideCode.equals(i.sideCode()))
                     .filter(i -> sameQuantity(order.getQuantity(), i.orderQty()))
+                    .filter(i -> matchesRequestWindow(order, i.orderDate(), i.orderTime()))
                     .findFirst();
 
             if (hit.isPresent()) {
@@ -96,6 +106,12 @@ public class KisOrderInquiry implements OrderInquiry {
 
     private String sideCode(ExecutionOrder order) {
         return (order.getSide() == ExecutionOrderSide.BUY) ? "02" : "01";
+    }
+
+    private LocalDate inquiryDate(ExecutionOrder order) {
+        return order.getRequestedMarketAt() == null
+                ? LocalDate.now()
+                : order.getRequestedMarketAt().toLocalDate();
     }
 
     private boolean isSuccessful(KisOverseasNccsResponse response) {
@@ -114,6 +130,31 @@ public class KisOrderInquiry implements OrderInquiry {
             return BigDecimal.valueOf(expected).compareTo(new BigDecimal(actual.trim())) == 0;
         } catch (NumberFormatException e) {
             return false;
+        }
+    }
+
+    private boolean matchesRequestWindow(ExecutionOrder order, String orderDate, String orderTime) {
+        LocalDateTime requestedMarketAt = order.getRequestedMarketAt();
+        if (requestedMarketAt == null) {
+            return true;
+        }
+        Optional<LocalDateTime> brokerRequestedAt = parseBrokerOrderTime(orderDate, orderTime);
+        return brokerRequestedAt
+                .map(value -> !value.isBefore(requestedMarketAt.minus(REQUEST_TIME_WINDOW))
+                        && !value.isAfter(requestedMarketAt.plus(REQUEST_TIME_WINDOW)))
+                .orElse(false);
+    }
+
+    private Optional<LocalDateTime> parseBrokerOrderTime(String orderDate, String orderTime) {
+        if (orderDate == null || orderDate.isBlank() || orderTime == null || orderTime.isBlank()) {
+            return Optional.empty();
+        }
+        try {
+            return Optional.of(LocalDateTime.of(
+                    LocalDate.parse(orderDate.trim(), YYYYMMDD),
+                    LocalTime.parse(orderTime.trim(), HHMMSS)));
+        } catch (DateTimeParseException e) {
+            return Optional.empty();
         }
     }
 }

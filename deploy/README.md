@@ -64,6 +64,8 @@ Flyway 스키마 관리:
 - 신규 빈 DB에는 `src/main/resources/db/migration/V1__baseline_current_schema.sql`부터 순서대로 적용된다.
 - 이후 스키마/데이터 보정은 Hibernate 자동 변경이 아니라 `V2__...sql` 또는 Flyway Java migration 형식의 명시 migration으로 추가한다.
 - 실행/감사/운영 시각 컬럼의 `DATETIME(6)` 값은 UTC instant 의미로 저장한다. 운영 DB URL은 `serverTimezone=UTC`를 사용하고, 애플리케이션의 `hibernate.jdbc.time_zone`도 `UTC`로 유지한다.
+- `V4__normalize_datetime_columns_to_utc`는 실행 Job/Order의 기존 시각만 UTC 의미로 보정한다. 운영 모드 감사, 파라미터, 제어 시각은 이미 UTC instant 의미로 저장된 값으로 보고 재보정하지 않는다.
+- V4 적용 전 실제 `/etc/trading/trading.env`의 `SPRING_DATASOURCE_URL`에 `serverTimezone=UTC`가 있는지 확인한다. `serverTimezone=Asia/Seoul` 같은 기존 값이 남아 있으면 먼저 UTC로 바꾼 뒤 서비스 재시작과 health check를 수행한다.
 
 운영 검증:
 

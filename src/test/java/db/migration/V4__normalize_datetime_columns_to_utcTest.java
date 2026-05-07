@@ -14,7 +14,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class V4__normalize_datetime_columns_to_utcTest {
 
     @Test
-    void 기존_datetime_값을_컬럼_의미에_맞춰_utc로_보정한다() throws Exception {
+    void 실행_datetime_값만_컬럼_의미에_맞춰_utc로_보정한다() throws Exception {
         try (Connection connection = DriverManager.getConnection("jdbc:h2:mem:v4-migration;MODE=MySQL", "sa", "")) {
             createTables(connection);
             insertSampleRows(connection);
@@ -23,12 +23,33 @@ class V4__normalize_datetime_columns_to_utcTest {
 
             assertThat(readDateTime(connection, "execution_job", "execute_after"))
                     .isEqualTo(LocalDateTime.of(2026, 5, 7, 3, 0));
+            assertThat(readDateTime(connection, "execution_job", "started_at"))
+                    .isEqualTo(LocalDateTime.of(2026, 5, 7, 3, 0));
+            assertThat(readDateTime(connection, "execution_job", "completed_at"))
+                    .isEqualTo(LocalDateTime.of(2026, 5, 7, 3, 0));
             assertThat(readDateTime(connection, "execution_order", "requested_market_at"))
                     .isEqualTo(LocalDateTime.of(2026, 5, 7, 13, 45));
+        }
+    }
+
+    @Test
+    void 기존_운영_감사와_제어_datetime은_utc_의미로_보존한다() throws Exception {
+        try (Connection connection = DriverManager.getConnection("jdbc:h2:mem:v4-migration-ops;MODE=MySQL", "sa", "")) {
+            createTables(connection);
+            insertSampleRows(connection);
+
+            new V4__normalize_datetime_columns_to_utc().migrate(context(connection));
+
+            assertThat(readDateTime(connection, "operation_mode_audit", "approved_at"))
+                    .isEqualTo(LocalDateTime.of(2026, 5, 7, 12, 0));
             assertThat(readDateTime(connection, "operation_mode_audit", "created_at"))
-                    .isEqualTo(LocalDateTime.of(2026, 5, 7, 3, 0));
+                    .isEqualTo(LocalDateTime.of(2026, 5, 7, 12, 0));
+            assertThat(readDateTime(connection, "parameter_change_event", "created_at"))
+                    .isEqualTo(LocalDateTime.of(2026, 5, 7, 12, 0));
+            assertThat(readDateTime(connection, "parameter_registry_record", "last_changed_at"))
+                    .isEqualTo(LocalDateTime.of(2026, 5, 7, 12, 0));
             assertThat(readDateTime(connection, "trading_control", "updated_at"))
-                    .isEqualTo(LocalDateTime.of(2026, 5, 7, 3, 0));
+                    .isEqualTo(LocalDateTime.of(2026, 5, 7, 12, 0));
         }
     }
 

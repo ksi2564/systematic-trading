@@ -6,27 +6,39 @@ import my.side.trading.core.domain.execution.order.ExecutionJob;
 import my.side.trading.core.domain.execution.order.ExecutionJobRepository;
 import my.side.trading.core.domain.execution.order.ExecutionOrder;
 import my.side.trading.core.domain.execution.order.ExecutionOrderStatus;
+import my.side.trading.core.domain.time.MarketStatus;
 import my.side.trading.core.domain.strategy.StrategyStateRepository;
+import my.side.trading.core.infrastructure.config.TradingMarketCalendarProps;
 import my.side.trading.core.infrastructure.config.TradingOperationProps;
-import org.springframework.stereotype.Component;
+import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.Clock;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
-@Component
+@Service
 @RequiredArgsConstructor
 public class OperationsKpiService {
+
+    private static final LocalTime SCHEDULED_EOD_TIME = LocalTime.of(16, 15);
+    private static final int PREVIOUS_EOD_LOOKBACK_DAYS = 14;
 
     private final StrategyStateRepository strategyStateRepository;
     private final ExecutionJobRepository executionJobRepository;
     private final MarketCalendarService marketCalendarService;
     private final TradingOperationProps operationProps;
+    private final TradingMarketCalendarProps marketCalendarProps;
+    private final Clock clock;
 
     public OperationsKpiSnapshot snapshot() {
         LocalDate marketDate = marketCalendarService.currentMarketDate();
@@ -34,8 +46,9 @@ public class OperationsKpiService {
         var latestState = strategyStateRepository.findLatestState().orElse(null);
         List<ExecutionJob> jobs = executionJobRepository.findAll();
 
-        boolean latestEodSuccess = !marketStatus.allowsScheduledEod()
-                || (latestState != null && marketDate.equals(latestState.asOfDate()));
+        boolean latestEodSuccess = requiredEodDate(marketDate, marketStatus)
+                .map(requiredDate -> latestState != null && !latestState.asOfDate().isBefore(requiredDate))
+                .orElse(true);
 
         int duplicateSignalJobCount = duplicateSignalJobCount(jobs);
         int unresolvedOrderCount = countOrders(jobs, status ->
@@ -71,6 +84,33 @@ public class OperationsKpiService {
 
     public boolean hasAutoLiveBreach() {
         return snapshot().breached();
+    }
+
+    private Optional<LocalDate> requiredEodDate(LocalDate marketDate, MarketStatus marketStatus) {
+        if (!marketStatus.allowsScheduledEod()) {
+            return Optional.empty();
+        }
+        if (currentMarketDateTime().toLocalTime().isBefore(SCHEDULED_EOD_TIME)) {
+            return previousScheduledEodDate(marketDate);
+        }
+        return Optional.of(marketDate);
+    }
+
+    private Optional<LocalDate> previousScheduledEodDate(LocalDate marketDate) {
+        for (int daysBack = 1; daysBack <= PREVIOUS_EOD_LOOKBACK_DAYS; daysBack++) {
+            LocalDate candidate = marketDate.minusDays(daysBack);
+            MarketStatus status = marketCalendarService.getMarketStatus(candidate);
+            if (status != null && status.allowsScheduledEod()) {
+                return Optional.of(candidate);
+            }
+        }
+        return Optional.empty();
+    }
+
+    private LocalDateTime currentMarketDateTime() {
+        return ZonedDateTime.now(clock)
+                .withZoneSameInstant(marketCalendarProps.marketZone())
+                .toLocalDateTime();
     }
 
     private List<OperationsKpiBreach> detectBreaches(

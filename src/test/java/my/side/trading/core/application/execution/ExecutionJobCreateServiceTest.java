@@ -17,8 +17,8 @@ import my.side.trading.testutil.FakeRealtimePriceProvider;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 
@@ -40,7 +40,7 @@ class ExecutionJobCreateServiceTest {
 
         var jobOpt = service.createJob(
                 LocalDate.of(2025, 12, 21),
-                LocalDateTime.of(2025, 12, 21, 23, 45),
+                Instant.parse("2025-12-21T23:45:00Z"),
                 decision,
                 portfolio);
 
@@ -65,7 +65,7 @@ class ExecutionJobCreateServiceTest {
 
         var jobOpt = service.createJob(
                 LocalDate.of(2025, 12, 21),
-                LocalDateTime.of(2025, 12, 21, 9, 0),
+                Instant.parse("2025-12-21T09:00:00Z"),
                 decision,
                 portfolio);
 
@@ -82,7 +82,7 @@ class ExecutionJobCreateServiceTest {
         RebalanceDecision decision = decision(new BigDecimal("50"));
 
         LocalDate signalDate = LocalDate.of(2025, 12, 21);
-        LocalDateTime executeAfter = LocalDateTime.of(2025, 12, 21, 23, 45);
+        Instant executeAfter = Instant.parse("2025-12-21T23:45:00Z");
 
         var first = service.createJob(signalDate, executeAfter, decision, portfolio);
         assertThat(first).isPresent();
@@ -103,7 +103,7 @@ class ExecutionJobCreateServiceTest {
 
         assertThatThrownBy(() -> service.createJob(
                 LocalDate.of(2025, 12, 21),
-                LocalDateTime.of(2025, 12, 21, 23, 45),
+                Instant.parse("2025-12-21T23:45:00Z"),
                 decision,
                 portfolio))
                 .isInstanceOf(ExecutionRiskLimitExceededException.class)

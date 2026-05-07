@@ -13,7 +13,6 @@ import java.lang.reflect.Method;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.Optional;
 
@@ -78,6 +77,6 @@ class RebalanceExecutionSchedulerTest {
         scheduler.runRebalance();
 
         verify(guard).getExecutionBlockReason(ExecutionTriggerType.AUTOMATED);
-        verify(orchestrator).run(eq(LocalDateTime.of(2026, 4, 2, 13, 45)), eq(ExecutionTriggerType.AUTOMATED));
+        verify(orchestrator).run(eq(Instant.parse("2026-04-02T13:45:00Z")), eq(ExecutionTriggerType.AUTOMATED));
     }
 }

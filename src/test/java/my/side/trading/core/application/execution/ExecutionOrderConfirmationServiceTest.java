@@ -12,8 +12,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -41,7 +41,7 @@ class ExecutionOrderConfirmationServiceTest {
         ExecutionOrderConfirmationResult result = service.confirm(
                 1L,
                 1L,
-                LocalDateTime.of(2026, 5, 6, 12, 0));
+                Instant.parse("2026-05-06T12:00:00Z"));
 
         ExecutionJob saved = jobRepository.findById(1L).orElseThrow();
         ExecutionOrder savedOrder = saved.getOrders().get(0);
@@ -60,7 +60,7 @@ class ExecutionOrderConfirmationServiceTest {
         ExecutionOrderConfirmationResult result = service.confirm(
                 1L,
                 1L,
-                LocalDateTime.of(2026, 5, 6, 12, 0));
+                Instant.parse("2026-05-06T12:00:00Z"));
 
         ExecutionJob saved = jobRepository.findById(1L).orElseThrow();
         ExecutionOrder savedOrder = saved.getOrders().get(0);
@@ -79,7 +79,7 @@ class ExecutionOrderConfirmationServiceTest {
         ExecutionOrderConfirmationResult result = service.confirm(
                 1L,
                 1L,
-                LocalDateTime.of(2026, 5, 6, 12, 0));
+                Instant.parse("2026-05-06T12:00:00Z"));
 
         ExecutionJob saved = jobRepository.findById(1L).orElseThrow();
         assertThat(result.currentStatus()).isEqualTo(ExecutionOrderStatus.CONFIRMATION_REQUIRED);
@@ -95,7 +95,7 @@ class ExecutionOrderConfirmationServiceTest {
         assertThatThrownBy(() -> service.confirm(
                 1L,
                 1L,
-                LocalDateTime.of(2026, 5, 6, 12, 0)))
+                Instant.parse("2026-05-06T12:00:00Z")))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("CONFIRMATION_REQUIRED");
     }
@@ -104,11 +104,11 @@ class ExecutionOrderConfirmationServiceTest {
         return ExecutionJob.rehydrate(
                 1L,
                 LocalDate.of(2026, 5, 5),
-                LocalDateTime.of(2026, 5, 6, 9, 45),
+                Instant.parse("2026-05-06T09:45:00Z"),
                 ExecutionStatus.FAILED,
                 List.of(order),
-                LocalDateTime.of(2026, 5, 6, 9, 45),
-                LocalDateTime.of(2026, 5, 6, 9, 46));
+                Instant.parse("2026-05-06T09:45:00Z"),
+                Instant.parse("2026-05-06T09:46:00Z"));
     }
 
     private ExecutionOrder confirmationRequiredOrder(Long id, String symbol, String brokerOrderId) {

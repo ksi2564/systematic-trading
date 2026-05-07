@@ -15,25 +15,32 @@ import my.side.trading.core.domain.portfolio.PortfolioSnapshot;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.util.List;
 
 @Builder
 public record DashboardHistoryResponse(
         int limit,
+        DisplayTimeZones displayTimeZones,
         List<JobHistoryItem> jobs,
         List<OperatingModeAuditItem> operatingModeAudits,
         List<PerformanceSnapshotItem> performanceSnapshots,
         List<PerformanceAnalyticsSnapshotItem> performanceAnalyticsSnapshots
 ) {
     @Builder
+    public record DisplayTimeZones(
+            String operator,
+            String market
+    ) {
+    }
+
+    @Builder
     public record JobHistoryItem(
             Long id,
             LocalDate signalDate,
-            LocalDateTime executeAfter,
+            Instant executeAfter,
             ExecutionStatus status,
-            LocalDateTime startedAt,
-            LocalDateTime completedAt,
+            Instant startedAt,
+            Instant completedAt,
             int orderCount,
             int acceptedOrderCount,
             int rejectedOrderCount,

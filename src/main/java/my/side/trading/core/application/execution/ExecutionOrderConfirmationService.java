@@ -9,7 +9,7 @@ import my.side.trading.core.domain.execution.order.OrderInquiry;
 import my.side.trading.core.domain.execution.order.OrderInquiryResult;
 import org.springframework.stereotype.Service;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.NoSuchElementException;
 
 @Service
@@ -21,7 +21,7 @@ public class ExecutionOrderConfirmationService {
     private final ExecutionJobRepository jobRepository;
     private final OrderInquiry orderInquiry;
 
-    public ExecutionOrderConfirmationResult confirm(Long jobId, Long orderId, LocalDateTime now) {
+    public ExecutionOrderConfirmationResult confirm(Long jobId, Long orderId, Instant now) {
         if (now == null) throw new IllegalArgumentException("now는 필수");
 
         ExecutionJob job = jobRepository.findById(jobId)

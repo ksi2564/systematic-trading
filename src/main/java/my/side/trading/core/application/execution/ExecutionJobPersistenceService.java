@@ -6,7 +6,7 @@ import my.side.trading.core.domain.execution.order.ExecutionJobRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 /**
  * ExecutionJob 영속성 전담 서비스
@@ -23,7 +23,7 @@ public class ExecutionJobPersistenceService {
      * Job을 조회하고 시작 상태로 전환 후 저장
      */
     @Transactional
-    public ExecutionJob startJob(Long jobId, LocalDateTime now) {
+    public ExecutionJob startJob(Long jobId, Instant now) {
         ExecutionJob job = jobRepository.findById(jobId)
                 .orElseThrow(() -> new IllegalArgumentException("Job not found: " + jobId));
         job.start(now);

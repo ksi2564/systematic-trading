@@ -121,6 +121,13 @@
 - 한국시간으로 보면 자동 리밸런싱은 `22:45` 또는 `23:45`, EOD 계산은 다음 날 `05:15` 또는 `06:15`, 성과 분석 집계는 다음 날 `05:30` 또는 `06:30`에 실행된다.
 - 썸머타임/윈터타임 전환은 스케줄러가 `America/New_York` 시간대를 기준으로 자동 반영한다.
 
+시간 저장 및 API 표시 기준:
+
+- 실행 Job/Order의 시각 필드는 애플리케이션 내부에서 `Instant`로 다룬다.
+- MySQL `DATETIME(6)` 컬럼에는 UTC instant 의미의 값을 저장하며, Hibernate JDBC time zone은 `UTC`로 고정한다.
+- `GET /api/dashboard/history`의 Job 시각 필드는 ISO-8601 UTC 값으로 내려간다. 화면은 응답의 `displayTimeZones.operator`, `displayTimeZones.market` 메타데이터를 기준으로 `Asia/Seoul` 또는 `America/New_York` 표시 시각으로 변환한다.
+- KIS 주문 확인용 broker 주문일자/시각은 미국 시장 로컬시각으로 해석한 뒤 UTC instant로 변환해 주문 요청 시각과 비교한다.
+
 ## 5. 미국장 캘린더 운영 정책
 
 시장 상태는 `정규장`, `휴장`, `조기폐장`, `데이터 미확정` 네 가지로 분류한다.

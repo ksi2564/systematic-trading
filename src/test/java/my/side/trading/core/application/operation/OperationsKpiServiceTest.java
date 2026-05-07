@@ -19,7 +19,6 @@ import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
 
@@ -168,7 +167,7 @@ class OperationsKpiServiceTest {
         return ExecutionJob.rehydrate(
                 id,
                 signalDate,
-                LocalDateTime.of(signalDate, java.time.LocalTime.of(23, 45)),
+                Instant.parse(signalDate + "T23:45:00Z"),
                 status,
                 List.of(order),
                 null,

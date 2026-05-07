@@ -10,10 +10,12 @@ import my.side.trading.core.domain.execution.order.ExecutionOrder;
 import my.side.trading.core.domain.execution.order.ExecutionOrderSide;
 import my.side.trading.core.domain.execution.order.OrderInquiry;
 import my.side.trading.core.domain.execution.order.OrderInquiryResult;
+import my.side.trading.core.infrastructure.config.TradingMarketCalendarProps;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
 import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -34,6 +36,7 @@ public class KisOrderInquiry implements OrderInquiry {
     private final KisOverseasNccsService nccsService;
     private final KisOverseasCcnlService ccnlService;
     private final MarketCalendarService marketCalendarService;
+    private final TradingMarketCalendarProps marketCalendarProps;
 
     @Override
     public OrderInquiryResult confirm(ExecutionOrder order) {
@@ -113,7 +116,7 @@ public class KisOrderInquiry implements OrderInquiry {
     private LocalDate inquiryDate(ExecutionOrder order) {
         return order.getRequestedMarketAt() == null
                 ? marketCalendarService.currentMarketDate()
-                : order.getRequestedMarketAt().toLocalDate();
+                : order.getRequestedMarketAt().atZone(marketCalendarProps.marketZone()).toLocalDate();
     }
 
     private boolean isSuccessful(KisOverseasNccsResponse response) {
@@ -136,25 +139,28 @@ public class KisOrderInquiry implements OrderInquiry {
     }
 
     private boolean matchesRequestWindow(ExecutionOrder order, String orderDate, String orderTime) {
-        LocalDateTime requestedMarketAt = order.getRequestedMarketAt();
+        Instant requestedMarketAt = order.getRequestedMarketAt();
         if (requestedMarketAt == null) {
             return true;
         }
-        Optional<LocalDateTime> brokerRequestedAt = parseBrokerOrderTime(orderDate, orderTime);
+        Optional<Instant> brokerRequestedAt = parseBrokerOrderTime(orderDate, orderTime);
         return brokerRequestedAt
                 .map(value -> !value.isBefore(requestedMarketAt.minus(REQUEST_TIME_WINDOW))
                         && !value.isAfter(requestedMarketAt.plus(REQUEST_TIME_WINDOW)))
                 .orElse(false);
     }
 
-    private Optional<LocalDateTime> parseBrokerOrderTime(String orderDate, String orderTime) {
+    private Optional<Instant> parseBrokerOrderTime(String orderDate, String orderTime) {
         if (orderDate == null || orderDate.isBlank() || orderTime == null || orderTime.isBlank()) {
             return Optional.empty();
         }
         try {
-            return Optional.of(LocalDateTime.of(
+            LocalDateTime brokerMarketTime = LocalDateTime.of(
                     LocalDate.parse(orderDate.trim(), YYYYMMDD),
-                    LocalTime.parse(orderTime.trim(), HHMMSS)));
+                    LocalTime.parse(orderTime.trim(), HHMMSS));
+            return Optional.of(brokerMarketTime
+                    .atZone(marketCalendarProps.marketZone())
+                    .toInstant());
         } catch (DateTimeParseException e) {
             return Optional.empty();
         }

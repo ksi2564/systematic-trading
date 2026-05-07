@@ -6,8 +6,8 @@ import my.side.trading.core.domain.execution.order.ExecutionJob;
 import my.side.trading.core.domain.execution.order.ExecutionOrder;
 import my.side.trading.core.domain.execution.order.ExecutionStatus;
 
+import java.time.Instant;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.util.List;
 
 @Entity
@@ -28,17 +28,17 @@ public class ExecutionJobEntity {
 
     // 집행 가능 시각 (다음 거래일 장 시작 후 15분 뒤)
     @Column(name = "execute_after", nullable = false)
-    private LocalDateTime executeAfter;
+    private Instant executeAfter;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "status", length = 16, nullable = false)
     private ExecutionStatus status;
 
     @Column(name = "started_at")
-    private LocalDateTime startedAt;
+    private Instant startedAt;
 
     @Column(name = "completed_at")
-    private LocalDateTime completedAt;
+    private Instant completedAt;
 
     public ExecutionJob toDomain(List<ExecutionOrder> orders) {
         return ExecutionJob.rehydrate(

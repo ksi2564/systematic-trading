@@ -15,7 +15,6 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import java.time.Clock;
 import java.time.Instant;
-import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 
 import static org.mockito.ArgumentMatchers.any;
@@ -51,7 +50,7 @@ class ExecutionJobControllerTest {
 
     @Test
     void 확인필요_주문_확인_응답을_반환한다() throws Exception {
-        when(confirmationService.confirm(eq(7L), eq(3L), any(LocalDateTime.class)))
+        when(confirmationService.confirm(eq(7L), eq(3L), any(Instant.class)))
                 .thenReturn(new ExecutionOrderConfirmationResult(
                         7L,
                         3L,
@@ -70,6 +69,6 @@ class ExecutionJobControllerTest {
                 .andExpect(jsonPath("$.data.brokerOrderId").value("OD123"))
                 .andExpect(jsonPath("$.data.inquiryStatus").value("FOUND"));
 
-        verify(confirmationService).confirm(eq(7L), eq(3L), eq(LocalDateTime.of(2026, 5, 7, 12, 34, 56)));
+        verify(confirmationService).confirm(eq(7L), eq(3L), eq(Instant.parse("2026-05-07T12:34:56Z")));
     }
 }

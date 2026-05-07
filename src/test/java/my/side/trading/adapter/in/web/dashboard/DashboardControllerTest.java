@@ -30,12 +30,12 @@ import my.side.trading.core.domain.portfolio.PortfolioSnapshot;
 import my.side.trading.core.domain.portfolio.PortfolioSnapshotRepository;
 import my.side.trading.core.domain.strategy.StrategyStateRepository;
 import my.side.trading.core.domain.time.MarketStatus;
+import my.side.trading.core.infrastructure.config.TradingMarketCalendarProps;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -98,7 +98,8 @@ class DashboardControllerTest {
                 analyticsService,
                 currentFxRateProvider,
                 portfolioSnapshotRepository,
-                operatingModeService);
+                operatingModeService,
+                marketCalendarProps());
 
         DashboardResponse response = controller.getSummary().data();
 
@@ -129,8 +130,8 @@ class DashboardControllerTest {
         OperatingModeService operatingModeService = mock(OperatingModeService.class);
 
         when(jobRepository.findAll()).thenReturn(List.of(
-                sampleJob(1L, LocalDate.of(2026, 4, 2), LocalDateTime.of(2026, 4, 2, 23, 40)),
-                sampleJob(2L, LocalDate.of(2026, 4, 3), LocalDateTime.of(2026, 4, 3, 23, 45))
+                sampleJob(1L, LocalDate.of(2026, 4, 2), Instant.parse("2026-04-02T23:40:00Z")),
+                sampleJob(2L, LocalDate.of(2026, 4, 3), Instant.parse("2026-04-03T23:45:00Z"))
         ));
         when(operatingModeService.recentHistory(2)).thenReturn(List.of(
                 auditEvent(2L, Instant.parse("2026-04-03T01:00:00Z")),
@@ -155,11 +156,15 @@ class DashboardControllerTest {
                 analyticsService,
                 currentFxRateProvider,
                 portfolioSnapshotRepository,
-                operatingModeService);
+                operatingModeService,
+                marketCalendarProps());
 
         DashboardHistoryResponse response = controller.getHistory(2).data();
 
         assertThat(response.jobs()).hasSize(2);
+        assertThat(response.displayTimeZones().operator()).isEqualTo("Asia/Seoul");
+        assertThat(response.displayTimeZones().market()).isEqualTo("America/New_York");
+        assertThat(response.jobs().getFirst().executeAfter()).isEqualTo(Instant.parse("2026-04-03T23:45:00Z"));
         assertThat(response.performanceSnapshots().getFirst().asOfDate()).isEqualTo(LocalDate.of(2026, 4, 3));
         assertThat(response.performanceAnalyticsSnapshots()).hasSize(2);
         assertThat(response.performanceAnalyticsSnapshots().getFirst().actualDataReady()).isTrue();
@@ -220,7 +225,8 @@ class DashboardControllerTest {
                 analyticsService,
                 currentFxRateProvider,
                 portfolioSnapshotRepository,
-                operatingModeService);
+                operatingModeService,
+                marketCalendarProps());
 
         DashboardPerformanceResponse response = controller.getPerformance(30).data();
 
@@ -338,10 +344,10 @@ class DashboardControllerTest {
     }
 
     private ExecutionJob sampleJob() {
-        return sampleJob(1L, LocalDate.of(2026, 4, 3), LocalDateTime.of(2026, 4, 3, 23, 45));
+        return sampleJob(1L, LocalDate.of(2026, 4, 3), Instant.parse("2026-04-03T23:45:00Z"));
     }
 
-    private ExecutionJob sampleJob(Long id, LocalDate signalDate, LocalDateTime executeAfter) {
+    private ExecutionJob sampleJob(Long id, LocalDate signalDate, Instant executeAfter) {
         return ExecutionJob.rehydrate(
                 id,
                 signalDate,
@@ -357,7 +363,11 @@ class DashboardControllerTest {
                         ExecutionOrderStatus.ACCEPTED,
                         "ORD-001",
                         "accepted")),
-                executeAfter.plusMinutes(1),
-                executeAfter.plusMinutes(3));
+                executeAfter.plusSeconds(60),
+                executeAfter.plusSeconds(180));
+    }
+
+    private TradingMarketCalendarProps marketCalendarProps() {
+        return new TradingMarketCalendarProps("America/New_York", List.of(), List.of(), List.of());
     }
 }

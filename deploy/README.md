@@ -62,7 +62,8 @@ Flyway 스키마 관리:
 - 첫 배포가 성공해 `flyway_schema_history`가 생성된 뒤에는 `SPRING_FLYWAY_BASELINE_ON_MIGRATE=false`로 되돌리고 `trading.service`를 재시작한다.
 - 전환 후 `flyway_schema_history`에 `version=1`, `description=current_schema_before_flyway`, `success=1` baseline row가 남아 있고 `/actuator/health`가 `UP`인지 확인한다.
 - 신규 빈 DB에는 `src/main/resources/db/migration/V1__baseline_current_schema.sql`부터 순서대로 적용된다.
-- 이후 스키마 변경은 Hibernate 자동 변경이 아니라 `V2__...sql` 형식의 명시 migration으로 추가한다.
+- 이후 스키마/데이터 보정은 Hibernate 자동 변경이 아니라 `V2__...sql` 또는 Flyway Java migration 형식의 명시 migration으로 추가한다.
+- 실행/감사/운영 시각 컬럼의 `DATETIME(6)` 값은 UTC instant 의미로 저장한다. 운영 DB URL은 `serverTimezone=UTC`를 사용하고, 애플리케이션의 `hibernate.jdbc.time_zone`도 `UTC`로 유지한다.
 
 운영 검증:
 

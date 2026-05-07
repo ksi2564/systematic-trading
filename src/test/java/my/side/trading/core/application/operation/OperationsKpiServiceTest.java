@@ -16,8 +16,11 @@ import my.side.trading.testutil.FakeStrategyStateRepository;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -37,16 +40,11 @@ class OperationsKpiServiceTest {
         when(marketCalendarService.currentMarketDate()).thenReturn(marketDate);
         when(marketCalendarService.getMarketStatus(marketDate)).thenReturn(my.side.trading.core.domain.time.MarketStatus.REGULAR);
 
-        OperationsKpiService service = new OperationsKpiService(
+        OperationsKpiService service = service(
                 stateRepository,
                 jobRepository,
                 marketCalendarService,
-                new TradingOperationProps(
-                        my.side.trading.core.domain.operation.OperatingMode.AUTO_LIVE,
-                        new TradingOperationProps.AutoLiveGateProps(5, true, true, true),
-                        new TradingOperationProps.KpiProps(true, 0, 0, new BigDecimal("5.0")),
-                        new TradingOperationProps.RiskLimitProps(BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO),
-                        new TradingOperationProps.AlertsProps(false, 30, null)));
+                Clock.fixed(Instant.parse("2026-04-02T21:00:00Z"), ZoneOffset.UTC));
 
         OperationsKpiSnapshot snapshot = service.snapshot();
 
@@ -63,6 +61,51 @@ class OperationsKpiServiceTest {
     }
 
     @Test
+    void 정규장_EOD_이전에는_전일_EOD가_있으면_최신_EOD_성공으로_판단한다() {
+        LocalDate marketDate = LocalDate.of(2026, 5, 6);
+        LocalDate previousEodDate = LocalDate.of(2026, 5, 5);
+        FakeStrategyStateRepository stateRepository = new FakeStrategyStateRepository(state(previousEodDate));
+        FakeExecutionJobRepository jobRepository = new FakeExecutionJobRepository();
+        MarketCalendarService marketCalendarService = mock(MarketCalendarService.class);
+        when(marketCalendarService.currentMarketDate()).thenReturn(marketDate);
+        when(marketCalendarService.getMarketStatus(marketDate)).thenReturn(my.side.trading.core.domain.time.MarketStatus.REGULAR);
+        when(marketCalendarService.getMarketStatus(previousEodDate)).thenReturn(my.side.trading.core.domain.time.MarketStatus.REGULAR);
+
+        OperationsKpiService service = service(
+                stateRepository,
+                jobRepository,
+                marketCalendarService,
+                Clock.fixed(Instant.parse("2026-05-06T13:45:00Z"), ZoneOffset.UTC));
+
+        OperationsKpiSnapshot snapshot = service.snapshot();
+
+        assertThat(snapshot.latestEodSuccess()).isTrue();
+        assertThat(snapshot.breached()).isFalse();
+    }
+
+    @Test
+    void 정규장_EOD_이후에는_당일_EOD가_없으면_kpi_breach로_판단한다() {
+        LocalDate marketDate = LocalDate.of(2026, 5, 6);
+        FakeStrategyStateRepository stateRepository = new FakeStrategyStateRepository(state(LocalDate.of(2026, 5, 5)));
+        FakeExecutionJobRepository jobRepository = new FakeExecutionJobRepository();
+        MarketCalendarService marketCalendarService = mock(MarketCalendarService.class);
+        when(marketCalendarService.currentMarketDate()).thenReturn(marketDate);
+        when(marketCalendarService.getMarketStatus(marketDate)).thenReturn(my.side.trading.core.domain.time.MarketStatus.REGULAR);
+
+        OperationsKpiService service = service(
+                stateRepository,
+                jobRepository,
+                marketCalendarService,
+                Clock.fixed(Instant.parse("2026-05-06T20:30:00Z"), ZoneOffset.UTC));
+
+        OperationsKpiSnapshot snapshot = service.snapshot();
+
+        assertThat(snapshot.latestEodSuccess()).isFalse();
+        assertThat(snapshot.breached()).isTrue();
+        assertThat(snapshot.breaches()).containsExactly(OperationsKpiBreach.LATEST_EOD_MISSING);
+    }
+
+    @Test
     void 휴장일에는_최신_EOD가_없어도_EOD_breach로_보지_않는다() {
         LocalDate marketDate = LocalDate.of(2026, 7, 4);
         FakeStrategyStateRepository stateRepository = new FakeStrategyStateRepository(state(LocalDate.of(2026, 7, 3)));
@@ -71,7 +114,25 @@ class OperationsKpiServiceTest {
         when(marketCalendarService.currentMarketDate()).thenReturn(marketDate);
         when(marketCalendarService.getMarketStatus(marketDate)).thenReturn(my.side.trading.core.domain.time.MarketStatus.HOLIDAY);
 
-        OperationsKpiService service = new OperationsKpiService(
+        OperationsKpiService service = service(
+                stateRepository,
+                jobRepository,
+                marketCalendarService,
+                Clock.fixed(Instant.parse("2026-07-04T14:00:00Z"), ZoneOffset.UTC));
+
+        OperationsKpiSnapshot snapshot = service.snapshot();
+
+        assertThat(snapshot.latestEodSuccess()).isTrue();
+        assertThat(snapshot.breached()).isFalse();
+    }
+
+    private OperationsKpiService service(
+            FakeStrategyStateRepository stateRepository,
+            FakeExecutionJobRepository jobRepository,
+            MarketCalendarService marketCalendarService,
+            Clock clock
+    ) {
+        return new OperationsKpiService(
                 stateRepository,
                 jobRepository,
                 marketCalendarService,
@@ -80,12 +141,13 @@ class OperationsKpiServiceTest {
                         new TradingOperationProps.AutoLiveGateProps(5, true, true, true),
                         new TradingOperationProps.KpiProps(true, 0, 0, new BigDecimal("5.0")),
                         new TradingOperationProps.RiskLimitProps(BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO),
-                        new TradingOperationProps.AlertsProps(false, 30, null)));
-
-        OperationsKpiSnapshot snapshot = service.snapshot();
-
-        assertThat(snapshot.latestEodSuccess()).isTrue();
-        assertThat(snapshot.breached()).isFalse();
+                        new TradingOperationProps.AlertsProps(false, 30, null)),
+                new my.side.trading.core.infrastructure.config.TradingMarketCalendarProps(
+                        "America/New_York",
+                        List.of(),
+                        List.of(),
+                        List.of()),
+                clock);
     }
 
     private StrategyState state(LocalDate asOfDate) {

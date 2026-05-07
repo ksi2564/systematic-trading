@@ -12,22 +12,17 @@ import java.time.ZoneOffset;
 
 public class V4__normalize_datetime_columns_to_utc extends BaseJavaMigration {
 
-    private static final ZoneId SERVER_ZONE = ZoneId.of("Asia/Seoul");
+    private static final ZoneId OPERATOR_ZONE = ZoneId.of("Asia/Seoul");
     private static final ZoneId MARKET_ZONE = ZoneId.of("America/New_York");
 
     @Override
     public void migrate(Context context) throws Exception {
         Connection connection = context.getConnection();
 
-        normalizeColumn(connection, "execution_job", "id", "execute_after", SERVER_ZONE);
-        normalizeColumn(connection, "execution_job", "id", "started_at", SERVER_ZONE);
-        normalizeColumn(connection, "execution_job", "id", "completed_at", SERVER_ZONE);
+        normalizeColumn(connection, "execution_job", "id", "execute_after", OPERATOR_ZONE);
+        normalizeColumn(connection, "execution_job", "id", "started_at", OPERATOR_ZONE);
+        normalizeColumn(connection, "execution_job", "id", "completed_at", OPERATOR_ZONE);
         normalizeColumn(connection, "execution_order", "id", "requested_market_at", MARKET_ZONE);
-        normalizeColumn(connection, "operation_mode_audit", "id", "approved_at", SERVER_ZONE);
-        normalizeColumn(connection, "operation_mode_audit", "id", "created_at", SERVER_ZONE);
-        normalizeColumn(connection, "parameter_change_event", "id", "created_at", SERVER_ZONE);
-        normalizeColumn(connection, "parameter_registry_record", "registry_key", "last_changed_at", SERVER_ZONE);
-        normalizeColumn(connection, "trading_control", "control_key", "updated_at", SERVER_ZONE);
     }
 
     private void normalizeColumn(

@@ -7,7 +7,7 @@ import my.side.trading.core.domain.execution.order.ExecutionOrderSide;
 import my.side.trading.core.domain.execution.order.ExecutionOrderStatus;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 @Entity
 @Table(name = "execution_order")
@@ -52,7 +52,7 @@ public class ExecutionOrderEntity {
     private String message;
 
     @Column(name = "requested_market_at")
-    private LocalDateTime requestedMarketAt;
+    private Instant requestedMarketAt;
 
     public ExecutionOrder toDomain() {
         return ExecutionOrder.rehydrate(

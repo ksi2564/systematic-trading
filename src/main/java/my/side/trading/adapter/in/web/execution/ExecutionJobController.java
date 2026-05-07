@@ -17,7 +17,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.Clock;
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 @Slf4j
 @RestController
@@ -60,7 +60,7 @@ public class ExecutionJobController {
         return ApiResponse.success(null);
     }
 
-    private LocalDateTime now() {
-        return LocalDateTime.now(clock);
+    private Instant now() {
+        return clock.instant();
     }
 }

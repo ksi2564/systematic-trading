@@ -11,12 +11,10 @@ import my.side.trading.core.domain.operation.OpsAlert;
 import my.side.trading.core.domain.operation.OpsAlertPublisher;
 import my.side.trading.core.domain.operation.OpsAlertSeverity;
 import my.side.trading.core.domain.operation.OpsAlertType;
-import my.side.trading.core.infrastructure.config.TradingMarketCalendarProps;
 import org.springframework.stereotype.Service;
 
 import java.time.Clock;
-import java.time.LocalDateTime;
-import java.time.ZonedDateTime;
+import java.time.Instant;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -31,7 +29,6 @@ public class ExecutionJobExecutor {
     private final ExecutionGuard guard;
     private final ExecutionRiskLimitService riskLimitService;
     private final OpsAlertPublisher opsAlertPublisher;
-    private final TradingMarketCalendarProps marketCalendarProps;
     private final Clock clock;
 
     public ExecutionJobExecutor(
@@ -41,7 +38,6 @@ public class ExecutionJobExecutor {
             ExecutionGuard guard,
             ExecutionRiskLimitService riskLimitService,
             OpsAlertPublisher opsAlertPublisher,
-            TradingMarketCalendarProps marketCalendarProps,
             Clock clock
     ) {
         this.jobRepository = jobRepository;
@@ -50,15 +46,14 @@ public class ExecutionJobExecutor {
         this.guard = guard;
         this.riskLimitService = riskLimitService;
         this.opsAlertPublisher = opsAlertPublisher;
-        this.marketCalendarProps = marketCalendarProps;
         this.clock = clock;
     }
 
-    public ExecutionJob execute(Long jobId, LocalDateTime now) {
+    public ExecutionJob execute(Long jobId, Instant now) {
         return execute(jobId, now, ExecutionTriggerType.MANUAL);
     }
 
-    public ExecutionJob execute(Long jobId, LocalDateTime now, ExecutionTriggerType triggerType) {
+    public ExecutionJob execute(Long jobId, Instant now, ExecutionTriggerType triggerType) {
         guard.requireExecutionAllowed(triggerType);
 
         ExecutionJob job = jobRepository.findById(jobId)
@@ -88,9 +83,9 @@ public class ExecutionJobExecutor {
         }
     }
 
-    private boolean processOrder(ExecutionJob job, ExecutionOrder order, LocalDateTime now) {
+    private boolean processOrder(ExecutionJob job, ExecutionOrder order, Instant now) {
         try {
-            job.markOrderRequested(order.getId(), "Starting execution", currentMarketTime());
+            job.markOrderRequested(order.getId(), "Starting execution", clock.instant());
 
             ExecutionResult result = orderExecutor.executeWithRetry(order);
             result = applySlippageGuard(order, result);
@@ -113,12 +108,6 @@ public class ExecutionJobExecutor {
             job.rejectOrder(order.getId(), null, "Error: " + e.getMessage(), now);
             return false;
         }
-    }
-
-    private LocalDateTime currentMarketTime() {
-        return ZonedDateTime.now(clock)
-                .withZoneSameInstant(marketCalendarProps.marketZone())
-                .toLocalDateTime();
     }
 
     private ExecutionResult applySlippageGuard(ExecutionOrder order, ExecutionResult result) {
@@ -167,7 +156,7 @@ public class ExecutionJobExecutor {
         }
     }
 
-    private void skipRemainingOrders(ExecutionJob job, Long processedOrderId, LocalDateTime now, String message) {
+    private void skipRemainingOrders(ExecutionJob job, Long processedOrderId, Instant now, String message) {
         job.getOrders().stream()
                 .filter(order -> !order.isTerminal())
                 .filter(order -> !order.getId().equals(processedOrderId))

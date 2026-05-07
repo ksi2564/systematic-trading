@@ -4,7 +4,7 @@ import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -13,7 +13,7 @@ class ExecutionJobTest {
 
     @Test
     void 모든_주문이_종료되면_완료되고_거절이_있으면_실패로_표시한다() {
-        LocalDateTime now = LocalDateTime.of(2025, 12, 21, 23, 45);
+        Instant now = Instant.parse("2025-12-21T23:45:00Z");
 
         ExecutionOrder o1 = ExecutionOrder.rehydrate(
                 1L, "QQQ", ExecutionOrderSide.BUY, 1,

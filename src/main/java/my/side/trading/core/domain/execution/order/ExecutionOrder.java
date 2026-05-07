@@ -3,7 +3,7 @@ package my.side.trading.core.domain.execution.order;
 import lombok.Getter;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 @Getter
 public class ExecutionOrder {
@@ -17,7 +17,7 @@ public class ExecutionOrder {
     private ExecutionOrderStatus status;
     private String brokerOrderId;           // KIS 주문번호(주문번호, 주문시각)
     private String message;                 // 응답 메세지
-    private LocalDateTime requestedMarketAt; // 주문 요청 시장시각
+    private Instant requestedMarketAt;       // 주문 요청 절대시각
 
     private ExecutionOrder(
             Long id,
@@ -29,7 +29,7 @@ public class ExecutionOrder {
             ExecutionOrderStatus status,
             String brokerOrderId,
             String message,
-            LocalDateTime requestedMarketAt
+            Instant requestedMarketAt
     ) {
         if (quantity <= 0) throw new IllegalArgumentException("주식 수량은 1개 이상이어야 주문 가능");
         if (symbol == null || symbol.isBlank()) throw new IllegalArgumentException("symbol은 필수");
@@ -94,7 +94,7 @@ public class ExecutionOrder {
             ExecutionOrderStatus status,
             String brokerOrderId,
             String message,
-            LocalDateTime requestedMarketAt
+            Instant requestedMarketAt
     ) {
         return new ExecutionOrder(
                 id,
@@ -110,7 +110,7 @@ public class ExecutionOrder {
         );
     }
 
-    public void markRequested(String message, LocalDateTime requestedMarketAt) {
+    public void markRequested(String message, Instant requestedMarketAt) {
         requireStatus(ExecutionOrderStatus.PLANNED);
         if (requestedMarketAt == null) throw new IllegalArgumentException("requestedMarketAt은 필수");
         this.message = message;

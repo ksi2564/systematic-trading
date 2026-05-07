@@ -76,6 +76,7 @@
 - scheduled EOD는 `REGULAR`, `EARLY_CLOSE`에서만 수행된다.
 - `HOLIDAY`, `DATA_UNCERTAIN`에서는 scheduled EOD와 자동 리밸런싱을 skip한다.
 - 시장 일자는 `America/New_York` 기준으로 해석한다.
+- 실행 Job/Order 시각은 도메인/API에서 UTC `Instant`로 다루고, Dashboard history는 표시용 timezone 메타데이터를 함께 제공한다.
 - 휴장일, 조기마감일, 데이터 미확정일은 `trading.market-calendar.*` 설정으로 관리한다.
 
 ### Stateful Circuit Breaker
@@ -154,6 +155,7 @@
 - `GET /api/operations/mode`, `POST /api/operations/mode`, `GET /api/operations/mode-history` 운영 API가 구현돼 있다.
 - 대시보드 요약은 현재 DB 운영 모드와 최근 운영 감사 이력 5건을 함께 노출한다.
 - `GET /api/dashboard/history`는 최신순 Job 이력, 운영 모드 감사 이력, 최근 성과 스냅샷을 함께 노출한다.
+- Dashboard history의 Job 시각 필드는 ISO-8601 UTC instant이며, 프론트는 응답의 표시 timezone 메타데이터를 기준으로 화면 시각을 포맷한다.
 - `GET /api/dashboard/performance`는 성과 요약, 최근 일별 NAV/DD 시계열, 월별 손익 이력을 함께 노출한다.
 - `GET /public/api/v1/summary`는 최신 EOD 스냅샷 기준 공개용 요약 성과와 보유 비중만 노출한다.
 - `GET /public/api/v1/performance`는 절대 금액 없이 정규화 인덱스와 월별 수익률만 노출한다.

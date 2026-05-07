@@ -15,7 +15,6 @@ import my.side.trading.core.domain.operation.OperatingModeReader;
 import my.side.trading.core.domain.operation.OpsAlertPublisher;
 import my.side.trading.core.domain.operation.OpsAlertType;
 import my.side.trading.core.infrastructure.config.TradingExecutionProps;
-import my.side.trading.core.infrastructure.config.TradingMarketCalendarProps;
 import my.side.trading.core.infrastructure.config.TradingOperationProps;
 import my.side.trading.testutil.FakeExecutionJobRepository;
 import my.side.trading.testutil.FakeOrderBroker;
@@ -30,7 +29,6 @@ import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
@@ -52,8 +50,8 @@ class ExecutionJobExecutorTest {
     private ExecutionJobExecutor executor;
     private ExecutionRiskLimitService riskLimitService;
     private OpsAlertPublisher alertPublisher;
-    private TradingMarketCalendarProps marketCalendarProps;
     private Clock fixedClock;
+    private static final Instant EXECUTION_TIME = Instant.parse("2025-12-22T04:45:00Z");
 
     @BeforeEach
     void setUp() {
@@ -63,8 +61,7 @@ class ExecutionJobExecutorTest {
         canceller = new FakeOrderCanceller();
         orderInquiry = new FakeOrderInquiry();
         alertPublisher = mock(OpsAlertPublisher.class);
-        marketCalendarProps = new TradingMarketCalendarProps("America/New_York", List.of(), List.of(), List.of());
-        fixedClock = Clock.fixed(Instant.parse("2025-12-22T04:45:00Z"), ZoneOffset.UTC);
+        fixedClock = Clock.fixed(EXECUTION_TIME, ZoneOffset.UTC);
 
         OperationsKpiService operationsKpiService = mock(OperationsKpiService.class);
         when(operationsKpiService.hasAutoLiveBreach()).thenReturn(false);
@@ -121,7 +118,6 @@ class ExecutionJobExecutorTest {
                 guard,
                 riskLimitService,
                 alertPublisher,
-                marketCalendarProps,
                 fixedClock);
     }
 
@@ -133,12 +129,12 @@ class ExecutionJobExecutorTest {
         orderBroker.willReturn(1L, BrokerOrderResult.success("0123456789", "ok"));
         fillChecker.setFullyFilled("0123456789", 1, new BigDecimal("100"));
 
-        ExecutionJob executed = executor.execute(1L, LocalDateTime.of(2025, 12, 21, 23, 45), ExecutionTriggerType.AUTOMATED);
+        ExecutionJob executed = executor.execute(1L, EXECUTION_TIME, ExecutionTriggerType.AUTOMATED);
 
         assertThat(executed.getOrders().get(0).getBrokerOrderId()).isEqualTo("0123456789");
         assertThat(executed.getOrders().get(0).getStatus()).isEqualTo(ExecutionOrderStatus.ACCEPTED);
         assertThat(executed.getOrders().get(0).getRequestedMarketAt())
-                .isEqualTo(LocalDateTime.of(2025, 12, 21, 23, 45));
+                .isEqualTo(EXECUTION_TIME);
         assertThat(executed.getStatus()).isEqualTo(ExecutionStatus.COMPLETED);
     }
 
@@ -153,7 +149,7 @@ class ExecutionJobExecutorTest {
         fillChecker.setFillResult("ORD001", FillResult.partial(7, 3, new BigDecimal("700")));
         fillChecker.setFullyFilled("ORD002", 3, new BigDecimal("300"));
 
-        ExecutionJob executed = executor.execute(1L, LocalDateTime.of(2025, 12, 21, 23, 45), ExecutionTriggerType.AUTOMATED);
+        ExecutionJob executed = executor.execute(1L, EXECUTION_TIME, ExecutionTriggerType.AUTOMATED);
 
         assertThat(executed.getOrders().get(0).getStatus()).isEqualTo(ExecutionOrderStatus.ACCEPTED);
         assertThat(executed.getStatus()).isEqualTo(ExecutionStatus.COMPLETED);
@@ -172,7 +168,7 @@ class ExecutionJobExecutorTest {
         fillChecker.setFillResult("ORD002", FillResult.partial(0, 7, BigDecimal.ZERO));
         fillChecker.setFillResult("ORD003", FillResult.partial(0, 7, BigDecimal.ZERO));
 
-        ExecutionJob executed = executor.execute(1L, LocalDateTime.of(2025, 12, 21, 23, 45), ExecutionTriggerType.AUTOMATED);
+        ExecutionJob executed = executor.execute(1L, EXECUTION_TIME, ExecutionTriggerType.AUTOMATED);
 
         assertThat(executed.getOrders().get(0).getStatus()).isEqualTo(ExecutionOrderStatus.ACCEPTED);
         assertThat(executed.getStatus()).isEqualTo(ExecutionStatus.COMPLETED);
@@ -192,7 +188,7 @@ class ExecutionJobExecutorTest {
         fillChecker.setFillResult("ORD002", FillResult.partial(0, 10, BigDecimal.ZERO));
         fillChecker.setFillResult("ORD003", FillResult.partial(0, 10, BigDecimal.ZERO));
 
-        ExecutionJob executed = executor.execute(1L, LocalDateTime.of(2025, 12, 21, 23, 45), ExecutionTriggerType.AUTOMATED);
+        ExecutionJob executed = executor.execute(1L, EXECUTION_TIME, ExecutionTriggerType.AUTOMATED);
 
         assertThat(executed.getOrders().get(0).getStatus()).isEqualTo(ExecutionOrderStatus.REJECTED);
         assertThat(executed.getStatus()).isEqualTo(ExecutionStatus.FAILED);
@@ -205,7 +201,7 @@ class ExecutionJobExecutorTest {
         ExecutionJob job = ExecutionJob.rehydrate(
                 1L,
                 LocalDate.of(2025, 12, 21),
-                LocalDateTime.of(2025, 12, 21, 23, 45),
+                EXECUTION_TIME,
                 ExecutionStatus.PENDING,
                 List.of(firstOrder, secondOrder),
                 null,
@@ -214,7 +210,7 @@ class ExecutionJobExecutorTest {
         jobRepository.save(job);
         orderBroker.willReturn(1L, BrokerOrderResult.confirmationRequired(null, "timeout"));
 
-        ExecutionJob executed = executor.execute(1L, LocalDateTime.of(2025, 12, 21, 23, 45), ExecutionTriggerType.AUTOMATED);
+        ExecutionJob executed = executor.execute(1L, EXECUTION_TIME, ExecutionTriggerType.AUTOMATED);
 
         assertThat(executed.getOrders().stream()
                 .filter(o -> o.getId().equals(1L))
@@ -225,7 +221,7 @@ class ExecutionJobExecutorTest {
                 .filter(o -> o.getId().equals(1L))
                 .findFirst()
                 .orElseThrow()
-                .getRequestedMarketAt()).isEqualTo(LocalDateTime.of(2025, 12, 21, 23, 45));
+                .getRequestedMarketAt()).isEqualTo(EXECUTION_TIME);
         assertThat(executed.getOrders().stream()
                 .filter(o -> o.getId().equals(2L))
                 .findFirst()
@@ -266,7 +262,6 @@ class ExecutionJobExecutorTest {
                 guard,
                 riskLimitService,
                 alertPublisher,
-                marketCalendarProps,
                 fixedClock);
 
         ExecutionOrder sellOrder = order(1L, "TQQQ", ExecutionOrderSide.SELL, 5);
@@ -274,7 +269,7 @@ class ExecutionJobExecutorTest {
         ExecutionJob job = ExecutionJob.rehydrate(
                 1L,
                 LocalDate.of(2025, 12, 21),
-                LocalDateTime.of(2025, 12, 21, 23, 45),
+                EXECUTION_TIME,
                 ExecutionStatus.PENDING,
                 List.of(buyOrder, sellOrder),
                 null,
@@ -284,7 +279,7 @@ class ExecutionJobExecutorTest {
         orderBroker.willReturn(1L, BrokerOrderResult.success("SELL_ORD", "ok"));
         fillChecker.setFullyFilled("SELL_ORD", 5, new BigDecimal("495"));
 
-        ExecutionJob executed = executor.execute(1L, LocalDateTime.of(2025, 12, 21, 23, 45), ExecutionTriggerType.AUTOMATED);
+        ExecutionJob executed = executor.execute(1L, EXECUTION_TIME, ExecutionTriggerType.AUTOMATED);
 
         assertThat(executed.getOrders().stream()
                 .filter(o -> o.getId().equals(1L))
@@ -304,7 +299,7 @@ class ExecutionJobExecutorTest {
         return ExecutionJob.rehydrate(
                 1L,
                 LocalDate.of(2025, 12, 21),
-                LocalDateTime.of(2025, 12, 21, 23, 45),
+                EXECUTION_TIME,
                 ExecutionStatus.PENDING,
                 List.of(order),
                 null,

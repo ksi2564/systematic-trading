@@ -18,6 +18,7 @@ import my.side.trading.core.domain.portfolio.PerformanceAnalyticsSnapshot;
 import my.side.trading.core.domain.portfolio.PortfolioSnapshot;
 import my.side.trading.core.domain.portfolio.PortfolioSnapshotRepository;
 import my.side.trading.core.domain.strategy.StrategyStateRepository;
+import my.side.trading.core.infrastructure.config.TradingMarketCalendarProps;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -41,7 +42,9 @@ public class DashboardController {
     private final CurrentFxRateProvider currentFxRateProvider;
     private final PortfolioSnapshotRepository portfolioSnapshotRepository;
     private final OperatingModeService operatingModeService;
+    private final TradingMarketCalendarProps marketCalendarProps;
 
+    private static final String OPERATOR_TIME_ZONE = "Asia/Seoul";
     private static final int DEFAULT_HISTORY_LIMIT = 20;
     private static final int MAX_HISTORY_LIMIT = 100;
 
@@ -113,6 +116,9 @@ public class DashboardController {
 
         return ApiResponse.success(new DashboardHistoryResponse(
                 normalizedLimit,
+                new DashboardHistoryResponse.DisplayTimeZones(
+                        OPERATOR_TIME_ZONE,
+                        marketCalendarProps.marketZoneId()),
                 jobs,
                 operatingAudits,
                 performanceSnapshots,

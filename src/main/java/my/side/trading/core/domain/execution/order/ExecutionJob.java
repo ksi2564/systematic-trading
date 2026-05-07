@@ -2,28 +2,28 @@ package my.side.trading.core.domain.execution.order;
 
 import lombok.Getter;
 
+import java.time.Instant;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.util.*;
 
 @Getter
 public class ExecutionJob {
     private final Long id;
     private final LocalDate signalDate;         // 이 리밸런싱 신호의 기준 날짜 (EOD)
-    private final LocalDateTime executeAfter;   // 언제부터 실행 가능?
+    private final Instant executeAfter;         // 실행 가능 절대시각
     private ExecutionStatus status;
     private final List<ExecutionOrder> orders;  // 실제로 실행할 주문 목록
-    private LocalDateTime startedAt;
-    private LocalDateTime completedAt;
+    private Instant startedAt;
+    private Instant completedAt;
 
     private ExecutionJob(
             Long id,
             LocalDate signalDate,
-            LocalDateTime executeAfter,
+            Instant executeAfter,
             ExecutionStatus status,
             List<ExecutionOrder> orders,
-            LocalDateTime startedAt,
-            LocalDateTime completedAt
+            Instant startedAt,
+            Instant completedAt
     ) {
         if (signalDate == null) throw new IllegalArgumentException("signalDate는 필수");
         if (executeAfter == null) throw new IllegalArgumentException("execute after는 필수");
@@ -38,7 +38,7 @@ public class ExecutionJob {
         this.completedAt = completedAt;
     }
 
-    public static ExecutionJob create(LocalDate signalDate, LocalDateTime executeAfter, List<ExecutionOrder> orders) {
+    public static ExecutionJob create(LocalDate signalDate, Instant executeAfter, List<ExecutionOrder> orders) {
         return new ExecutionJob(
                 null,
                 signalDate,
@@ -53,11 +53,11 @@ public class ExecutionJob {
     public static ExecutionJob rehydrate(
             Long id,
             LocalDate signalDate,
-            LocalDateTime executeAfter,
+            Instant executeAfter,
             ExecutionStatus status,
             List<ExecutionOrder> orders,
-            LocalDateTime startedAt,
-            LocalDateTime completedAt
+            Instant startedAt,
+            Instant completedAt
     ) {
         return new ExecutionJob(id, signalDate, executeAfter, status, orders, startedAt, completedAt);
     }
@@ -66,7 +66,7 @@ public class ExecutionJob {
         return Collections.unmodifiableList(orders);
     }
 
-    public void start(LocalDateTime now) {
+    public void start(Instant now) {
         if (now == null) throw new IllegalArgumentException("now는 필수");
         if (status != ExecutionStatus.PENDING) throw new IllegalStateException("PENDING만 start 가능: " + status);
         if (now.isBefore(executeAfter)) throw new IllegalStateException("executeAfter 이전에는 start 불가");
@@ -75,7 +75,7 @@ public class ExecutionJob {
         this.completedAt = null;
     }
 
-    public void markOrderRequested(Long orderId, String message, LocalDateTime requestedMarketAt) {
+    public void markOrderRequested(Long orderId, String message, Instant requestedMarketAt) {
         requireRunning();
         findOrderById(orderId).markRequested(message, requestedMarketAt);
     }
@@ -85,60 +85,60 @@ public class ExecutionJob {
         findOrderById(orderId).remarkRequested(message);
     }
 
-    public void markOrderRequested(String symbol, ExecutionOrderSide side, String message, LocalDateTime requestedMarketAt) {
+    public void markOrderRequested(String symbol, ExecutionOrderSide side, String message, Instant requestedMarketAt) {
         requireRunning();
         findOrderBySymbolSide(symbol, side).markRequested(message, requestedMarketAt);
     }
 
-    public void acceptOrder(Long orderId, String brokerOrderId, String message, LocalDateTime now) {
+    public void acceptOrder(Long orderId, String brokerOrderId, String message, Instant now) {
         requireRunning();
         findOrderById(orderId).accept(brokerOrderId, message);
         completeIfAllTerminal(now);
     }
 
-    public void rejectOrder(Long orderId, String brokerOrderId, String message, LocalDateTime now) {
+    public void rejectOrder(Long orderId, String brokerOrderId, String message, Instant now) {
         requireRunning();
         findOrderById(orderId).reject(brokerOrderId, message);
         completeIfAllTerminal(now);
     }
 
-    public void requireOrderConfirmation(Long orderId, String brokerOrderId, String message, LocalDateTime now) {
+    public void requireOrderConfirmation(Long orderId, String brokerOrderId, String message, Instant now) {
         requireRunning();
         findOrderById(orderId).requireConfirmation(brokerOrderId, message);
         completeIfAllTerminal(now);
     }
 
-    public void resolveOrderConfirmation(Long orderId, String brokerOrderId, String message, LocalDateTime now) {
+    public void resolveOrderConfirmation(Long orderId, String brokerOrderId, String message, Instant now) {
         if (now == null) throw new IllegalArgumentException("now는 필수");
         findOrderById(orderId).resolveConfirmationAsAccepted(brokerOrderId, message);
         recomputeTerminalStatus(now);
     }
 
-    public void keepOrderConfirmationRequired(Long orderId, String message, LocalDateTime now) {
+    public void keepOrderConfirmationRequired(Long orderId, String message, Instant now) {
         if (now == null) throw new IllegalArgumentException("now는 필수");
         findOrderById(orderId).keepConfirmationRequired(message);
         recomputeTerminalStatus(now);
     }
 
-    public void cancelOrder(Long orderId, String message, LocalDateTime now) {
+    public void cancelOrder(Long orderId, String message, Instant now) {
         requireRunning();
         findOrderById(orderId).cancel(message);
         completeIfAllTerminal(now);
     }
 
-    public void skipOrder(Long orderId, String message, LocalDateTime now) {
+    public void skipOrder(Long orderId, String message, Instant now) {
         requireRunning();
         findOrderById(orderId).markSkipped(message);
         completeIfAllTerminal(now);
     }
 
-    public void completeIfAllTerminal(LocalDateTime now) {
+    public void completeIfAllTerminal(Instant now) {
         if (now == null) throw new IllegalArgumentException("now는 필수");
         if (status != ExecutionStatus.RUNNING) return;
         recomputeTerminalStatus(now);
     }
 
-    private void recomputeTerminalStatus(LocalDateTime now) {
+    private void recomputeTerminalStatus(Instant now) {
         boolean allTerminal = orders.stream().allMatch(ExecutionOrder::isTerminal);
         if (!allTerminal) return;
 

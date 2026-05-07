@@ -9,12 +9,13 @@ import my.side.trading.core.domain.execution.order.ExecutionOrder;
 import my.side.trading.core.domain.execution.order.ExecutionOrderSide;
 import my.side.trading.core.domain.execution.order.ExecutionOrderStatus;
 import my.side.trading.core.domain.execution.order.OrderInquiryResult;
+import my.side.trading.core.infrastructure.config.TradingMarketCalendarProps;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -38,7 +39,11 @@ class KisOrderInquiryTest {
         ccnlService = mock(KisOverseasCcnlService.class);
         marketCalendarService = mock(MarketCalendarService.class);
         when(marketCalendarService.currentMarketDate()).thenReturn(LocalDate.of(2025, 12, 22));
-        inquiry = new KisOrderInquiry(nccsService, ccnlService, marketCalendarService);
+        inquiry = new KisOrderInquiry(
+                nccsService,
+                ccnlService,
+                marketCalendarService,
+                new TradingMarketCalendarProps("America/New_York", List.of(), List.of(), List.of()));
     }
 
     @Test
@@ -76,7 +81,7 @@ class KisOrderInquiryTest {
                 ExecutionOrderSide.BUY,
                 3,
                 null,
-                LocalDateTime.of(2025, 12, 21, 23, 45));
+                Instant.parse("2025-12-22T04:45:00Z"));
         when(nccsService.inquireNccs("NASD"))
                 .thenReturn(nccs(
                         nccsItem("OLD", "QQQ", "02", "3", "20251221", "233900"),
@@ -95,7 +100,7 @@ class KisOrderInquiryTest {
                 ExecutionOrderSide.BUY,
                 3,
                 null,
-                LocalDateTime.of(2025, 12, 21, 23, 45));
+                Instant.parse("2025-12-22T04:45:00Z"));
         when(nccsService.inquireNccs("NASD"))
                 .thenReturn(nccs(nccsItem("OD126", "QQQ", "02", "3", "20251221", "235100")));
         when(ccnlService.inquireCcnl(eq("NASD"), eq("QQQ"), eq(LocalDate.of(2025, 12, 21))))
@@ -146,7 +151,7 @@ class KisOrderInquiryTest {
             ExecutionOrderSide side,
             long quantity,
             String brokerOrderId,
-            LocalDateTime requestedMarketAt
+            Instant requestedMarketAt
     ) {
         return ExecutionOrder.rehydrate(
                 1L,

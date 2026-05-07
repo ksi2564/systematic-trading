@@ -25,8 +25,8 @@ import my.side.trading.core.domain.strategy.WeightSet;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -77,7 +77,7 @@ class RebalanceOrchestratorTest {
                 marketDataProvider,
                 executionGuard);
 
-        RebalanceRunResult result = orchestrator.run(LocalDateTime.of(2026, 4, 2, 9, 0), ExecutionTriggerType.MANUAL);
+        RebalanceRunResult result = orchestrator.run(Instant.parse("2026-04-02T09:00:00Z"), ExecutionTriggerType.MANUAL);
 
         assertThat(result.jobCreated()).isTrue();
         assertThat(result.executed()).isFalse();
@@ -103,7 +103,7 @@ class RebalanceOrchestratorTest {
                 WeightSet.of(100, 0, 0),
                 List.of(new OrderIntent("QQQ", ExecutionOrderSide.BUY, "buy")));
         ExecutionJob job = sampleJob();
-        LocalDateTime now = LocalDateTime.of(2026, 4, 2, 23, 45);
+        Instant now = Instant.parse("2026-04-02T23:45:00Z");
 
         when(stateRepository.findLatestState()).thenReturn(Optional.of(state));
         when(stateRepository.findPreviousState(state.asOfDate())).thenReturn(Optional.empty());
@@ -174,7 +174,7 @@ class RebalanceOrchestratorTest {
                 marketDataProvider,
                 executionGuard);
 
-        RebalanceRunResult result = orchestrator.run(LocalDateTime.of(2026, 4, 2, 23, 45), ExecutionTriggerType.AUTOMATED);
+        RebalanceRunResult result = orchestrator.run(Instant.parse("2026-04-02T23:45:00Z"), ExecutionTriggerType.AUTOMATED);
 
         assertThat(result.jobCreated()).isFalse();
         verify(decisionService).decide(state, portfolio, previousState.targetWeights(), null, null);
@@ -198,7 +198,7 @@ class RebalanceOrchestratorTest {
         return ExecutionJob.rehydrate(
                 10L,
                 LocalDate.of(2026, 4, 1),
-                LocalDateTime.of(2026, 4, 2, 23, 45),
+                Instant.parse("2026-04-02T23:45:00Z"),
                 my.side.trading.core.domain.execution.order.ExecutionStatus.PENDING,
                 List.of(ExecutionOrder.rehydrate(
                         1L,

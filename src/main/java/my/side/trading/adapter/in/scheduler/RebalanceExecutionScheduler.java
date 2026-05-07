@@ -12,7 +12,6 @@ import org.springframework.stereotype.Component;
 
 import java.time.Clock;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 
 @Slf4j
 @Component
@@ -48,6 +47,6 @@ public class RebalanceExecutionScheduler {
                     guard.currentMode());
             return;
         }
-        orchestrator.run(LocalDateTime.now(clock), ExecutionTriggerType.AUTOMATED);
+        orchestrator.run(clock.instant(), ExecutionTriggerType.AUTOMATED);
     }
 }

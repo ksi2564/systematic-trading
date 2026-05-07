@@ -17,8 +17,8 @@ import my.side.trading.core.domain.strategy.StrategyStateRepository;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 
 @Slf4j
 @Service
@@ -38,11 +38,11 @@ public class RebalanceOrchestrator {
      *
      * @param now
      */
-    public RebalanceRunResult run(LocalDateTime now) {
+    public RebalanceRunResult run(Instant now) {
         return run(now, ExecutionTriggerType.MANUAL);
     }
 
-    public RebalanceRunResult run(LocalDateTime now, ExecutionTriggerType triggerType) {
+    public RebalanceRunResult run(Instant now, ExecutionTriggerType triggerType) {
         StrategyState state = strategyStateRepository.findLatestState()
                 .orElseThrow(() -> new IllegalStateException("StrategyState가 없습니다. EOD가 먼저 수행되어야 합니다."));
         var prevWeights = strategyStateRepository.findPreviousState(state.asOfDate())
@@ -63,7 +63,7 @@ public class RebalanceOrchestrator {
         }
 
         LocalDate signalDate = state.asOfDate();
-        LocalDateTime executeAfter = now; // 즉시 실행(추후 규칙화)
+        Instant executeAfter = now; // 즉시 실행(추후 규칙화)
 
         return jobCreateService.createJob(signalDate, executeAfter, decision, portfolio)
                 .map(job -> handleCreatedJob(now, triggerType, decision, job))
@@ -74,7 +74,7 @@ public class RebalanceOrchestrator {
     }
 
     private RebalanceRunResult handleCreatedJob(
-            LocalDateTime now,
+            Instant now,
             ExecutionTriggerType triggerType,
             RebalanceDecision decision,
             my.side.trading.core.domain.execution.order.ExecutionJob job) {

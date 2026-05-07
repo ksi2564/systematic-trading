@@ -16,9 +16,9 @@ import my.side.trading.core.domain.strategy.WeightSet;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
-import java.util.LinkedHashMap;
+import java.time.Instant;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
+import java.util.LinkedHashMap;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -35,7 +35,7 @@ public class ExecutionJobCreateService {
 
     public Optional<ExecutionJob> createJob(
             LocalDate signalDate,
-            LocalDateTime executeAfter,
+            Instant executeAfter,
             RebalanceDecision decision,
             Portfolio portfolio) {
         if (!decision.shouldRebalance()) {

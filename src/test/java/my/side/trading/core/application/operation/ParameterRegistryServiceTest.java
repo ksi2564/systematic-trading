@@ -6,7 +6,10 @@ import my.side.trading.testutil.FakeParameterChangeEventRepository;
 import my.side.trading.testutil.FakeParameterRegistryRecordRepository;
 import org.junit.jupiter.api.Test;
 
+import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.Arrays;
 import java.util.EnumMap;
 import java.util.List;
@@ -17,12 +20,18 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class ParameterRegistryServiceTest {
 
+    private static final Clock FIXED_CLOCK = Clock.fixed(Instant.parse("2026-05-07T00:00:00Z"), ZoneOffset.UTC);
+
     @Test
     void 빈레지스트리면문서기준초기값으로부트스트랩한다() {
         FakeParameterRegistryRecordRepository recordRepository = new FakeParameterRegistryRecordRepository();
         FakeParameterChangeEventRepository eventRepository = new FakeParameterChangeEventRepository();
         MutableSnapshotProvider snapshotProvider = new MutableSnapshotProvider(defaultSnapshots("current"));
-        ParameterRegistryService service = new ParameterRegistryService(recordRepository, eventRepository, snapshotProvider);
+        ParameterRegistryService service = new ParameterRegistryService(
+                recordRepository,
+                eventRepository,
+                snapshotProvider,
+                FIXED_CLOCK);
 
         List<?> records = service.getRegistry();
 
@@ -37,7 +46,8 @@ class ParameterRegistryServiceTest {
         ParameterRegistryService service = new ParameterRegistryService(
                 new FakeParameterRegistryRecordRepository(),
                 new FakeParameterChangeEventRepository(),
-                snapshotProvider);
+                snapshotProvider,
+                FIXED_CLOCK);
         service.getRegistry();
 
         assertThatThrownBy(() -> service.recordChange(new RecordParameterChangeCommand(
@@ -60,7 +70,11 @@ class ParameterRegistryServiceTest {
         FakeParameterRegistryRecordRepository recordRepository = new FakeParameterRegistryRecordRepository();
         FakeParameterChangeEventRepository eventRepository = new FakeParameterChangeEventRepository();
         MutableSnapshotProvider snapshotProvider = new MutableSnapshotProvider(defaultSnapshots("v1"));
-        ParameterRegistryService service = new ParameterRegistryService(recordRepository, eventRepository, snapshotProvider);
+        ParameterRegistryService service = new ParameterRegistryService(
+                recordRepository,
+                eventRepository,
+                snapshotProvider,
+                FIXED_CLOCK);
         service.getRegistry();
 
         Map<ParameterRegistryKey, String> updated = defaultSnapshots("v1");
@@ -82,6 +96,7 @@ class ParameterRegistryServiceTest {
         assertThat(updatedRecord.effectiveValue()).isEqualTo("40");
         assertThat(updatedRecord.status()).isEqualTo(ParameterRegistryStatus.ADOPTED);
         assertThat(updatedRecord.lastChangedBy()).isEqualTo("alice");
+        assertThat(updatedRecord.lastChangedAt()).isEqualTo(Instant.parse("2026-05-07T00:00:00Z"));
         assertThat(eventRepository.findRecentByKey(ParameterRegistryKey.VIX_THRESHOLD, 10))
                 .first()
                 .satisfies(event -> {

@@ -10,6 +10,7 @@ import my.side.trading.core.domain.parameter.ParameterRegistryStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Arrays;
@@ -28,6 +29,7 @@ public class ParameterRegistryService {
     private final ParameterRegistryRecordRepository recordRepository;
     private final ParameterChangeEventRepository changeEventRepository;
     private final EffectiveParameterSnapshotProvider snapshotProvider;
+    private final Clock clock;
 
     @Transactional
     public List<ParameterRegistryRecord> getRegistry() {
@@ -56,7 +58,7 @@ public class ParameterRegistryService {
 
         ParameterRegistryRecord currentRecord = recordRepository.findByKey(command.key())
                 .orElseThrow(() -> new IllegalStateException("parameter registry record is missing: " + command.key()));
-        Instant now = Instant.now();
+        Instant now = Instant.now(clock);
 
         changeEventRepository.save(new ParameterChangeEvent(
                 null,
@@ -93,7 +95,7 @@ public class ParameterRegistryService {
             return;
         }
 
-        Instant now = Instant.now();
+        Instant now = Instant.now(clock);
         for (ParameterRegistryKey key : Arrays.stream(ParameterRegistryKey.values())
                 .sorted(Comparator.comparingInt(ParameterRegistryKey::sortOrder))
                 .toList()) {

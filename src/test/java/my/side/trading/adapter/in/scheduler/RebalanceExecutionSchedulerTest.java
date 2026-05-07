@@ -10,7 +10,11 @@ import org.junit.jupiter.api.Test;
 import org.springframework.scheduling.annotation.Scheduled;
 
 import java.lang.reflect.Method;
+import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.Optional;
 
 import static org.mockito.ArgumentMatchers.any;
@@ -18,6 +22,8 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 class RebalanceExecutionSchedulerTest {
+
+    private static final Clock FIXED_CLOCK = Clock.fixed(Instant.parse("2026-04-02T13:45:00Z"), ZoneOffset.UTC);
 
     @Test
     void 자동_리밸런싱은_미국_동부시간_기준_정규장_개장_15분_뒤에_실행된다() throws NoSuchMethodException {
@@ -43,7 +49,8 @@ class RebalanceExecutionSchedulerTest {
         RebalanceExecutionScheduler scheduler = new RebalanceExecutionScheduler(
                 guard,
                 orchestrator,
-                marketCalendarService);
+                marketCalendarService,
+                FIXED_CLOCK);
 
         scheduler.runRebalance();
 
@@ -65,11 +72,12 @@ class RebalanceExecutionSchedulerTest {
         RebalanceExecutionScheduler scheduler = new RebalanceExecutionScheduler(
                 guard,
                 orchestrator,
-                marketCalendarService);
+                marketCalendarService,
+                FIXED_CLOCK);
 
         scheduler.runRebalance();
 
         verify(guard).getExecutionBlockReason(ExecutionTriggerType.AUTOMATED);
-        verify(orchestrator).run(any(), eq(ExecutionTriggerType.AUTOMATED));
+        verify(orchestrator).run(eq(LocalDateTime.of(2026, 4, 2, 13, 45)), eq(ExecutionTriggerType.AUTOMATED));
     }
 }

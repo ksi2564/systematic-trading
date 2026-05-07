@@ -7,6 +7,7 @@ import my.side.trading.core.domain.operation.OperatingMode;
 import my.side.trading.core.domain.operation.OperatingModeControlRepository;
 import org.springframework.stereotype.Repository;
 
+import java.time.Clock;
 import java.time.Instant;
 import java.util.Optional;
 
@@ -17,6 +18,7 @@ public class DbOperatingModeRepository implements OperatingModeControlRepository
     private static final String KEY = "OPERATING_MODE";
 
     private final TradingControlJpaRepository repository;
+    private final Clock clock;
 
     @Override
     public Optional<OperatingMode> findCurrentMode() {
@@ -30,7 +32,7 @@ public class DbOperatingModeRepository implements OperatingModeControlRepository
         repository.save(TradingControlEntity.builder()
                 .key(KEY)
                 .value(mode.name())
-                .updatedAt(Instant.now())
+                .updatedAt(Instant.now(clock))
                 .build());
     }
 }

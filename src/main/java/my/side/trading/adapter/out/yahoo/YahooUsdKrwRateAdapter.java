@@ -8,7 +8,6 @@ import my.side.trading.adapter.out.yahoo.dto.YahooQuoteResponse;
 import my.side.trading.core.application.port.out.CurrentFxRateProvider;
 import my.side.trading.core.application.port.out.FxRateReader;
 import my.side.trading.core.infrastructure.config.TradingFxProps;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Component;
@@ -43,12 +42,11 @@ public class YahooUsdKrwRateAdapter implements FxRateReader, CurrentFxRateProvid
     private final Cache<LocalDate, BigDecimal> historicalRateCache;
     private final AtomicReference<CachedFxRate> lastSuccessfulCurrentRate;
 
-    @Autowired
-    public YahooUsdKrwRateAdapter(@Qualifier("yahooWebClient") WebClient yahooWebClient, TradingFxProps props) {
-        this(yahooWebClient, props, Clock.systemUTC());
-    }
-
-    YahooUsdKrwRateAdapter(WebClient yahooWebClient, TradingFxProps props, Clock clock) {
+    public YahooUsdKrwRateAdapter(
+            @Qualifier("yahooWebClient") WebClient yahooWebClient,
+            TradingFxProps props,
+            Clock clock
+    ) {
         this.yahooWebClient = yahooWebClient;
         this.props = props;
         this.clock = clock;

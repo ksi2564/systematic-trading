@@ -10,6 +10,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
+import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 
@@ -25,6 +26,7 @@ public class RebalanceExecutionScheduler {
     private final ExecutionGuard guard;
     private final RebalanceOrchestrator orchestrator;
     private final MarketCalendarService marketCalendarService;
+    private final Clock clock;
 
     // 미국 동부시간 기준 정규장 개장 15분 뒤에 실행한다.
     @Scheduled(cron = REBALANCE_CRON, zone = MARKET_TIME_ZONE)
@@ -46,6 +48,6 @@ public class RebalanceExecutionScheduler {
                     guard.currentMode());
             return;
         }
-        orchestrator.run(LocalDateTime.now(), ExecutionTriggerType.AUTOMATED);
+        orchestrator.run(LocalDateTime.now(clock), ExecutionTriggerType.AUTOMATED);
     }
 }

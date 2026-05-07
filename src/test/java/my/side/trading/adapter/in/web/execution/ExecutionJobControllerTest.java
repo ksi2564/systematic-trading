@@ -13,7 +13,10 @@ import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
+import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -30,6 +33,7 @@ class ExecutionJobControllerTest {
     private final ExecutionOrderConfirmationService confirmationService = mock(ExecutionOrderConfirmationService.class);
     private final RebalanceOrchestrator rebalanceOrchestrator = mock(RebalanceOrchestrator.class);
     private final StrategyEodScheduler eodScheduler = mock(StrategyEodScheduler.class);
+    private final Clock clock = Clock.fixed(Instant.parse("2026-05-07T12:34:56Z"), ZoneOffset.UTC);
 
     private MockMvc mockMvc;
 
@@ -39,7 +43,8 @@ class ExecutionJobControllerTest {
                         executor,
                         confirmationService,
                         rebalanceOrchestrator,
-                        eodScheduler))
+                        eodScheduler,
+                        clock))
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .build();
     }
@@ -65,6 +70,6 @@ class ExecutionJobControllerTest {
                 .andExpect(jsonPath("$.data.brokerOrderId").value("OD123"))
                 .andExpect(jsonPath("$.data.inquiryStatus").value("FOUND"));
 
-        verify(confirmationService).confirm(eq(7L), eq(3L), any(LocalDateTime.class));
+        verify(confirmationService).confirm(eq(7L), eq(3L), eq(LocalDateTime.of(2026, 5, 7, 12, 34, 56)));
     }
 }

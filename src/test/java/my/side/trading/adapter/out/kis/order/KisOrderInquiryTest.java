@@ -4,6 +4,7 @@ import my.side.trading.adapter.out.kis.client.KisOverseasCcnlService;
 import my.side.trading.adapter.out.kis.client.KisOverseasNccsService;
 import my.side.trading.adapter.out.kis.dto.KisOverseasCcnlResponse;
 import my.side.trading.adapter.out.kis.dto.KisOverseasNccsResponse;
+import my.side.trading.core.application.market.MarketCalendarService;
 import my.side.trading.core.domain.execution.order.ExecutionOrder;
 import my.side.trading.core.domain.execution.order.ExecutionOrderSide;
 import my.side.trading.core.domain.execution.order.ExecutionOrderStatus;
@@ -28,13 +29,16 @@ class KisOrderInquiryTest {
 
     private KisOverseasNccsService nccsService;
     private KisOverseasCcnlService ccnlService;
+    private MarketCalendarService marketCalendarService;
     private KisOrderInquiry inquiry;
 
     @BeforeEach
     void setUp() {
         nccsService = mock(KisOverseasNccsService.class);
         ccnlService = mock(KisOverseasCcnlService.class);
-        inquiry = new KisOrderInquiry(nccsService, ccnlService);
+        marketCalendarService = mock(MarketCalendarService.class);
+        when(marketCalendarService.currentMarketDate()).thenReturn(LocalDate.of(2025, 12, 22));
+        inquiry = new KisOrderInquiry(nccsService, ccnlService, marketCalendarService);
     }
 
     @Test
@@ -114,6 +118,7 @@ class KisOrderInquiryTest {
 
         assertThat(result.status()).isEqualTo(OrderInquiryResult.Status.FOUND);
         assertThat(result.brokerOrderId()).isEqualTo("OD125");
+        verify(ccnlService).inquireCcnl("NASD", "QQQ", LocalDate.of(2025, 12, 22));
     }
 
     @Test

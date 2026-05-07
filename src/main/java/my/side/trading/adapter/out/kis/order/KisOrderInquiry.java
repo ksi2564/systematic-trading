@@ -5,6 +5,7 @@ import my.side.trading.adapter.out.kis.client.KisOverseasCcnlService;
 import my.side.trading.adapter.out.kis.client.KisOverseasNccsService;
 import my.side.trading.adapter.out.kis.dto.KisOverseasCcnlResponse;
 import my.side.trading.adapter.out.kis.dto.KisOverseasNccsResponse;
+import my.side.trading.core.application.market.MarketCalendarService;
 import my.side.trading.core.domain.execution.order.ExecutionOrder;
 import my.side.trading.core.domain.execution.order.ExecutionOrderSide;
 import my.side.trading.core.domain.execution.order.OrderInquiry;
@@ -32,6 +33,7 @@ public class KisOrderInquiry implements OrderInquiry {
 
     private final KisOverseasNccsService nccsService;
     private final KisOverseasCcnlService ccnlService;
+    private final MarketCalendarService marketCalendarService;
 
     @Override
     public OrderInquiryResult confirm(ExecutionOrder order) {
@@ -110,7 +112,7 @@ public class KisOrderInquiry implements OrderInquiry {
 
     private LocalDate inquiryDate(ExecutionOrder order) {
         return order.getRequestedMarketAt() == null
-                ? LocalDate.now()
+                ? marketCalendarService.currentMarketDate()
                 : order.getRequestedMarketAt().toLocalDate();
     }
 

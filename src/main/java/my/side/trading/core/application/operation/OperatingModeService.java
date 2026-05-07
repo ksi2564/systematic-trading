@@ -14,6 +14,7 @@ import my.side.trading.core.infrastructure.config.TradingOperationProps;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
 import java.time.Instant;
 import java.util.EnumMap;
 import java.util.List;
@@ -32,6 +33,7 @@ public class OperatingModeService implements OperatingModeReader {
     private final TradingOperationProps operationProps;
     private final OperatingModeControlRepository controlRepository;
     private final OperatingModeAuditRepository auditRepository;
+    private final Clock clock;
 
     @Override
     public OperatingMode currentMode() {
@@ -83,7 +85,7 @@ public class OperatingModeService implements OperatingModeReader {
             return new OperatingModeChangeResult(currentMode, false, hasManualApprovalRecord(), null);
         }
 
-        Instant now = Instant.now();
+        Instant now = now();
         OperatingModeAuditEvent auditEvent = saveTransition(
                 currentMode,
                 targetMode,
@@ -120,12 +122,12 @@ public class OperatingModeService implements OperatingModeReader {
                 "Automatic demotion triggered by " + alert.type().name(),
                 null,
                 null,
-                Instant.now());
+                now());
     }
 
     private OperatingMode bootstrapMode() {
         OperatingMode configuredMode = operationProps.mode();
-        Instant now = Instant.now();
+        Instant now = now();
 
         if (configuredMode == OperatingMode.AUTO_LIVE && operationProps.autoLiveGate().requireManualApprovalRecord()) {
             return saveTransition(
@@ -192,6 +194,10 @@ public class OperatingModeService implements OperatingModeReader {
 
     private int normalizeLimit(int limit) {
         return limit <= 0 ? 20 : Math.min(limit, 100);
+    }
+
+    private Instant now() {
+        return Instant.now(clock);
     }
 
     private static Map<OpsAlertType, OperatingMode> autoDemotionTargets() {

@@ -4,12 +4,12 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import my.side.trading.adapter.out.kis.client.KisOverseasCcnlService;
 import my.side.trading.adapter.out.kis.dto.KisOverseasCcnlResponse;
+import my.side.trading.core.application.market.MarketCalendarService;
 import my.side.trading.core.domain.execution.order.FillResult;
 import my.side.trading.core.domain.execution.order.OrderFillChecker;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
-import java.time.LocalDate;
 import java.util.Optional;
 
 /**
@@ -23,11 +23,15 @@ public class KisOrderFillChecker implements OrderFillChecker {
     private static final String DEFAULT_EXCHANGE = "NASD";
 
     private final KisOverseasCcnlService ccnlService;
+    private final MarketCalendarService marketCalendarService;
 
     @Override
     public FillResult checkFill(String brokerOrderId, String symbol) {
         try {
-            KisOverseasCcnlResponse response = ccnlService.inquireCcnl(DEFAULT_EXCHANGE, symbol, LocalDate.now());
+            KisOverseasCcnlResponse response = ccnlService.inquireCcnl(
+                    DEFAULT_EXCHANGE,
+                    symbol,
+                    marketCalendarService.currentMarketDate());
 
             if (response == null || !"0".equals(response.resultCode()) || response.output() == null) {
                 log.warn("체결조회 실패: brokerOrderId={}, symbol={}, response={}",

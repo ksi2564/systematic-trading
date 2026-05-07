@@ -12,6 +12,7 @@ import reactor.core.publisher.Mono;
 import reactor.util.retry.Retry;
 
 import java.net.URI;
+import java.time.Clock;
 import java.time.Duration;
 import java.time.LocalTime;
 import java.time.ZoneId;
@@ -26,6 +27,7 @@ public class KisOverseasRealtimeQuoteService {
     private final ReactorNettyWebSocketClient wsClient;
     private final KisAuthService kisAuthService;
     private final KisRealtimeMessageHandler messageHandler;
+    private final Clock clock;
 
     // KIS 해외주식 실시간호가 WebSocket URL
     private static final String WS_URL =
@@ -130,7 +132,7 @@ public class KisOverseasRealtimeQuoteService {
     }
 
     private boolean isKisDaySession() {
-        ZonedDateTime nowKst = ZonedDateTime.now(ZoneId.of("Asia/Seoul"));
+        ZonedDateTime nowKst = ZonedDateTime.now(clock.withZone(ZoneId.of("Asia/Seoul")));
         LocalTime time = nowKst.toLocalTime();
 
         return !time.isBefore(LocalTime.of(6, 0))

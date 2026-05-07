@@ -12,14 +12,13 @@ import my.side.trading.core.domain.operation.OpsAlertPublisher;
 import my.side.trading.core.domain.operation.OpsAlertSeverity;
 import my.side.trading.core.domain.operation.OpsAlertType;
 import my.side.trading.core.infrastructure.config.TradingMarketCalendarProps;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
-import java.util.LinkedHashMap;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.time.ZonedDateTime;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
 
 @Slf4j
@@ -35,28 +34,7 @@ public class ExecutionJobExecutor {
     private final TradingMarketCalendarProps marketCalendarProps;
     private final Clock clock;
 
-    @Autowired
     public ExecutionJobExecutor(
-            ExecutionJobRepository jobRepository,
-            RetryableOrderExecutor orderExecutor,
-            OrderInquiry orderInquiry,
-            ExecutionGuard guard,
-            ExecutionRiskLimitService riskLimitService,
-            OpsAlertPublisher opsAlertPublisher,
-            TradingMarketCalendarProps marketCalendarProps
-    ) {
-        this(
-                jobRepository,
-                orderExecutor,
-                orderInquiry,
-                guard,
-                riskLimitService,
-                opsAlertPublisher,
-                marketCalendarProps,
-                Clock.systemUTC());
-    }
-
-    ExecutionJobExecutor(
             ExecutionJobRepository jobRepository,
             RetryableOrderExecutor orderExecutor,
             OrderInquiry orderInquiry,

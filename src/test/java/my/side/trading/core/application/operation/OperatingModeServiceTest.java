@@ -11,11 +11,16 @@ import my.side.trading.testutil.FakeOperatingModeControlRepository;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 class OperatingModeServiceTest {
+
+    private static final Clock FIXED_CLOCK = Clock.fixed(Instant.parse("2026-05-07T00:00:00Z"), ZoneOffset.UTC);
 
     @Test
     void 제어값이_없으면_설정된_모드로_초기화한다() {
@@ -24,7 +29,8 @@ class OperatingModeServiceTest {
         OperatingModeService service = new OperatingModeService(
                 operationProps(OperatingMode.PAPER, true),
                 controlRepository,
-                auditRepository);
+                auditRepository,
+                FIXED_CLOCK);
 
         OperatingMode currentMode = service.currentMode();
 
@@ -45,7 +51,8 @@ class OperatingModeServiceTest {
         OperatingModeService service = new OperatingModeService(
                 operationProps(OperatingMode.AUTO_LIVE, true),
                 controlRepository,
-                auditRepository);
+                auditRepository,
+                FIXED_CLOCK);
 
         OperatingMode currentMode = service.currentMode();
 
@@ -66,7 +73,8 @@ class OperatingModeServiceTest {
         OperatingModeService service = new OperatingModeService(
                 operationProps(OperatingMode.PAPER, true),
                 controlRepository,
-                auditRepository);
+                auditRepository,
+                FIXED_CLOCK);
 
         OperatingModeChangeResult result = service.changeMode(
                 OperatingMode.AUTO_LIVE,
@@ -79,6 +87,7 @@ class OperatingModeServiceTest {
         assertThat(result.auditEvent()).isNotNull();
         assertThat(result.auditEvent().approvedBy()).isEqualTo("alice");
         assertThat(result.auditEvent().approvedAt()).isEqualTo(result.auditEvent().createdAt());
+        assertThat(result.auditEvent().createdAt()).isEqualTo(Instant.parse("2026-05-07T00:00:00Z"));
     }
 
     @Test
@@ -89,7 +98,8 @@ class OperatingModeServiceTest {
         OperatingModeService service = new OperatingModeService(
                 operationProps(OperatingMode.PAPER, true),
                 controlRepository,
-                auditRepository);
+                auditRepository,
+                FIXED_CLOCK);
 
         service.applySystemAlert(alert(OpsAlertType.KPI_BREACH));
 
@@ -110,7 +120,8 @@ class OperatingModeServiceTest {
         OperatingModeService service = new OperatingModeService(
                 operationProps(OperatingMode.PAPER, true),
                 controlRepository,
-                auditRepository);
+                auditRepository,
+                FIXED_CLOCK);
 
         service.applySystemAlert(alert(OpsAlertType.BROKER_API_FAILURE));
 
@@ -126,7 +137,8 @@ class OperatingModeServiceTest {
         OperatingModeService service = new OperatingModeService(
                 operationProps(OperatingMode.PAPER, true),
                 controlRepository,
-                auditRepository);
+                auditRepository,
+                FIXED_CLOCK);
 
         OperatingModeChangeResult result = service.changeMode(OperatingMode.PAPER, "alice", "keep paper");
 

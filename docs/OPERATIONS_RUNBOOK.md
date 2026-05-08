@@ -105,7 +105,16 @@
 - 리밸런싱 전체 실행
 - 특정 Job 재실행
 
-수동 실주문은 `MANUAL_LIVE` 또는 `AUTO_LIVE`에서만 허용한다.
+수동 실주문은 `MANUAL_LIVE` 또는 `AUTO_LIVE`에서만 허용한다. 다만 실제 운영 표준 경로는 curl 직접 호출이 아니라 Admin Dashboard의 수동 실행 flow다.
+
+Admin Dashboard 수동 실행 flow는 아래 단계를 반드시 포함해야 한다.
+
+1. 실행 전 점검: 운영 모드, 실행 플래그, Kill Switch, 최신 EOD, 운영 KPI, 미정리 주문, KIS 잔고/시세를 확인한다.
+2. 주문 미리보기: 최신 전략 상태 기준 목표 주문, 예상 수량/금액, 리스크 한도 결과를 확인한다.
+3. 최종 확인: 운영자가 명시 확인한 뒤에만 실행 API를 호출한다.
+4. 실행 후 확인: Job/Order 상태, `CONFIRMATION_REQUIRED` 주문 확인 API, 운영 로그와 이력을 확인한다.
+
+curl 직접 호출은 비상 대응이나 개발자 운영 경로로만 사용한다.
 
 ## 4. 스케줄 기준
 
@@ -209,6 +218,21 @@
 | `GET /api/dashboard/summary` | 포트폴리오, 전략 상태, 보조 지표, 최근 Job 요약 조회 |
 | `GET /api/dashboard/history` | Job 이력, 운영 모드 감사 이력, 최근 성과 스냅샷 조회 |
 | `GET /api/dashboard/performance` | 성과 요약, 일별 NAV/DD 시계열, 월별 손익 조회 |
+
+### Dashboard 경계
+
+운영 화면과 공개 화면은 역할과 호출 API를 분리한다.
+
+- Admin Dashboard는 내부 전용 화면이다.
+  - 호출 경로: `/api/dashboard`, `/api/jobs`, `/api/operations`, `/kis`, `/actuator`
+  - 접근 경로: SSH tunnel, Tailscale, VPN, 또는 별도 인증 계층 뒤
+  - 목적: 운영 상태 확인, 수동 실행, 주문 확인, 장애 대응
+- Public Dashboard는 인터넷 공개 가능 화면이다.
+  - 호출 경로: `/public/api/v1/**`
+  - 접근 경로: reverse proxy 또는 CDN 뒤
+  - 목적: 공개 가능한 EOD 기준 포트폴리오 비율과 정규화 성과 조회
+
+Public Dashboard는 운영 API를 호출하지 않는다. Admin Dashboard는 외부 공개 DNS에 직접 매핑하지 않는다.
 
 ### KIS 연동 확인용 API
 
@@ -337,9 +361,9 @@ curl.exe -s `
 - 접근 로그는 `my.side.trading.publicapi.access` logger 기준으로 수집하고, reverse proxy access log와 함께 본다.
 
 ### 현재 구현과 기준 정책 간 차이
-- 현재 구현은 일부 조회 경로를 공개 예외로 취급한다.
-- 운영 기준으로는 대시보드와 Actuator를 기본 공개 경로로 보지 않는다.
-- 운영 환경에서는 리버스 프록시, 사설망, 별도 인증 계층 중 최소 하나를 추가하는 것이 필수에 가깝다.
+- 현재 구현은 공개 예외를 설정 기반으로 제어하며, 운영 프로필에서는 `/public/api/v1/**`만 공개 경로로 여는 것을 기준으로 한다.
+- 운영 기준으로는 대시보드와 Actuator를 공개 경로로 보지 않는다.
+- 운영 환경에서는 공개 API도 reverse proxy 또는 CDN 뒤에서만 노출하고, 운영 API는 사설망, SSH tunnel, VPN, 별도 인증 계층 중 하나 이상으로 보호한다.
 
 ## 9. 장애 및 예외 시나리오
 

@@ -20,7 +20,11 @@
 - `docs/QQQ_AutoTrading_FullPlan.md`: 제품 기획 및 전략 배경
 - `docs/DEVELOPER_ROADMAP.md`: 구현 우선순위와 단계별 목표
 - `docs/KIS_openAPI.md`: KIS 연동 기준 문서
+- `docs/OPERATIONS_RUNBOOK.md`: 운영 모드, 장애 대응, 운영 API와 KIS 진단 절차
+- `docs/CURRENT_IMPLEMENTATION_SYNC.md`: 현재 구현 범위와 문서 동기화 상태
+- `deploy/README.md`: 단일 VM 배포 산출물, Flyway 전환, 운영 검증 명령
 - `docs/decisions/001_code_review_security_and_refactoring.md`: 보안/트랜잭션/아키텍처 관련 주요 결정
+- `docs/decisions/004_kis_http_policy.md`: KIS 주문성 API retry 금지와 주문 확인 정책
 
 ## 2. Architecture Map
 
@@ -67,6 +71,8 @@ src/main/java/my/side/trading
 - 외부 의존성이 필요한 경우 `src/test/java/my/side/trading/testutil`의 fake 객체 패턴을 우선 활용한다.
 - `@SpringBootTest`는 정말 필요한 통합 검증에만 사용한다.
 - 변경 후 최소 검증 기본값은 `./gradlew test`다.
+- Windows PowerShell에서는 `./gradlew.bat test`, CI/Unix 계열에서는 `./gradlew test`를 사용한다.
+- 배포 산출물까지 확인해야 하는 변경은 `./gradlew.bat test bootJar` 또는 `./gradlew test bootJar`로 검증한다.
 
 ## 5. Review Checklist
 
@@ -84,6 +90,8 @@ src/main/java/my/side/trading
 - KIS 자격증명은 환경변수로 주입한다.
 - 로컬 개발 기본 DB 설정은 `src/main/resources/application.yml`에 있다.
 - `trading.scheduling.enabled`, `trading.execution.enabled` 기본값은 `false`이며, 실거래 관련 변경은 특히 보수적으로 검토한다.
+- 운영 프로파일은 Flyway를 사용하고 Hibernate는 `ddl-auto=validate`로만 검증한다. 신규 스키마/데이터 보정은 명시 migration으로 추가한다.
+- 운영 DB URL과 Hibernate JDBC time zone은 UTC 기준을 유지한다. `V4__normalize_datetime_columns_to_utc`는 실행 Job/Order 시각만 보정 대상으로 둔다.
 
 ## 7. Session Workflow Rules
 
@@ -111,3 +119,11 @@ src/main/java/my/side/trading
 - 큰 작업은 적응형 세션 분할보다 기능 자체를 더 작은 단위로 쪼개는 것을 우선한다.
 - 기능 단위가 너무 커서 한 세션에 담기기 어렵다고 보이면, 구현 중간 handoff보다 먼저 작업 범위를 다시 나누는 쪽을 우선 검토한다.
 - 문서와 주석은 한글을 최우선으로 작성한다.
+
+## 8. Operational Workflows and Commands
+
+- 운영 절차는 `docs/OPERATIONS_RUNBOOK.md`, 배포 산출물과 서버 명령은 `deploy/README.md`를 우선 기준으로 확인한다.
+- KIS 주문 접수/취소 API에는 WebClient/Reactor 자동 retry를 추가하지 않는다. timeout 또는 network error로 접수 여부가 불명확하면 미접수 실패로 단정하지 않고 확인 필요 상태로 다룬다.
+- `CONFIRMATION_REQUIRED` 주문은 동일 주문을 재전송하지 말고 `POST /api/jobs/{jobId}/orders/{orderId}/confirm`으로 확인한다. 호출에는 `X-API-KEY`가 필요하며 요청 body는 사용하지 않는다.
+- KIS 개발 진단 API는 `local` 또는 `dev` profile에서만 사용한다. PowerShell 로컬 실행 예시는 `SPRING_PROFILES_ACTIVE=local`, `TRADING_API_KEY`, KIS 환경변수를 설정한 뒤 `./gradlew.bat bootRun`이다.
+- 단일 VM 운영 검증 명령은 `curl http://127.0.0.1:8080/actuator/health`, `curl https://api.<domain>/public/api/v1/summary`, `systemctl list-timers trading-backup.timer`, `systemctl start trading-backup.service`를 기준으로 한다.

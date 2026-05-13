@@ -3,6 +3,7 @@ package my.side.trading.core.application.orchestration;
 import lombok.RequiredArgsConstructor;
 import my.side.trading.core.application.execution.ExecutionBlockReason;
 import my.side.trading.core.application.execution.ExecutionGuard;
+import my.side.trading.core.application.execution.MarketQuoteUnavailableException;
 import my.side.trading.core.application.execution.RebalanceDecisionService;
 import my.side.trading.core.application.execution.RebalanceOrderPlan;
 import my.side.trading.core.application.execution.RebalanceOrderPlanner;
@@ -19,6 +20,8 @@ import org.springframework.stereotype.Service;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.util.List;
 
 @Service
 @RequiredArgsConstructor
@@ -50,7 +53,10 @@ public class ManualRebalancePreviewService {
                 .getExecutionBlockReason(ExecutionTriggerType.MANUAL)
                 .orElse(null);
 
-        RebalanceOrderPlan orderPlan = orderPlanner.plan(state.asOfDate(), decision, portfolio);
+        RebalanceOrderPlan orderPlan = planOrders(state.asOfDate(), decision, portfolio);
+        if (orderPlan.quoteUnavailable() && manualBlockReason == null) {
+            manualBlockReason = ExecutionBlockReason.MARKET_QUOTE_UNAVAILABLE;
+        }
         boolean executable = manualBlockReason == null
                 && !duplicateSignalJobExists
                 && decision.shouldRebalance()
@@ -72,5 +78,25 @@ public class ManualRebalancePreviewService {
                 orderPlan.totalOrderNotional(),
                 orderPlan.estimatedRemainingCash(),
                 executable);
+    }
+
+    private RebalanceOrderPlan planOrders(
+            LocalDate signalDate,
+            RebalanceDecision decision,
+            Portfolio portfolio
+    ) {
+        try {
+            return orderPlanner.plan(signalDate, decision, portfolio);
+        } catch (MarketQuoteUnavailableException e) {
+            return new RebalanceOrderPlan(
+                    List.of(),
+                    BigDecimal.ZERO,
+                    defaultZero(portfolio.cash()),
+                    true);
+        }
+    }
+
+    private BigDecimal defaultZero(BigDecimal value) {
+        return value == null ? BigDecimal.ZERO : value;
     }
 }

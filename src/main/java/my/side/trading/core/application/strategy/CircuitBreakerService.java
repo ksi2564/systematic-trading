@@ -11,7 +11,7 @@ import java.math.BigDecimal;
 /**
  * 서킷 브레이커 로직(안전장치)
  * - VIX 필터: VIX >= 35 시 레버리지 확대 중단
- * - 200MA 필터: QQQ < 200MA 시 TQQQ 비중 한 단계 낮게 유지
+ * - 200MA 필터: 신호 ETF < 200MA 시 TQQQ 비중 한 단계 낮게 유지
  */
 @Slf4j
 @Service
@@ -35,15 +35,16 @@ public class CircuitBreakerService {
     }
 
     /**
-     * QQQ가 200MA 미만인지 확인
+     * 신호 ETF가 200MA 미만인지 확인
      */
-    public boolean isMaTriggered(BigDecimal qqqClose, BigDecimal ma) {
-        if (!props.isEnabled() || qqqClose == null || ma == null) {
+    public boolean isMaTriggered(String signalSymbol, BigDecimal signalClose, BigDecimal ma) {
+        if (!props.isEnabled() || signalClose == null || ma == null) {
             return false;
         }
-        boolean triggered = qqqClose.compareTo(ma) < 0;
+        String symbol = signalSymbol == null || signalSymbol.isBlank() ? "QQQM" : signalSymbol.trim().toUpperCase();
+        boolean triggered = signalClose.compareTo(ma) < 0;
         if (triggered) {
-            log.warn("200MA 서킷 브레이커가 발동했습니다: QQQ={} < MA{}={}", qqqClose, props.getMaPeriod(), ma);
+            log.warn("200MA 서킷 브레이커가 발동했습니다: {}={} < MA{}={}", symbol, signalClose, props.getMaPeriod(), ma);
         }
         return triggered;
     }
@@ -54,7 +55,7 @@ public class CircuitBreakerService {
      * @param original     원래 목표 비중
      * @param prevWeights  이전 비중 (VIX 트리거 시 TQQQ 확대 방지용)
      * @param vixTriggered VIX >= 35 여부
-     * @param maTriggered  QQQ < 200MA 여부
+     * @param maTriggered  신호 ETF < 200MA 여부
      * @return 조정된 비중
      */
     public WeightSet adjustWeights(WeightSet original, WeightSet prevWeights, boolean vixTriggered,

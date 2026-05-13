@@ -4,12 +4,13 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import my.side.trading.core.domain.strategy.DdBucket;
 import my.side.trading.core.domain.strategy.DrawdownThresholds;
-import my.side.trading.core.domain.strategy.QqqHistoricalDataProvider;
 import my.side.trading.core.domain.strategy.RecoveryThresholds;
+import my.side.trading.core.domain.strategy.SignalHistoricalDataProvider;
 import my.side.trading.core.domain.strategy.StrategyPhase;
 import my.side.trading.core.domain.strategy.StrategyState;
 import my.side.trading.core.domain.strategy.StrategyStateRepository;
 import my.side.trading.core.domain.strategy.WeightSet;
+import my.side.trading.core.infrastructure.config.TradingStrategyProps;
 import my.side.trading.core.infrastructure.config.TradingStrategyThresholdProps;
 import org.springframework.stereotype.Service;
 
@@ -23,45 +24,52 @@ import java.util.List;
 @RequiredArgsConstructor
 public class StrategyStateEodService {
 
-    private static final int CURRENT_STRATEGY_VERSION = 1;
+    private static final int CURRENT_STRATEGY_VERSION = 2;
     private static final int ATH_LOOKUP_DAYS = 365;
 
     private final StrategyStateRepository strategyStateRepository;
-    private final QqqHistoricalDataProvider qqqHistoricalDataProvider;
+    private final SignalHistoricalDataProvider signalHistoricalDataProvider;
+    private final TradingStrategyProps strategyProps;
     private final TradingStrategyThresholdProps strategyThresholdProps;
 
-    public StrategyState runEod(LocalDate asOfDate, BigDecimal qqqClose) {
+    public StrategyState runEod(LocalDate asOfDate, BigDecimal signalClose) {
+        String signalSymbol = strategyProps.signalSymbol();
         StrategyState prev = strategyStateRepository.findLatestState()
-                .orElseGet(() -> initializeState(asOfDate, qqqClose));
+                .filter(state -> signalSymbol.equalsIgnoreCase(state.signalSymbol()))
+                .orElse(null);
 
-        StrategyState newState = calculateNextState(asOfDate, qqqClose, prev);
+        if (prev == null) {
+            return initializeState(asOfDate, signalSymbol, signalClose);
+        }
+
+        StrategyState newState = calculateNextState(asOfDate, signalSymbol, signalClose, prev);
         return strategyStateRepository.save(newState);
     }
 
-    private StrategyState initializeState(LocalDate asOfDate, BigDecimal qqqClose) {
-        log.info("과거 데이터로 StrategyState를 초기화합니다.");
+    private StrategyState initializeState(LocalDate asOfDate, String signalSymbol, BigDecimal signalClose) {
+        log.info("과거 데이터로 StrategyState를 초기화합니다. signalSymbol={}", signalSymbol);
 
-        List<BigDecimal> historicalPrices = qqqHistoricalDataProvider.getHistoricalClosePrices(ATH_LOOKUP_DAYS);
+        List<BigDecimal> historicalPrices = signalHistoricalDataProvider.getHistoricalClosePrices(signalSymbol, ATH_LOOKUP_DAYS);
 
         if (historicalPrices.isEmpty()) {
             log.warn("과거 데이터가 없어 현재 종가를 ATH로 사용합니다.");
-            return createInitialState(asOfDate, qqqClose, qqqClose);
+            return createInitialState(asOfDate, signalSymbol, signalClose, signalClose);
         }
 
         BigDecimal ath = historicalPrices.stream()
                 .max(BigDecimal::compareTo)
-                .orElse(qqqClose);
+                .orElse(signalClose);
 
-        if (qqqClose.compareTo(ath) > 0) {
-            ath = qqqClose;
+        if (signalClose.compareTo(ath) > 0) {
+            ath = signalClose;
         }
 
         log.info("과거 가격 {}건으로 계산한 ATH={}", historicalPrices.size(), ath);
-        return createInitialState(asOfDate, qqqClose, ath);
+        return createInitialState(asOfDate, signalSymbol, signalClose, ath);
     }
 
-    private StrategyState createInitialState(LocalDate asOfDate, BigDecimal qqqClose, BigDecimal ath) {
-        BigDecimal dd = calculateDrawdownPercent(ath, qqqClose);
+    private StrategyState createInitialState(LocalDate asOfDate, String signalSymbol, BigDecimal signalClose, BigDecimal ath) {
+        BigDecimal dd = calculateDrawdownPercent(ath, signalClose);
         BigDecimal maxDd = dd;
         DrawdownThresholds drawdownThresholds = strategyThresholdProps.drawdownThresholds();
         RecoveryThresholds recoveryThresholds = strategyThresholdProps.recoveryThresholds();
@@ -72,8 +80,9 @@ public class StrategyStateEodService {
 
         StrategyState initialState = new StrategyState(
                 asOfDate,
+                signalSymbol,
                 ath,
-                qqqClose,
+                signalClose,
                 dd,
                 maxDd,
                 bucket,
@@ -95,19 +104,19 @@ public class StrategyStateEodService {
         };
     }
 
-    private StrategyState calculateNextState(LocalDate asOfDate, BigDecimal qqqClose, StrategyState prev) {
+    private StrategyState calculateNextState(LocalDate asOfDate, String signalSymbol, BigDecimal signalClose, StrategyState prev) {
         BigDecimal prevAth = prev.ath();
         BigDecimal ath;
         BigDecimal dd;
         BigDecimal maxDd;
 
-        if (qqqClose.compareTo(prevAth) > 0) {
-            ath = qqqClose;
+        if (signalClose.compareTo(prevAth) > 0) {
+            ath = signalClose;
             dd = BigDecimal.ZERO;
             maxDd = BigDecimal.ZERO;
         } else {
             ath = prevAth;
-            dd = calculateDrawdownPercent(ath, qqqClose);
+            dd = calculateDrawdownPercent(ath, signalClose);
             maxDd = prev.maxDrawdownPctSinceAth().max(dd);
         }
 
@@ -120,8 +129,9 @@ public class StrategyStateEodService {
 
         return new StrategyState(
                 asOfDate,
+                signalSymbol,
                 ath,
-                qqqClose,
+                signalClose,
                 dd,
                 maxDd,
                 bucket,

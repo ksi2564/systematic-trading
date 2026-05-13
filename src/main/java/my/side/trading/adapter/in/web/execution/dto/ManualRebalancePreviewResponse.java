@@ -18,6 +18,8 @@ public record ManualRebalancePreviewResponse(
         String operatingMode,
         String manualBlockReason,
         LocalDate signalDate,
+        String baseSymbol,
+        String signalSymbol,
         StrategyInfo strategy,
         DecisionInfo decision,
         PortfolioInfo portfolio,
@@ -34,10 +36,12 @@ public record ManualRebalancePreviewResponse(
                 preview.operatingMode().name(),
                 preview.manualBlockReason() == null ? null : preview.manualBlockReason().code(),
                 preview.signalDate(),
-                StrategyInfo.from(preview.strategyState()),
-                DecisionInfo.from(preview.decision()),
-                PortfolioInfo.from(preview.portfolio()),
-                new MarketIndicatorInfo(preview.vix(), preview.qqq200Ma()),
+                preview.baseSymbol(),
+                preview.signalSymbol(),
+                StrategyInfo.from(preview.strategyState(), preview.baseSymbol()),
+                DecisionInfo.from(preview.decision(), preview.baseSymbol()),
+                PortfolioInfo.from(preview.portfolio(), preview.baseSymbol()),
+                new MarketIndicatorInfo(preview.signalSymbol(), preview.vix(), preview.signal200Ma(), preview.signal200Ma()),
                 preview.duplicateSignalJobExists(),
                 preview.orders().stream()
                         .map(OrderInfo::from)
@@ -55,14 +59,14 @@ public record ManualRebalancePreviewResponse(
             boolean strategyOn,
             WeightInfo targetWeights
     ) {
-        static StrategyInfo from(StrategyState state) {
+        static StrategyInfo from(StrategyState state, String baseSymbol) {
             return new StrategyInfo(
                     state.asOfDate(),
                     state.drawdownPct(),
                     state.ddBucket().name(),
                     state.phase().name(),
                     state.strategyOn(),
-                    WeightInfo.from(state.targetWeights()));
+                    WeightInfo.from(state.targetWeights(), baseSymbol));
         }
     }
 
@@ -72,33 +76,43 @@ public record ManualRebalancePreviewResponse(
             String reason,
             WeightInfo targetWeights
     ) {
-        static DecisionInfo from(my.side.trading.core.domain.execution.plan.RebalanceDecision decision) {
+        static DecisionInfo from(my.side.trading.core.domain.execution.plan.RebalanceDecision decision, String baseSymbol) {
             return new DecisionInfo(
                     decision.shouldRebalance(),
                     decision.type() == null ? null : decision.type().name(),
                     decision.reason(),
-                    WeightInfo.from(decision.targetWeights()));
+                    WeightInfo.from(decision.targetWeights(), baseSymbol));
         }
     }
 
     public record PortfolioInfo(
+            String baseSymbol,
             BigDecimal totalValue,
             BigDecimal cash,
             WeightInfo currentWeights
     ) {
-        static PortfolioInfo from(Portfolio portfolio) {
+        static PortfolioInfo from(Portfolio portfolio, String baseSymbol) {
             return new PortfolioInfo(
+                    baseSymbol,
                     portfolio.totalValue(),
                     portfolio.cash(),
                     new WeightInfo(
-                            portfolio.wQqq(),
+                            baseSymbol,
+                            portfolio.wBase(),
+                            portfolio.wBase(),
+                            portfolio.wQld(),
+                            portfolio.wTqqq(),
+                            portfolio.wBase(),
+                            portfolio.wBase(),
                             portfolio.wQld(),
                             portfolio.wTqqq()));
         }
     }
 
     public record MarketIndicatorInfo(
+            String signalSymbol,
             BigDecimal vix,
+            BigDecimal signal200Ma,
             BigDecimal qqq200Ma
     ) {
     }
@@ -150,15 +164,30 @@ public record ManualRebalancePreviewResponse(
     }
 
     public record WeightInfo(
+            String baseSymbol,
+            BigDecimal base,
             BigDecimal qqq,
             BigDecimal qld,
-            BigDecimal tqqq
+            BigDecimal tqqq,
+            BigDecimal wBase,
+            BigDecimal wQqq,
+            BigDecimal wQld,
+            BigDecimal wTqqq
     ) {
-        static WeightInfo from(WeightSet weights) {
+        static WeightInfo from(WeightSet weights, String baseSymbol) {
             if (weights == null) {
                 return null;
             }
-            return new WeightInfo(weights.wQqq(), weights.wQld(), weights.wTqqq());
+            return new WeightInfo(
+                    baseSymbol,
+                    weights.wBase(),
+                    weights.wBase(),
+                    weights.wQld(),
+                    weights.wTqqq(),
+                    weights.wBase(),
+                    weights.wBase(),
+                    weights.wQld(),
+                    weights.wTqqq());
         }
     }
 }

@@ -24,7 +24,7 @@ class PortfolioPerformanceSnapshotServiceTest {
 
         when(portfolioService.getCurrentPortfolio()).thenReturn(portfolio(
                 "1000.0000",
-                new Position("QQQ", new BigDecimal("1"), new BigDecimal("100"), new BigDecimal("100"))
+                new Position("QQQM", new BigDecimal("1"), new BigDecimal("100"), new BigDecimal("100"))
         ));
 
         PortfolioSnapshot snapshot = service.captureDailySnapshot(LocalDate.of(2026, 4, 7));
@@ -44,13 +44,13 @@ class PortfolioPerformanceSnapshotServiceTest {
 
         when(portfolioService.getCurrentPortfolio()).thenReturn(portfolio(
                 "900.0000",
-                new Position("QQQ", new BigDecimal("1"), new BigDecimal("100"), new BigDecimal("100"))
+                new Position("QQQM", new BigDecimal("1"), new BigDecimal("100"), new BigDecimal("100"))
         ));
         service.captureDailySnapshot(LocalDate.of(2026, 4, 7));
 
         when(portfolioService.getCurrentPortfolio()).thenReturn(portfolio(
                 "700.0000",
-                new Position("QQQ", new BigDecimal("1"), new BigDecimal("100"), new BigDecimal("100"))
+                new Position("QQQM", new BigDecimal("1"), new BigDecimal("100"), new BigDecimal("100"))
         ));
         PortfolioSnapshot overwritten = service.captureDailySnapshot(LocalDate.of(2026, 4, 7));
 

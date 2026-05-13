@@ -4,7 +4,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 
 public record WeightSet(
-        BigDecimal wQqq,
+        BigDecimal wBase,
         BigDecimal wQld,
         BigDecimal wTqqq
 ) {
@@ -36,12 +36,16 @@ public record WeightSet(
         throw new IllegalStateException("ddPercent=" + ddPercent);
     }
 
-    public static WeightSet of(int qqq, int qld, int tqqq) {
+    public static WeightSet of(int base, int qld, int tqqq) {
         return new WeightSet(
-                percent(qqq),
+                percent(base),
                 percent(qld),
                 percent(tqqq)
         );
+    }
+
+    public BigDecimal wQqq() {
+        return wBase;
     }
 
     private static BigDecimal percent(int value) {

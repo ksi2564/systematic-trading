@@ -24,6 +24,9 @@ public class StrategyStateEntity {
     @Column(name = "as_of_date", nullable = false)
     private LocalDate asOfDate;
 
+    @Column(name = "signal_symbol", nullable = false, length = 16)
+    private String signalSymbol;
+
     @Column(name = "ath", nullable = false, precision = 18, scale = 4)
     private BigDecimal ath;
 
@@ -46,8 +49,8 @@ public class StrategyStateEntity {
     @Column(name = "phase", length = 16, nullable = false)
     private StrategyPhase phase;
 
-    @Column(name = "w_qqq", nullable = false, precision = 5, scale = 2)
-    private BigDecimal wQqq;
+    @Column(name = "w_base", nullable = false, precision = 5, scale = 2)
+    private BigDecimal wBase;
 
     @Column(name = "w_qld", nullable = false, precision = 5, scale = 2)
     private BigDecimal wQld;
@@ -64,13 +67,14 @@ public class StrategyStateEntity {
     public StrategyState toDomain() {
         return new StrategyState(
                 asOfDate,
+                signalSymbol,
                 ath,
                 lastClose,
                 drawdownPct,
                 maxDrawdownPctSinceAth,
                 ddBucket,
                 phase,
-                new WeightSet(wQqq, wQld, wTqqq),
+                new WeightSet(wBase, wQld, wTqqq),
                 strategyOn,
                 version
         );
@@ -79,13 +83,14 @@ public class StrategyStateEntity {
     public static StrategyStateEntity from(StrategyState s) {
         return StrategyStateEntity.builder()
                 .asOfDate(s.asOfDate())
+                .signalSymbol(s.signalSymbol())
                 .ath(s.ath())
                 .lastClose(s.lastClose())
                 .drawdownPct(s.drawdownPct())
                 .maxDrawdownPctSinceAth(s.maxDrawdownPctSinceAth())
                 .ddBucket(s.ddBucket())
                 .phase(s.phase())
-                .wQqq(s.targetWeights().wQqq())
+                .wBase(s.targetWeights().wBase())
                 .wQld(s.targetWeights().wQld())
                 .wTqqq(s.targetWeights().wTqqq())
                 .strategyOn(s.strategyOn())

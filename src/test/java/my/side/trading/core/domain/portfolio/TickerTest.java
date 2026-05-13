@@ -10,7 +10,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class TickerTest {
 
     @ParameterizedTest
-    @ValueSource(strings = { "QQQ", "qqq", "Qqq", "QLD", "qld", "TQQQ", "tqqq" })
+    @ValueSource(strings = { "QQQM", "qqqm", "Qqqm", "QLD", "qld", "TQQQ", "tqqq" })
     void 대소문자_무관하게_Ticker_생성(String symbol) {
         Ticker ticker = Ticker.from(symbol);
 
@@ -18,9 +18,9 @@ class TickerTest {
     }
 
     @Test
-    void QQQ_심볼_변환() {
-        assertThat(Ticker.from("QQQ")).isEqualTo(Ticker.QQQ);
-        assertThat(Ticker.from("qqq")).isEqualTo(Ticker.QQQ);
+    void QQQM_심볼_변환() {
+        assertThat(Ticker.from("QQQM")).isEqualTo(Ticker.QQQM);
+        assertThat(Ticker.from("qqqm")).isEqualTo(Ticker.QQQM);
     }
 
     @Test
@@ -38,6 +38,13 @@ class TickerTest {
     @Test
     void 지원하지_않는_심볼은_예외() {
         assertThatThrownBy(() -> Ticker.from("SPY"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("지원하지 않는 심볼");
+    }
+
+    @Test
+    void QQQ는_더_이상_운용심볼로_인정하지_않는다() {
+        assertThatThrownBy(() -> Ticker.from("QQQ"))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("지원하지 않는 심볼");
     }

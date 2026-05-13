@@ -14,7 +14,7 @@ class PortfolioTest {
         Portfolio portfolio = new Portfolio(
                 new BigDecimal("1000"),
                 List.of(
-                        new Position("QQQ", new BigDecimal("10"), BigDecimal.ZERO, new BigDecimal("100")), // 1000
+                        new Position("QQQM", new BigDecimal("10"), BigDecimal.ZERO, new BigDecimal("100")), // 1000
                         new Position("QLD", new BigDecimal("5"), BigDecimal.ZERO, new BigDecimal("200")) // 1000
                 ));
 
@@ -34,7 +34,7 @@ class PortfolioTest {
     void 현금이_null이어도_포지션_합계_계산() {
         Portfolio portfolio = new Portfolio(
                 null,
-                List.of(new Position("QQQ", new BigDecimal("10"), BigDecimal.ZERO, new BigDecimal("100"))));
+                List.of(new Position("QQQM", new BigDecimal("10"), BigDecimal.ZERO, new BigDecimal("100"))));
 
         assertThat(portfolio.totalValue()).isEqualByComparingTo("1000");
     }
@@ -44,7 +44,7 @@ class PortfolioTest {
         Portfolio portfolio = new Portfolio(
                 BigDecimal.ZERO,
                 List.of(
-                        new Position("QQQ", new BigDecimal("6"), BigDecimal.ZERO, new BigDecimal("100")), // 600
+                        new Position("QQQM", new BigDecimal("6"), BigDecimal.ZERO, new BigDecimal("100")), // 600
                         new Position("QLD", new BigDecimal("3"), BigDecimal.ZERO, new BigDecimal("100")), // 300
                         new Position("TQQQ", new BigDecimal("1"), BigDecimal.ZERO, new BigDecimal("100")) // 100
                 ));
@@ -58,17 +58,17 @@ class PortfolioTest {
     void 총자산이_0이면_비중은_0반환() {
         Portfolio portfolio = new Portfolio(BigDecimal.ZERO, List.of());
 
-        assertThat(portfolio.weightOf("QQQ")).isEqualByComparingTo("0");
-        assertThat(portfolio.weightOf(Ticker.QQQ)).isEqualByComparingTo("0");
+        assertThat(portfolio.weightOf("QQQM")).isEqualByComparingTo("0");
+        assertThat(portfolio.weightOf(Ticker.QQQM)).isEqualByComparingTo("0");
     }
 
     @Test
     void Ticker_enum으로_비중_조회() {
         Portfolio portfolio = new Portfolio(
                 BigDecimal.ZERO,
-                List.of(new Position("QQQ", new BigDecimal("10"), BigDecimal.ZERO, new BigDecimal("100"))));
+                List.of(new Position("QQQM", new BigDecimal("10"), BigDecimal.ZERO, new BigDecimal("100"))));
 
-        assertThat(portfolio.weightOf(Ticker.QQQ)).isEqualByComparingTo("100.0000");
+        assertThat(portfolio.weightOf(Ticker.QQQM)).isEqualByComparingTo("100.0000");
         assertThat(portfolio.weightOf(Ticker.QLD)).isEqualByComparingTo("0.0000");
     }
 
@@ -77,12 +77,12 @@ class PortfolioTest {
         Portfolio portfolio = new Portfolio(
                 new BigDecimal("1000"),
                 List.of(
-                        new Position("QQQ", new BigDecimal("15"), BigDecimal.ZERO, new BigDecimal("100")),
-                        new Position("QQQ", new BigDecimal("5"), BigDecimal.ZERO, new BigDecimal("100")), // 동일 종목 2건
+                        new Position("QQQM", new BigDecimal("15"), BigDecimal.ZERO, new BigDecimal("100")),
+                        new Position("QQQM", new BigDecimal("5"), BigDecimal.ZERO, new BigDecimal("100")), // 동일 종목 2건
                         new Position("QLD", new BigDecimal("10"), BigDecimal.ZERO, new BigDecimal("100"))));
 
-        assertThat(portfolio.quantityOf("QQQ")).isEqualByComparingTo("20");
-        assertThat(portfolio.quantityOf(Ticker.QQQ)).isEqualByComparingTo("20");
+        assertThat(portfolio.quantityOf("QQQM")).isEqualByComparingTo("20");
+        assertThat(portfolio.quantityOf(Ticker.QQQM)).isEqualByComparingTo("20");
         assertThat(portfolio.quantityOf(Ticker.QLD)).isEqualByComparingTo("10");
     }
 }

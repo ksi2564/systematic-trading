@@ -14,6 +14,7 @@ import my.side.trading.core.domain.execution.plan.RebalanceDecision;
 import my.side.trading.core.domain.portfolio.Portfolio;
 import my.side.trading.core.domain.strategy.StrategyState;
 import my.side.trading.core.domain.strategy.StrategyStateRepository;
+import my.side.trading.core.infrastructure.config.TradingStrategyProps;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -32,6 +33,7 @@ public class RebalanceOrchestrator {
     private final ExecutionJobExecutor jobExecutor;
     private final MarketDataProvider marketDataProvider;
     private final ExecutionGuard executionGuard;
+    private final TradingStrategyProps strategyProps;
 
     /**
      * 자동 매매 시작점
@@ -53,10 +55,10 @@ public class RebalanceOrchestrator {
 
         // 서킷 브레이커 판단용 VIX와 200MA를 포트 인터페이스로 조회한다.
         BigDecimal vix = marketDataProvider.getVixPrice().orElse(null);
-        BigDecimal qqqMa200 = marketDataProvider.getQqq200Ma().orElse(null);
-        log.info("서킷 브레이커 데이터: VIX={}, QQQ_200MA={}", vix, qqqMa200);
+        BigDecimal signalMa200 = marketDataProvider.getSignal200Ma(strategyProps.signalSymbol()).orElse(null);
+        log.info("서킷 브레이커 데이터: VIX={}, {}_200MA={}", vix, strategyProps.signalSymbol(), signalMa200);
 
-        RebalanceDecision decision = decisionService.decide(state, portfolio, prevWeights, vix, qqqMa200);
+        RebalanceDecision decision = decisionService.decide(state, portfolio, prevWeights, vix, signalMa200);
         if (!decision.shouldRebalance()) {
             log.info("리밸런싱을 건너뜁니다: {}", decision.reason());
             return RebalanceRunResult.skipped(triggerType, executionGuard.currentMode(), decision.reason());

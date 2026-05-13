@@ -13,6 +13,7 @@ import my.side.trading.core.domain.operation.OpsAlertPublisher;
 import my.side.trading.core.domain.operation.OpsAlertSeverity;
 import my.side.trading.core.domain.operation.OpsAlertType;
 import my.side.trading.core.domain.time.MarketStatus;
+import my.side.trading.core.infrastructure.config.TradingStrategyProps;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -35,6 +36,7 @@ public class StrategyEodScheduler {
     private final YahooVixService yahooVixService;
     private final MarketCalendarService marketCalendarService;
     private final OpsAlertPublisher opsAlertPublisher;
+    private final TradingStrategyProps strategyProps;
 
     @Value("${trading.scheduling.enabled:false}")
     private boolean enabled;
@@ -73,19 +75,20 @@ public class StrategyEodScheduler {
 
     private void runEod(LocalDate asOfDate) {
         try {
-            QuotedPriceResponse res = quotedPriceService.getQuotedPrice("QQQ");
+            String signalSymbol = strategyProps.signalSymbol();
+            QuotedPriceResponse res = quotedPriceService.getQuotedPrice(signalSymbol);
             BigDecimal close = new BigDecimal(res.item().prevClosePrice());
 
             // VIX와 200MA를 조회한다. (서킷 브레이커 판단용)
             BigDecimal vix = yahooVixService.getVixPrice().orElse(null);
-            BigDecimal qqqMa200 = yahooVixService.getQqq200Ma().orElse(null);
+            BigDecimal signalMa200 = yahooVixService.getSignal200Ma(signalSymbol).orElse(null);
 
-            log.info("서킷 브레이커 데이터: VIX={}, QQQ_200MA={}", vix, qqqMa200);
+            log.info("서킷 브레이커 데이터: VIX={}, {}_200MA={}", vix, signalSymbol, signalMa200);
 
             eodService.runEod(asOfDate, close);
             capturePerformanceSnapshot(asOfDate);
 
-            log.info("EOD를 갱신했습니다: asOfDate={}, qqqClose={}", asOfDate, close);
+            log.info("EOD를 갱신했습니다: asOfDate={}, signalSymbol={}, signalClose={}", asOfDate, signalSymbol, close);
         } catch (Exception e) {
             opsAlertPublisher.publish(new OpsAlert(
                     OpsAlertType.EOD_FAILURE,
@@ -127,9 +130,13 @@ public class StrategyEodScheduler {
     }
 
     /**
-     * QQQ 200MA를 조회한다. (외부 호출용)
+     * 신호 ETF 200MA를 조회한다. (외부 호출용)
      */
-    public BigDecimal getQqq200Ma() {
-        return yahooVixService.getQqq200Ma().orElse(null);
+    public BigDecimal getSignal200Ma() {
+        return yahooVixService.getSignal200Ma(strategyProps.signalSymbol()).orElse(null);
+    }
+
+    public String getSignalSymbol() {
+        return strategyProps.signalSymbol();
     }
 }

@@ -55,8 +55,12 @@ public record Portfolio(
         return quantityOf(ticker.name());
     }
 
+    public BigDecimal wBase() {
+        return weightOf(Ticker.QQQM);
+    }
+
     public BigDecimal wQqq() {
-        return weightOf(Ticker.QQQ);
+        return wBase();
     }
 
     public BigDecimal wQld() {

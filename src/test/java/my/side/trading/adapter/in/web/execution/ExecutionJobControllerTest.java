@@ -97,8 +97,14 @@ class ExecutionJobControllerTest {
                 .andExpect(jsonPath("$.data.generatedAt").exists())
                 .andExpect(jsonPath("$.data.operatingMode").value("MANUAL_LIVE"))
                 .andExpect(jsonPath("$.data.signalDate").exists())
+                .andExpect(jsonPath("$.data.baseSymbol").value("QQQM"))
+                .andExpect(jsonPath("$.data.signalSymbol").value("QQQM"))
                 .andExpect(jsonPath("$.data.decision.shouldRebalance").value(true))
+                .andExpect(jsonPath("$.data.portfolio.baseSymbol").value("QQQM"))
                 .andExpect(jsonPath("$.data.marketIndicators.vix").value(18.5))
+                .andExpect(jsonPath("$.data.marketIndicators.signalSymbol").value("QQQM"))
+                .andExpect(jsonPath("$.data.marketIndicators.signal200Ma").value(440.0))
+                .andExpect(jsonPath("$.data.marketIndicators.qqq200Ma").value(440.0))
                 .andExpect(jsonPath("$.data.duplicateSignalJobExists").value(false))
                 .andExpect(jsonPath("$.data.totalOrderNotional").value(0))
                 .andExpect(jsonPath("$.data.executable").value(false));
@@ -132,6 +138,8 @@ class ExecutionJobControllerTest {
                 state,
                 decision,
                 new Portfolio(new BigDecimal("1000.00"), List.of()),
+                "QQQM",
+                "QQQM",
                 new BigDecimal("18.50"),
                 new BigDecimal("440.00"),
                 false,

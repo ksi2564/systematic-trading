@@ -291,10 +291,10 @@ public class PortfolioPerformanceAnalyticsService {
 
     private BigDecimal calculateHoldingCostUsd(PortfolioSnapshot snapshot) {
         TradingPerformanceProps.HoldingCostSymbolProps symbols = performanceProps.holdingCost().symbols();
-        BigDecimal qqqCost = estimateHoldingCost(snapshot.totalValue(), snapshot.wQqq(), symbols.QQQ());
+        BigDecimal baseCost = estimateHoldingCost(snapshot.totalValue(), snapshot.wBase(), symbols.QQQM());
         BigDecimal qldCost = estimateHoldingCost(snapshot.totalValue(), snapshot.wQld(), symbols.QLD());
         BigDecimal tqqqCost = estimateHoldingCost(snapshot.totalValue(), snapshot.wTqqq(), symbols.TQQQ());
-        return qqqCost.add(qldCost).add(tqqqCost).setScale(4, RoundingMode.HALF_UP);
+        return baseCost.add(qldCost).add(tqqqCost).setScale(4, RoundingMode.HALF_UP);
     }
 
     private BigDecimal estimateHoldingCost(BigDecimal navUsd, BigDecimal weightPct, BigDecimal annualCostPct) {
@@ -314,7 +314,7 @@ public class PortfolioPerformanceAnalyticsService {
 
     private boolean isHoldingCostConfigured() {
         TradingPerformanceProps.HoldingCostSymbolProps symbols = performanceProps.holdingCost().symbols();
-        return symbols.QQQ().signum() > 0 || symbols.QLD().signum() > 0 || symbols.TQQQ().signum() > 0;
+        return symbols.QQQM().signum() > 0 || symbols.QLD().signum() > 0 || symbols.TQQQ().signum() > 0;
     }
 
     private BigDecimal percentChange(BigDecimal baseValue, BigDecimal amount) {

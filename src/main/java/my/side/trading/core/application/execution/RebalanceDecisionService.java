@@ -36,10 +36,10 @@ public class RebalanceDecisionService {
      * @param state     현재 전략 상태
      * @param portfolio 현재 포트폴리오
      * @param vix       VIX 지수 (없으면 null)
-     * @param qqqMa200  QQQ 200MA (없으면 null)
+     * @param signalMa200  신호 ETF 200MA (없으면 null)
      */
-    public RebalanceDecision decide(StrategyState state, Portfolio portfolio, BigDecimal vix, BigDecimal qqqMa200) {
-        return decide(state, portfolio, null, vix, qqqMa200);
+    public RebalanceDecision decide(StrategyState state, Portfolio portfolio, BigDecimal vix, BigDecimal signalMa200) {
+        return decide(state, portfolio, null, vix, signalMa200);
     }
 
     public RebalanceDecision decide(
@@ -47,7 +47,7 @@ public class RebalanceDecisionService {
             Portfolio portfolio,
             WeightSet prevWeights,
             BigDecimal vix,
-            BigDecimal qqqMa200) {
+            BigDecimal signalMa200) {
 
         // 전략 OFF면 리밸런싱 판단 자체를 하지 않음
         if (!state.strategyOn()) {
@@ -63,9 +63,13 @@ public class RebalanceDecisionService {
         BigDecimal tolerancePct = strategyProps.tolerancePct();
         List<String> symbols = strategyProps.symbols();
 
+        if (!symbols.contains("QQQ") && portfolio.quantityOf("QQQ").signum() > 0) {
+            return RebalanceDecision.no("지원 종료된 QQQ 보유분이 감지되어 수동 확인이 필요합니다.");
+        }
+
         // Circuit Breaker 적용
         boolean vixTriggered = circuitBreakerService.isVixTriggered(vix);
-        boolean maTriggered = circuitBreakerService.isMaTriggered(state.lastClose(), qqqMa200);
+        boolean maTriggered = circuitBreakerService.isMaTriggered(state.signalSymbol(), state.lastClose(), signalMa200);
         WeightSet target = circuitBreakerService.adjustWeights(
                 originalTarget, prevWeights, vixTriggered, maTriggered);
 
@@ -128,7 +132,7 @@ public class RebalanceDecisionService {
 
     private BigDecimal actualWeightOf(Portfolio portfolio, String sym) {
         return switch (sym) {
-            case "QQQ" -> portfolio.wQqq();
+            case "QQQM" -> portfolio.wBase();
             case "QLD" -> portfolio.wQld();
             case "TQQQ" -> portfolio.wTqqq();
             default -> BigDecimal.ZERO;
@@ -137,7 +141,7 @@ public class RebalanceDecisionService {
 
     private BigDecimal targetWeightOf(WeightSet target, String sym) {
         return switch (sym) {
-            case "QQQ" -> target.wQqq();
+            case "QQQM" -> target.wBase();
             case "QLD" -> target.wQld();
             case "TQQQ" -> target.wTqqq();
             default -> BigDecimal.ZERO;

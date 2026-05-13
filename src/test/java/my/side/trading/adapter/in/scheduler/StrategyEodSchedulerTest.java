@@ -9,6 +9,7 @@ import my.side.trading.core.application.strategy.StrategyStateEodService;
 import my.side.trading.core.domain.operation.OpsAlertPublisher;
 import my.side.trading.core.domain.operation.OpsAlertType;
 import my.side.trading.core.domain.time.MarketStatus;
+import my.side.trading.core.infrastructure.config.TradingStrategyProps;
 import org.junit.jupiter.api.Test;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -51,7 +52,8 @@ class StrategyEodSchedulerTest {
                 portfolioPerformanceSnapshotService,
                 yahooVixService,
                 marketCalendarService,
-                opsAlertPublisher);
+                opsAlertPublisher,
+                strategyProps());
         ReflectionTestUtils.setField(scheduler, "enabled", true);
 
         scheduler.runScheduledEod();
@@ -72,9 +74,9 @@ class StrategyEodSchedulerTest {
 
         when(marketCalendarService.currentMarketDate()).thenReturn(marketDate);
         when(marketCalendarService.getMarketStatus(marketDate)).thenReturn(MarketStatus.EARLY_CLOSE);
-        when(quotedPriceService.getQuotedPrice("QQQ")).thenReturn(sampleQuotedPriceResponse("499.12"));
+        when(quotedPriceService.getQuotedPrice("QQQM")).thenReturn(sampleQuotedPriceResponse("499.12"));
         when(yahooVixService.getVixPrice()).thenReturn(Optional.of(new BigDecimal("22.34")));
-        when(yahooVixService.getQqq200Ma()).thenReturn(Optional.of(new BigDecimal("470.11")));
+        when(yahooVixService.getSignal200Ma("QQQM")).thenReturn(Optional.of(new BigDecimal("470.11")));
 
         StrategyEodScheduler scheduler = new StrategyEodScheduler(
                 quotedPriceService,
@@ -82,7 +84,8 @@ class StrategyEodSchedulerTest {
                 portfolioPerformanceSnapshotService,
                 yahooVixService,
                 marketCalendarService,
-                opsAlertPublisher);
+                opsAlertPublisher,
+                strategyProps());
         ReflectionTestUtils.setField(scheduler, "enabled", true);
 
         scheduler.runScheduledEod();
@@ -103,7 +106,7 @@ class StrategyEodSchedulerTest {
         LocalDate marketDate = LocalDate.of(2026, 4, 2);
 
         when(marketCalendarService.currentMarketDate()).thenReturn(marketDate);
-        when(quotedPriceService.getQuotedPrice("QQQ")).thenReturn(sampleQuotedPriceResponse("499.12"));
+        when(quotedPriceService.getQuotedPrice("QQQM")).thenReturn(sampleQuotedPriceResponse("499.12"));
         doThrow(new IllegalStateException("boom")).when(eodService).runEod(marketDate, new BigDecimal("499.12"));
 
         StrategyEodScheduler scheduler = new StrategyEodScheduler(
@@ -112,7 +115,8 @@ class StrategyEodSchedulerTest {
                 portfolioPerformanceSnapshotService,
                 yahooVixService,
                 marketCalendarService,
-                opsAlertPublisher);
+                opsAlertPublisher,
+                strategyProps());
 
         org.assertj.core.api.Assertions.assertThatThrownBy(scheduler::runManualEod)
                 .isInstanceOf(IllegalStateException.class)
@@ -132,7 +136,7 @@ class StrategyEodSchedulerTest {
         LocalDate marketDate = LocalDate.of(2026, 4, 2);
 
         when(marketCalendarService.currentMarketDate()).thenReturn(marketDate);
-        when(quotedPriceService.getQuotedPrice("QQQ")).thenReturn(sampleQuotedPriceResponse("499.12"));
+        when(quotedPriceService.getQuotedPrice("QQQM")).thenReturn(sampleQuotedPriceResponse("499.12"));
         doThrow(new IllegalStateException("snapshot-boom"))
                 .when(portfolioPerformanceSnapshotService).captureDailySnapshot(marketDate);
 
@@ -142,7 +146,8 @@ class StrategyEodSchedulerTest {
                 portfolioPerformanceSnapshotService,
                 yahooVixService,
                 marketCalendarService,
-                opsAlertPublisher);
+                opsAlertPublisher,
+                strategyProps());
 
         scheduler.runManualEod();
 
@@ -156,7 +161,7 @@ class StrategyEodSchedulerTest {
                 "0",
                 "ok",
                 new QuotedPriceResponse.Item(
-                        "QQQ",
+                        "QQQM",
                         "2",
                         prevClosePrice,
                         "0",
@@ -167,5 +172,9 @@ class StrategyEodSchedulerTest {
                         "0",
                         "0",
                         "Y"));
+    }
+
+    private TradingStrategyProps strategyProps() {
+        return new TradingStrategyProps(null, "QQQM", null, null, null);
     }
 }

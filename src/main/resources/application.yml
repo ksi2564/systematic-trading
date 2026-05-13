@@ -68,7 +68,7 @@ trading:
       default-days: 365
     holding-cost:
       symbols:
-        QQQ: 0
+        QQQM: 0.15
         QLD: 0
         TQQQ: 0
   fx:
@@ -122,16 +122,17 @@ trading:
     enabled: false
   strategy:
     tolerance-pct: 5.0
+    signal-symbol: QQQM
     symbols:
-      - QQQ
+      - QQQM
       - QLD
       - TQQQ
     sell-priority:
       - TQQQ
       - QLD
-      - QQQ
+      - QQQM
     buy-priority:
-      - QQQ
+      - QQQM
       - QLD
       - TQQQ
     thresholds:

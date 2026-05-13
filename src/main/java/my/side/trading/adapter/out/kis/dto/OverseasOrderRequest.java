@@ -23,7 +23,7 @@ public record OverseasOrderRequest(
         String overseasExchangeCode, // 해외거래소코드 (예: "NASD", "AMEX")
 
         @JsonProperty("PDNO")
-        String productNo,           // 상품번호 (종목코드: QQQ, QLD, TQQQ)
+        String productNo,           // 상품번호 (종목코드: QQQM, QLD, TQQQ)
 
         @JsonProperty("ORD_QTY")
         String orderQuantity,       // 주문수량

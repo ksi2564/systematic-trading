@@ -28,13 +28,13 @@ public class PortfolioSnapshotEntity {
     @Column(name = "cash", nullable = false, precision = 18, scale = 4)
     private BigDecimal cash;
 
-    @Column(name = "w_qqq", nullable = false, precision = 5, scale = 4)
-    private BigDecimal wQqq;
+    @Column(name = "w_base", nullable = false, precision = 7, scale = 4)
+    private BigDecimal wBase;
 
-    @Column(name = "w_qld", nullable = false, precision = 5, scale = 4)
+    @Column(name = "w_qld", nullable = false, precision = 7, scale = 4)
     private BigDecimal wQld;
 
-    @Column(name = "w_tqqq", nullable = false, precision = 5, scale = 4)
+    @Column(name = "w_tqqq", nullable = false, precision = 7, scale = 4)
     private BigDecimal wTqqq;
 
     // DD 퍼센트 (예: 15.23)
@@ -46,7 +46,7 @@ public class PortfolioSnapshotEntity {
                 asOfDate,
                 totalValue,
                 cash,
-                wQqq,
+                wBase,
                 wQld,
                 wTqqq,
                 ddPercent
@@ -59,7 +59,7 @@ public class PortfolioSnapshotEntity {
                 .asOfDate(snapshot.asOfDate())
                 .totalValue(snapshot.totalValue())
                 .cash(snapshot.cash())
-                .wQqq(snapshot.wQqq())
+                .wBase(snapshot.wBase())
                 .wQld(snapshot.wQld())
                 .wTqqq(snapshot.wTqqq())
                 .ddPercent(snapshot.ddPercent())

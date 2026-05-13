@@ -15,6 +15,7 @@ import my.side.trading.core.domain.execution.plan.RebalanceDecision;
 import my.side.trading.core.domain.portfolio.Portfolio;
 import my.side.trading.core.domain.strategy.StrategyState;
 import my.side.trading.core.domain.strategy.StrategyStateRepository;
+import my.side.trading.core.infrastructure.config.TradingStrategyProps;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -35,6 +36,7 @@ public class ManualRebalancePreviewService {
     private final ExecutionGuard executionGuard;
     private final RebalanceOrderPlanner orderPlanner;
     private final Clock clock;
+    private final TradingStrategyProps strategyProps;
 
     public ManualRebalancePreview preview() {
         Instant generatedAt = clock.instant();
@@ -46,8 +48,8 @@ public class ManualRebalancePreviewService {
 
         Portfolio portfolio = portfolioService.getCurrentPortfolio();
         BigDecimal vix = marketDataProvider.getVixPrice().orElse(null);
-        BigDecimal qqq200Ma = marketDataProvider.getQqq200Ma().orElse(null);
-        RebalanceDecision decision = decisionService.decide(state, portfolio, prevWeights, vix, qqq200Ma);
+        BigDecimal signal200Ma = marketDataProvider.getSignal200Ma(strategyProps.signalSymbol()).orElse(null);
+        RebalanceDecision decision = decisionService.decide(state, portfolio, prevWeights, vix, signal200Ma);
         boolean duplicateSignalJobExists = jobRepository.findBySignalDate(state.asOfDate()).isPresent();
         ExecutionBlockReason manualBlockReason = executionGuard
                 .getExecutionBlockReason(ExecutionTriggerType.MANUAL)
@@ -71,8 +73,10 @@ public class ManualRebalancePreviewService {
                 state,
                 decision,
                 portfolio,
+                strategyProps.signalSymbol(),
+                strategyProps.signalSymbol(),
                 vix,
-                qqq200Ma,
+                signal200Ma,
                 duplicateSignalJobExists,
                 orderPlan.orders(),
                 orderPlan.totalOrderNotional(),

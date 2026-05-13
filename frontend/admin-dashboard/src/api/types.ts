@@ -18,9 +18,12 @@ export type ExecutionOrderStatus =
   | string;
 
 export type WeightInfo = {
+  baseSymbol?: string;
+  base?: Numeric;
   qqq?: Numeric;
   qld?: Numeric;
   tqqq?: Numeric;
+  wBase?: Numeric;
   wQqq?: Numeric;
   wQld?: Numeric;
   wTqqq?: Numeric;
@@ -56,9 +59,12 @@ export type OperationsKpiSnapshot = {
 };
 
 export type DashboardSummary = {
+  baseSymbol?: string;
+  signalSymbol?: string;
   portfolio?: {
     totalValue?: Numeric;
     cash?: Numeric;
+    wBase?: Numeric;
     wQqq?: Numeric;
     wQld?: Numeric;
     wTqqq?: Numeric;
@@ -72,7 +78,9 @@ export type DashboardSummary = {
     targetWeights?: WeightInfo | null;
   } | null;
   circuitBreaker?: {
+    signalSymbol?: string;
     vix?: Numeric;
+    signal200Ma?: Numeric;
     qqq200Ma?: Numeric;
   } | null;
   operationsKpi?: OperationsKpiSnapshot | null;
@@ -102,6 +110,8 @@ export type ManualRebalancePreview = {
   operatingMode: OperatingMode;
   manualBlockReason: string | null;
   signalDate: string | null;
+  baseSymbol?: string;
+  signalSymbol?: string;
   strategy: {
     asOfDate: string | null;
     drawdownPct: Numeric;
@@ -117,12 +127,15 @@ export type ManualRebalancePreview = {
     targetWeights: WeightInfo | null;
   } | null;
   portfolio: {
+    baseSymbol?: string;
     totalValue: Numeric;
     cash: Numeric;
     currentWeights: WeightInfo | null;
   } | null;
   marketIndicators: {
+    signalSymbol?: string;
     vix: Numeric;
+    signal200Ma?: Numeric;
     qqq200Ma: Numeric;
   } | null;
   duplicateSignalJobExists: boolean;
@@ -212,6 +225,7 @@ export type PerformanceSnapshotItem = {
   asOfDate: string;
   totalValue: Numeric;
   cash: Numeric;
+  wBase?: Numeric;
   wQqq: Numeric;
   wQld: Numeric;
   wTqqq: Numeric;

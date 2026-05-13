@@ -16,7 +16,7 @@ public class RealtimeQuoteBootstrap implements ApplicationRunner {
 
     @Override
     public void run(ApplicationArguments args) {
-        // 앱 기동 시 핵심 ETF 3종목 실시간호가 자동 구독(QQQ, QLD, TQQQ)
+        // 앱 기동 시 핵심 ETF 3종목 실시간호가 자동 구독(QQQM, QLD, TQQQ)
         kisOverseasRealtimeQuoteService.startCoreEtfRealtimeQuotes();
     }
 }

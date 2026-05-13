@@ -39,7 +39,7 @@ class YahooVixServiceTest {
     }
 
     @Test
-    void 공통_WebClient로_QQQ_과거가격을_조회한다() {
+    void 공통_WebClient로_QQQM_과거가격을_조회한다() {
         AtomicReference<String> requestedUrl = new AtomicReference<>();
         WebClient webClient = webClient(request -> {
             requestedUrl.set(request.url().toString());
@@ -59,10 +59,10 @@ class YahooVixServiceTest {
         });
         YahooVixService service = new YahooVixService(webClient, circuitBreakerProps(), fxProps());
 
-        List<BigDecimal> prices = service.getQqqHistoricalPrices(2);
+        List<BigDecimal> prices = service.getHistoricalPrices("QQQM", 2);
 
         assertThat(prices).containsExactly(new BigDecimal("482.2000"), new BigDecimal("483.3000"));
-        assertThat(requestedUrl.get()).isEqualTo("https://query1.finance.yahoo.com/v8/finance/chart/QQQ?range=1y&interval=1d");
+        assertThat(requestedUrl.get()).isEqualTo("https://query1.finance.yahoo.com/v8/finance/chart/QQQM?range=1y&interval=1d");
     }
 
     @Test
@@ -74,11 +74,11 @@ class YahooVixServiceTest {
     }
 
     @Test
-    void QQQ_조회가_실패하면_빈_목록을_반환한다() {
+    void QQQM_조회가_실패하면_빈_목록을_반환한다() {
         WebClient webClient = webClient(request -> Mono.error(new IllegalStateException("Yahoo down")));
         YahooVixService service = new YahooVixService(webClient, circuitBreakerProps(), fxProps());
 
-        assertThat(service.getQqqHistoricalPrices(200)).isEmpty();
+        assertThat(service.getHistoricalPrices("QQQM", 200)).isEmpty();
     }
 
     private WebClient webClient(ExchangeFunction exchangeFunction) {

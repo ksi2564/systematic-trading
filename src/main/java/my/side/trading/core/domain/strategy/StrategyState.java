@@ -5,8 +5,9 @@ import java.time.LocalDate;
 
 public record StrategyState(
         LocalDate asOfDate,                 // 상태 기준 일자 (EOD)
-        BigDecimal ath,                     // QQQ 전고점 종가
-        BigDecimal lastClose,               // 어제 QQQ 종가
+        String signalSymbol,                // 전략 판단 기준 ETF 심볼
+        BigDecimal ath,                     // 신호 ETF 전고점 종가
+        BigDecimal lastClose,               // 어제 신호 ETF 종가
         BigDecimal drawdownPct,             // DD 퍼센트 (예: 15.23 == 15.23%)
         BigDecimal maxDrawdownPctSinceAth,  // 해당 ATH 이후 경험한 최악의 DD (%)
         DdBucket ddBucket,                  // DD 구간
@@ -15,4 +16,35 @@ public record StrategyState(
         boolean strategyOn,                 // 전략 ON/OFF
         int version                         // 전략 버전(기획서 버전 번호 등)
 ) {
+        public StrategyState {
+                signalSymbol = signalSymbol == null || signalSymbol.isBlank()
+                        ? "QQQ"
+                        : signalSymbol.trim().toUpperCase();
+        }
+
+        public StrategyState(
+                LocalDate asOfDate,
+                BigDecimal ath,
+                BigDecimal lastClose,
+                BigDecimal drawdownPct,
+                BigDecimal maxDrawdownPctSinceAth,
+                DdBucket ddBucket,
+                StrategyPhase phase,
+                WeightSet targetWeights,
+                boolean strategyOn,
+                int version
+        ) {
+                this(
+                        asOfDate,
+                        "QQQ",
+                        ath,
+                        lastClose,
+                        drawdownPct,
+                        maxDrawdownPctSinceAth,
+                        ddBucket,
+                        phase,
+                        targetWeights,
+                        strategyOn,
+                        version);
+        }
 }

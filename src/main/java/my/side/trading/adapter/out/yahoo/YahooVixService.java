@@ -78,12 +78,14 @@ public class YahooVixService implements MarketDataProvider {
     }
 
     /**
-     * QQQ 200일 종가 조회
-     * 
-     * @param days 조회할 일수 (기본 200)
-     * @return 종가 리스트 (최신순)
+     * 신호 ETF 일별 종가 조회
+     *
+     * @param symbol 조회할 ETF 심볼
+     * @param days 조회할 일수
+     * @return 종가 리스트 (과거순 -> 최신순)
      */
-    public List<BigDecimal> getQqqHistoricalPrices(int days) {
+    public List<BigDecimal> getHistoricalPrices(String symbol, int days) {
+        String normalizedSymbol = normalizeSymbol(symbol);
         try {
             // range=1y(1년), interval=1d(일봉)
             YahooQuoteResponse response = yahooWebClient.get()
@@ -91,18 +93,18 @@ public class YahooVixService implements MarketDataProvider {
                             .path("/v8/finance/chart/{symbol}")
                             .queryParam("range", "1y")
                             .queryParam("interval", "1d")
-                            .build("QQQ"))
+                            .build(normalizedSymbol))
                     .retrieve()
                     .bodyToMono(YahooQuoteResponse.class)
                     .block(fxProps.yahoo().requestTimeout());
 
             if (response == null) {
-                log.warn("Yahoo Finance QQQ 응답이 비어 있습니다.");
+                log.warn("Yahoo Finance 신호 ETF 응답이 비어 있습니다. symbol={}", normalizedSymbol);
                 return List.of();
             }
 
             List<BigDecimal> closes = response.getClosePrices();
-            log.info("QQQ 일별 종가 {}건을 조회했습니다.", closes.size());
+            log.info("{} 일별 종가 {}건을 조회했습니다.", normalizedSymbol, closes.size());
 
             // 최근 days일만 반환
             if (closes.size() > days) {
@@ -111,22 +113,24 @@ public class YahooVixService implements MarketDataProvider {
             return closes;
 
         } catch (Exception e) {
-            log.error("Yahoo Finance에서 QQQ 과거 가격 조회에 실패했습니다.", e);
+            log.error("Yahoo Finance에서 신호 ETF 과거 가격 조회에 실패했습니다. symbol={}", normalizedSymbol, e);
             return List.of();
         }
     }
 
     /**
-     * QQQ 200일 이동평균 계산
+     * 전략 판단 기준 ETF의 200일 이동평균 계산
      * 
      * @return 200MA, 계산 불가 시 Optional.empty()
      */
-    public Optional<BigDecimal> getQqq200Ma() {
+    @Override
+    public Optional<BigDecimal> getSignal200Ma(String signalSymbol) {
+        String normalizedSymbol = normalizeSymbol(signalSymbol);
         int period = props.getMaPeriod();
-        List<BigDecimal> prices = getQqqHistoricalPrices(period);
+        List<BigDecimal> prices = getHistoricalPrices(normalizedSymbol, period);
 
         if (prices.size() < period) {
-            log.warn("{}MA 계산에 필요한 데이터가 부족합니다: availableDays={}", period, prices.size());
+            log.warn("{} {}MA 계산에 필요한 데이터가 부족합니다: availableDays={}", normalizedSymbol, period, prices.size());
             return Optional.empty();
         }
 
@@ -134,7 +138,14 @@ public class YahooVixService implements MarketDataProvider {
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
         BigDecimal ma = sum.divide(BigDecimal.valueOf(period), 4, java.math.RoundingMode.HALF_UP);
 
-        log.info("QQQ {}MA={}", period, ma);
+        log.info("{} {}MA={}", normalizedSymbol, period, ma);
         return Optional.of(ma);
+    }
+
+    private String normalizeSymbol(String symbol) {
+        if (symbol == null || symbol.isBlank()) {
+            return "QQQM";
+        }
+        return symbol.trim().toUpperCase();
     }
 }

@@ -24,6 +24,7 @@ import my.side.trading.core.domain.strategy.StrategyPhase;
 import my.side.trading.core.domain.strategy.StrategyState;
 import my.side.trading.core.domain.strategy.WeightSet;
 import my.side.trading.core.infrastructure.config.TradingOperationProps;
+import my.side.trading.core.infrastructure.config.TradingStrategyProps;
 import my.side.trading.testutil.FakeExecutionJobRepository;
 import my.side.trading.testutil.FakeRealtimePriceProvider;
 import my.side.trading.testutil.FakeStrategyStateRepository;
@@ -61,11 +62,13 @@ class ManualRebalancePreviewServiceTest {
         assertThat(preview.operatingMode()).isEqualTo(OperatingMode.PAPER);
         assertThat(preview.manualBlockReason()).isEqualTo(ExecutionBlockReason.PAPER_MODE_BLOCKS_LIVE_EXECUTION);
         assertThat(preview.signalDate()).isEqualTo(SIGNAL_DATE);
+        assertThat(preview.baseSymbol()).isEqualTo("QQQM");
+        assertThat(preview.signalSymbol()).isEqualTo("QQQM");
         assertThat(preview.vix()).isEqualByComparingTo("18.50");
-        assertThat(preview.qqq200Ma()).isEqualByComparingTo("440.00");
+        assertThat(preview.signal200Ma()).isEqualByComparingTo("440.00");
         assertThat(preview.duplicateSignalJobExists()).isFalse();
         assertThat(preview.orders()).hasSize(1);
-        assertThat(preview.orders().getFirst().order().getSymbol()).isEqualTo("QQQ");
+        assertThat(preview.orders().getFirst().order().getSymbol()).isEqualTo("QQQM");
         assertThat(preview.orders().getFirst().riskViolation()).isNull();
         assertThat(preview.totalOrderNotional()).isEqualByComparingTo("500.00");
         assertThat(preview.executable()).isFalse();
@@ -92,7 +95,7 @@ class ManualRebalancePreviewServiceTest {
         jobRepository.save(ExecutionJob.create(
                 SIGNAL_DATE,
                 NOW,
-                List.of(ExecutionOrder.create("QQQ", ExecutionOrderSide.BUY, 1,
+                List.of(ExecutionOrder.create("QQQM", ExecutionOrderSide.BUY, 1,
                         new BigDecimal("100.00"), new BigDecimal("100.00")))));
         ManualRebalancePreviewService service = createService(jobRepository, BigDecimal.ZERO, decision(true),
                 null, OperatingMode.MANUAL_LIVE);
@@ -161,7 +164,7 @@ class ManualRebalancePreviewServiceTest {
                 manualBlockReason,
                 operatingMode,
                 FakeRealtimePriceProvider.withLastPrices(Map.of(
-                        "QQQ", new BigDecimal("100.00"))));
+                        "QQQM", new BigDecimal("100.00"))));
     }
 
     private ManualRebalancePreviewService createService(
@@ -184,7 +187,7 @@ class ManualRebalancePreviewServiceTest {
 
         MarketDataProvider marketDataProvider = mock(MarketDataProvider.class);
         when(marketDataProvider.getVixPrice()).thenReturn(Optional.of(new BigDecimal("18.50")));
-        when(marketDataProvider.getQqq200Ma()).thenReturn(Optional.of(new BigDecimal("440.00")));
+        when(marketDataProvider.getSignal200Ma("QQQM")).thenReturn(Optional.of(new BigDecimal("440.00")));
 
         ExecutionGuard executionGuard = mock(ExecutionGuard.class);
         when(executionGuard.getExecutionBlockReason(ExecutionTriggerType.MANUAL))
@@ -216,7 +219,8 @@ class ManualRebalancePreviewServiceTest {
                 jobRepository,
                 executionGuard,
                 orderPlanner,
-                Clock.fixed(NOW, ZoneOffset.UTC));
+                Clock.fixed(NOW, ZoneOffset.UTC),
+                strategyProps());
     }
 
     private RebalanceDecision decision(boolean shouldRebalance) {
@@ -227,12 +231,13 @@ class ManualRebalancePreviewServiceTest {
                 RebalanceType.THRESHOLD,
                 "test",
                 WeightSet.of(50, 0, 0),
-                List.of(new OrderIntent("QQQ", ExecutionOrderSide.BUY, "buy test")));
+                List.of(new OrderIntent("QQQM", ExecutionOrderSide.BUY, "buy test")));
     }
 
     private StrategyState state() {
         return new StrategyState(
                 SIGNAL_DATE,
+                "QQQM",
                 new BigDecimal("500.00"),
                 new BigDecimal("450.00"),
                 new BigDecimal("10.00"),
@@ -242,5 +247,9 @@ class ManualRebalancePreviewServiceTest {
                 WeightSet.of(50, 0, 0),
                 true,
                 1);
+    }
+
+    private TradingStrategyProps strategyProps() {
+        return new TradingStrategyProps(null, "QQQM", null, null, null);
     }
 }

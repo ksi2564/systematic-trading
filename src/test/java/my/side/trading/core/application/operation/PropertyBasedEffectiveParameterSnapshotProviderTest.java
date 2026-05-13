@@ -22,9 +22,10 @@ class PropertyBasedEffectiveParameterSnapshotProviderTest {
         PropertyBasedEffectiveParameterSnapshotProvider provider = new PropertyBasedEffectiveParameterSnapshotProvider(
                 new TradingStrategyProps(
                         new BigDecimal("5.0"),
-                        List.of("QQQ", "QLD", "TQQQ"),
-                        List.of("TQQQ", "QLD", "QQQ"),
-                        List.of("QQQ", "QLD", "TQQQ")),
+                        "QQQM",
+                        List.of("QQQM", "QLD", "TQQQ"),
+                        List.of("TQQQ", "QLD", "QQQM"),
+                        List.of("QQQM", "QLD", "TQQQ")),
                 new TradingStrategyThresholdProps(null, null),
                 new TradingCircuitBreakerProps(true, true, new BigDecimal("35"), 200),
                 new TradingPricingProps(new BigDecimal("0.01"), 0, 0, 1, 1, new BigDecimal("0.25"), 3, 2000),
@@ -46,7 +47,7 @@ class PropertyBasedEffectiveParameterSnapshotProviderTest {
         assertThat(snapshots.get(ParameterRegistryKey.RECOVERY_RULE)).isEqualTo("최대 DD 15% 이상 + 현재 DD 10% 이하");
         assertThat(snapshots.get(ParameterRegistryKey.REBALANCE_TOLERANCE)).isEqualTo("5.0%");
         assertThat(snapshots.get(ParameterRegistryKey.VIX_THRESHOLD)).isEqualTo("35");
-        assertThat(snapshots.get(ParameterRegistryKey.MA_200_GUARD)).isEqualTo("QQQ < MA200 시 공격 버킷 1단계 축소");
+        assertThat(snapshots.get(ParameterRegistryKey.MA_200_GUARD)).isEqualTo("QQQM < MA200 시 공격 버킷 1단계 축소");
         assertThat(snapshots.get(ParameterRegistryKey.ORDER_BUFFER_RETRY_POLICY))
                 .isEqualTo("초기 BUY 0 tick / SELL 0 tick, 재시도 BUY +1 tick / SELL +1 tick, 최대 3회, 대기 2000ms");
         assertThat(snapshots.get(ParameterRegistryKey.MAX_ORDER_NOTIONAL_USD)).isEqualTo("미정의 (0으로 비활성)");

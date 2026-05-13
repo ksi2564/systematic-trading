@@ -84,8 +84,8 @@
 
 ### EOD 계산
 
-1. 장 마감 이후 QQQ 전일 종가를 조회한다.
-2. 보조 지표로 VIX와 QQQ 200MA를 조회한다.
+1. 장 마감 이후 QQQM 전일 종가를 조회한다.
+2. 보조 지표로 VIX와 QQQM 200MA를 조회한다.
 3. 전략 상태를 계산하고 저장한다.
 
 ### 자동 리밸런싱
@@ -311,7 +311,7 @@ curl.exe -s `
   -X POST `
   -H "X-API-KEY: $apiKey" `
   -H "Content-Type: application/json" `
-  -d '{"symbol":"QQQ","side":"BUY","quantity":1,"limitPrice":421.12}' `
+  -d '{"symbol":"QQQM","side":"BUY","quantity":1,"limitPrice":180.12}' `
   http://127.0.0.1:8080/kis/dev-diagnostics/orders/payload
 ```
 

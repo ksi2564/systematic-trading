@@ -34,13 +34,13 @@ public class KisOverseasRealtimeQuoteService {
             "ws://ops.koreainvestment.com:21000/tryitout/HDFSASP0";
 
     /**
-     * QQQ / QLD / TQQQ 3종목 실시간호가를
+     * QQQM / QLD / TQQQ 3종목 실시간호가를
      * WebSocket 하나로 동시에 구독
      * 애플리케이션 기동 시 자동 실행 예정
      */
     public void startCoreEtfRealtimeQuotes() {
         List<SymbolTarget> targets = List.of(
-                new SymbolTarget("QQQ", "NAS"),
+                new SymbolTarget("QQQM", "NAS"),
                 new SymbolTarget("QLD", "AMS"),
                 new SymbolTarget("TQQQ", "NAS")
         );

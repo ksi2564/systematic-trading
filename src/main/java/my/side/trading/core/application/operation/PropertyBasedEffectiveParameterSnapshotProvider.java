@@ -43,7 +43,7 @@ public class PropertyBasedEffectiveParameterSnapshotProvider implements Effectiv
         snapshots.put(ParameterRegistryKey.REBALANCE_TOLERANCE, formatPercent(strategyProps.tolerancePct(), 1));
         snapshots.put(ParameterRegistryKey.VIX_THRESHOLD, formatDecimal(circuitBreakerProps.getVixThreshold(), 0));
         snapshots.put(ParameterRegistryKey.MA_200_GUARD,
-                "QQQ < MA" + circuitBreakerProps.getMaPeriod() + " 시 공격 버킷 1단계 축소");
+                strategyProps.signalSymbol() + " < MA" + circuitBreakerProps.getMaPeriod() + " 시 공격 버킷 1단계 축소");
         snapshots.put(ParameterRegistryKey.ORDER_BUFFER_RETRY_POLICY, formatOrderRetryPolicy());
         snapshots.put(ParameterRegistryKey.MAX_ORDER_NOTIONAL_USD,
                 formatOptionalLimit(operationProps.riskLimits().maxOrderNotionalUsd(), "USD"));

@@ -1,7 +1,7 @@
 # QQQ 자동매매 시스템 현재 구현 싱크 문서
 
 기준 브랜치: `master`
-기준 일자: 2026-05-08
+기준 일자: 2026-05-13
 검토 범위: 현재 저장소 코드, `application.yml`, `application-prod.yml`, 운영/전략/배포 문서
 
 관련 문서:
@@ -42,6 +42,7 @@
 - 운영 모드 감사 로그, 수동 전환 API, 자동 강등 이력
 - 파라미터 변경 이력 레지스터
 - 운영 Dashboard 요약 / 이력 / 성과 조회 API
+- 수동 리밸런싱 주문 미리보기 / 리스크 결과 API
 - 공개 포트폴리오 요약 / 성과 읽기 API
 - API Key 필수 설정 기반 인증과 private/public rate limit
 - 공개 경로 보호 선언, CORS allowlist, 신뢰 프록시 기반 client IP 해석, 공개 접근 로그
@@ -105,7 +106,7 @@
 - `GET /api/dashboard/summary`는 포트폴리오, 전략 상태, 보조 지표, 운영 KPI, 성과 요약, 실행 가드, 최근 Job, 운영 감사 이력을 노출한다.
 - `GET /api/dashboard/history`는 Job 이력, 운영 모드 감사 이력, 최근 성과 스냅샷을 함께 노출한다.
 - `GET /api/dashboard/performance`는 성과 요약, 최근 일별 NAV/DD 시계열, 월별 손익 이력을 함께 노출한다.
-- `POST /api/jobs/manual-rebalance`, `POST /api/jobs/eod-calculation`, `POST /api/jobs/{jobId}/execute`, `POST /api/jobs/{jobId}/orders/{orderId}/confirm`이 구현돼 있다.
+- `GET /api/jobs/manual-rebalance/preview`, `POST /api/jobs/manual-rebalance`, `POST /api/jobs/eod-calculation`, `POST /api/jobs/{jobId}/execute`, `POST /api/jobs/{jobId}/orders/{orderId}/confirm`이 구현돼 있다.
 - `GET /api/operations/mode`, `POST /api/operations/mode`, `GET /api/operations/mode-history`가 구현돼 있다.
 - 파라미터 변경 이력 레지스터 API가 구현돼 있다.
 - 이 API들은 Admin Dashboard가 소비할 내부 운영 API다.
@@ -142,8 +143,9 @@
 
 ### P1. 별도 프론트엔드 애플리케이션 부재
 
-- 현재 저장소에는 별도 Admin Dashboard 또는 Public Dashboard 프론트엔드 앱이 없다.
-- 백엔드는 JSON API를 제공하며, 화면 구현은 후속 작업이다.
+- 현재 저장소에는 실제 API 연동 Admin Dashboard 또는 Public Dashboard 프론트엔드 앱이 없다.
+- Admin Dashboard v1 화면 설계 원본은 `frontend/admin-dashboard/wireframe/index.html`에 정적 HTML로 추가돼 있다.
+- 백엔드는 JSON API를 제공하며, 실제 화면 구현은 후속 작업이다.
 - Public Dashboard는 `/public/api/v1/**`만 호출해야 한다.
 - Admin Dashboard는 내부 전용 화면으로 `/api/dashboard`, `/api/jobs`, `/api/operations`, `/kis`, `/actuator` 등 운영 API를 호출해야 한다.
 
@@ -151,8 +153,9 @@
 
 - 현재 `POST /api/jobs/manual-rebalance`는 운영자용 화면 없이 실행 API만 제공한다.
 - curl 직접 호출은 비상/개발자 운영 경로로만 본다.
-- 실제 수동 실주문 전에는 Admin Dashboard에 실행 전 점검, 주문 미리보기, 최종 확인, 실행 후 확인 flow를 먼저 만들어야 한다.
-- 주문 미리보기와 리스크 결과를 실행 전에 조회하는 전용 API는 아직 없다.
+- 실제 수동 실주문 전에는 Admin Dashboard에 실행 전 점검, 주문 미리보기, 최종 확인, 실행 후 확인 flow를 실제 앱으로 만들어야 한다.
+- 주문 미리보기와 리스크 결과를 실행 전에 조회하는 `GET /api/jobs/manual-rebalance/preview`는 구현돼 있다.
+- 남은 갭은 HTML 와이어프레임을 기준으로 이 API를 소비하는 내부 전용 Admin Dashboard 앱과 최종 확인 UX를 구현하는 것이다.
 
 ### P3. 성과 해석 체계 고도화 필요
 
@@ -193,6 +196,7 @@
 - 최소 장애 알림 골격 부재
 - 운영 모드 감사 로그 / 전환 API 부재
 - 파라미터 변경 이력 레지스터 부재
+- 수동 리밸런싱 주문 미리보기 / 리스크 결과 API 부재
 - 공개용 포트폴리오 읽기 API 부재
 - API key placeholder fallback 제거 부재
 - 운영 배포 산출물 부재
@@ -204,11 +208,10 @@
 
 1. 문서와 프론트엔드 개발 기준 싱크 완료
 2. Admin Dashboard 수동 실행 flow 요구사항 구체화
-3. 수동 리밸런싱 주문 미리보기 / 리스크 결과 API 추가
-4. 내부 전용 Admin Dashboard 앱 구현
-5. 공개 API만 소비하는 Public Dashboard 앱 구현
-6. `MANUAL_LIVE` 수동 실거래 리허설과 운영 기록 축적
-7. 성과 해석 체계 고도화
-8. `AUTO_LIVE` 승격 전 체크리스트 검증
+3. 내부 전용 Admin Dashboard 앱 구현
+4. 공개 API만 소비하는 Public Dashboard 앱 구현
+5. `MANUAL_LIVE` 수동 실거래 리허설과 운영 기록 축적
+6. 성과 해석 체계 고도화
+7. `AUTO_LIVE` 승격 전 체크리스트 검증
 
 로드맵 관리 기준 문서는 `docs/DEVELOPER_ROADMAP.md`다.

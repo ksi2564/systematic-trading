@@ -22,6 +22,7 @@ import my.side.trading.core.domain.strategy.StrategyPhase;
 import my.side.trading.core.domain.strategy.StrategyState;
 import my.side.trading.core.domain.strategy.StrategyStateRepository;
 import my.side.trading.core.domain.strategy.WeightSet;
+import my.side.trading.core.infrastructure.config.TradingStrategyProps;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
@@ -53,14 +54,14 @@ class RebalanceOrchestratorTest {
                 RebalanceType.THRESHOLD,
                 "rebalance needed",
                 WeightSet.of(100, 0, 0),
-                List.of(new OrderIntent("QQQ", ExecutionOrderSide.BUY, "buy")));
+                List.of(new OrderIntent("QQQM", ExecutionOrderSide.BUY, "buy")));
         ExecutionJob job = sampleJob();
 
         when(stateRepository.findLatestState()).thenReturn(Optional.of(state));
         when(stateRepository.findPreviousState(state.asOfDate())).thenReturn(Optional.empty());
         when(portfolioService.getCurrentPortfolio()).thenReturn(portfolio);
         when(marketDataProvider.getVixPrice()).thenReturn(Optional.empty());
-        when(marketDataProvider.getQqq200Ma()).thenReturn(Optional.empty());
+        when(marketDataProvider.getSignal200Ma("QQQM")).thenReturn(Optional.empty());
         when(decisionService.decide(state, portfolio, null, null, null)).thenReturn(decision);
         when(jobCreateService.createJob(eq(state.asOfDate()), any(), eq(decision), eq(portfolio)))
                 .thenReturn(Optional.of(job));
@@ -75,7 +76,8 @@ class RebalanceOrchestratorTest {
                 jobCreateService,
                 jobExecutor,
                 marketDataProvider,
-                executionGuard);
+                executionGuard,
+                strategyProps());
 
         RebalanceRunResult result = orchestrator.run(Instant.parse("2026-04-02T09:00:00Z"), ExecutionTriggerType.MANUAL);
 
@@ -101,7 +103,7 @@ class RebalanceOrchestratorTest {
                 RebalanceType.THRESHOLD,
                 "rebalance needed",
                 WeightSet.of(100, 0, 0),
-                List.of(new OrderIntent("QQQ", ExecutionOrderSide.BUY, "buy")));
+                List.of(new OrderIntent("QQQM", ExecutionOrderSide.BUY, "buy")));
         ExecutionJob job = sampleJob();
         Instant now = Instant.parse("2026-04-02T23:45:00Z");
 
@@ -109,7 +111,7 @@ class RebalanceOrchestratorTest {
         when(stateRepository.findPreviousState(state.asOfDate())).thenReturn(Optional.empty());
         when(portfolioService.getCurrentPortfolio()).thenReturn(portfolio);
         when(marketDataProvider.getVixPrice()).thenReturn(Optional.empty());
-        when(marketDataProvider.getQqq200Ma()).thenReturn(Optional.empty());
+        when(marketDataProvider.getSignal200Ma("QQQM")).thenReturn(Optional.empty());
         when(decisionService.decide(state, portfolio, null, null, null)).thenReturn(decision);
         when(jobCreateService.createJob(state.asOfDate(), now, decision, portfolio)).thenReturn(Optional.of(job));
         when(executionGuard.getExecutionBlockReason(ExecutionTriggerType.AUTOMATED)).thenReturn(Optional.empty());
@@ -122,7 +124,8 @@ class RebalanceOrchestratorTest {
                 jobCreateService,
                 jobExecutor,
                 marketDataProvider,
-                executionGuard);
+                executionGuard,
+                strategyProps());
 
         RebalanceRunResult result = orchestrator.run(now, ExecutionTriggerType.AUTOMATED);
 
@@ -144,6 +147,7 @@ class RebalanceOrchestratorTest {
 
         StrategyState previousState = new StrategyState(
                 LocalDate.of(2026, 3, 31),
+                "QQQM",
                 new BigDecimal("500"),
                 new BigDecimal("470"),
                 new BigDecimal("6"),
@@ -161,7 +165,7 @@ class RebalanceOrchestratorTest {
         when(stateRepository.findPreviousState(state.asOfDate())).thenReturn(Optional.of(previousState));
         when(portfolioService.getCurrentPortfolio()).thenReturn(portfolio);
         when(marketDataProvider.getVixPrice()).thenReturn(Optional.empty());
-        when(marketDataProvider.getQqq200Ma()).thenReturn(Optional.empty());
+        when(marketDataProvider.getSignal200Ma("QQQM")).thenReturn(Optional.empty());
         when(decisionService.decide(state, portfolio, previousState.targetWeights(), null, null)).thenReturn(decision);
         when(executionGuard.currentMode()).thenReturn(OperatingMode.AUTO_LIVE);
 
@@ -172,7 +176,8 @@ class RebalanceOrchestratorTest {
                 jobCreateService,
                 jobExecutor,
                 marketDataProvider,
-                executionGuard);
+                executionGuard,
+                strategyProps());
 
         RebalanceRunResult result = orchestrator.run(Instant.parse("2026-04-02T23:45:00Z"), ExecutionTriggerType.AUTOMATED);
 
@@ -183,6 +188,7 @@ class RebalanceOrchestratorTest {
     private StrategyState sampleState() {
         return new StrategyState(
                 LocalDate.of(2026, 4, 1),
+                "QQQM",
                 new BigDecimal("500"),
                 new BigDecimal("450"),
                 new BigDecimal("10"),
@@ -202,7 +208,7 @@ class RebalanceOrchestratorTest {
                 my.side.trading.core.domain.execution.order.ExecutionStatus.PENDING,
                 List.of(ExecutionOrder.rehydrate(
                         1L,
-                        "QQQ",
+                        "QQQM",
                         ExecutionOrderSide.BUY,
                         1,
                         new BigDecimal("100"),
@@ -212,5 +218,9 @@ class RebalanceOrchestratorTest {
                         null)),
                 null,
                 null);
+    }
+
+    private TradingStrategyProps strategyProps() {
+        return new TradingStrategyProps(null, "QQQM", null, null, null);
     }
 }

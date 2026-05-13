@@ -30,9 +30,9 @@ class RebalanceDecisionServiceTest {
                 // 기본 설정값 사용
                 TradingStrategyProps props = new TradingStrategyProps(
                                 new BigDecimal("5.0"),
-                                List.of("QQQ", "QLD", "TQQQ"),
-                                List.of("TQQQ", "QLD", "QQQ"),
-                                List.of("QQQ", "QLD", "TQQQ"));
+                                List.of("QQQM", "QLD", "TQQQ"),
+                                List.of("TQQQ", "QLD", "QQQM"),
+                                List.of("QQQM", "QLD", "TQQQ"));
                 TradingCircuitBreakerProps cbProps = new TradingCircuitBreakerProps(false, false, null, null);
                 CircuitBreakerService cbService = new CircuitBreakerService(cbProps);
                 service = new RebalanceDecisionService(props, cbService);
@@ -74,12 +74,12 @@ class RebalanceDecisionServiceTest {
                                 true,
                                 1);
 
-                // 실제: QQQ 20%, QLD 10%, TQQQ 70% 같은 극단(의도적으로 허용 오차 초과)
+                // 실제: QQQM 20%, QLD 10%, TQQQ 70% 같은 극단(의도적으로 허용 오차 초과)
                 // 총자산=1000, 현금=0
                 Portfolio portfolio = new Portfolio(
                                 BigDecimal.ZERO,
                                 List.of(
-                                                new Position("QQQ", new BigDecimal("2"), new BigDecimal("0"),
+                                                new Position("QQQM", new BigDecimal("2"), new BigDecimal("0"),
                                                                 new BigDecimal("100")), // 200
                                                 new Position("QLD", new BigDecimal("1"), new BigDecimal("0"),
                                                                 new BigDecimal("100")), // 100
@@ -93,7 +93,7 @@ class RebalanceDecisionServiceTest {
                 assertThat(decision.intents()).isNotEmpty();
                 // TQQQ 비중이 과다하므로 매도가 있어야 한다.
                 assertThat(decision.intents()).anyMatch(i -> i.side() == ExecutionOrderSide.SELL);
-                // QQQ, QLD 비중이 부족하므로 매수가 있어야 한다.
+                // QQQM, QLD 비중이 부족하므로 매수가 있어야 한다.
                 assertThat(decision.intents()).anyMatch(i -> i.side() == ExecutionOrderSide.BUY);
                 // "SELL 먼저, 그 다음 BUY" 순서를 검증한다.
                 boolean seenBuy = false;
@@ -116,9 +116,9 @@ class RebalanceDecisionServiceTest {
                 // tolerancePct를 10%로 설정한다.
                 TradingStrategyProps customProps = new TradingStrategyProps(
                                 new BigDecimal("10.0"),
-                                List.of("QQQ", "QLD", "TQQQ"),
-                                List.of("TQQQ", "QLD", "QQQ"),
-                                List.of("QQQ", "QLD", "TQQQ"));
+                                List.of("QQQM", "QLD", "TQQQ"),
+                                List.of("TQQQ", "QLD", "QQQM"),
+                                List.of("QQQM", "QLD", "TQQQ"));
                 TradingCircuitBreakerProps cbProps = new TradingCircuitBreakerProps(false, false, null, null);
                 CircuitBreakerService cbService = new CircuitBreakerService(cbProps);
                 RebalanceDecisionService customService = new RebalanceDecisionService(customProps, cbService);
@@ -131,15 +131,15 @@ class RebalanceDecisionServiceTest {
                                 new BigDecimal("0.0000"),
                                 DdBucket.LESS_THAN_15,
                                 StrategyPhase.NORMAL,
-                                WeightSet.of(100, 0, 0), // 목표: QQQ 100%
+                                WeightSet.of(100, 0, 0), // 목표: QQQM 100%
                                 true,
                                 1);
 
-                // 실제: QQQ 92% -> 8% 편차이므로 10% tolerance 이내에서는 리밸런싱하지 않는다.
+                // 실제: QQQM 92% -> 8% 편차이므로 10% tolerance 이내에서는 리밸런싱하지 않는다.
                 Portfolio portfolio = new Portfolio(
                                 new BigDecimal("80"), // 현금 8%
                                 List.of(
-                                                new Position("QQQ", new BigDecimal("9.2"), new BigDecimal("0"),
+                                                new Position("QQQM", new BigDecimal("9.2"), new BigDecimal("0"),
                                                                 new BigDecimal("100")) // 920
                                 ));
 
@@ -150,12 +150,36 @@ class RebalanceDecisionServiceTest {
         }
 
         @Test
+        void QQQ_보유분이_있으면_QQQM_전환_전_수동확인을_요구한다() {
+                StrategyState state = new StrategyState(
+                                LocalDate.of(2025, 12, 21),
+                                "QQQM",
+                                new BigDecimal("100"),
+                                new BigDecimal("100"),
+                                new BigDecimal("0.0000"),
+                                new BigDecimal("0.0000"),
+                                DdBucket.LESS_THAN_15,
+                                StrategyPhase.NORMAL,
+                                WeightSet.normal(),
+                                true,
+                                2);
+                Portfolio portfolio = new Portfolio(
+                                BigDecimal.ZERO,
+                                List.of(new Position("QQQ", BigDecimal.ONE, BigDecimal.ZERO, new BigDecimal("700"))));
+
+                RebalanceDecision decision = service.decide(state, portfolio);
+
+                assertThat(decision.shouldRebalance()).isFalse();
+                assertThat(decision.reason()).contains("QQQ 보유분");
+        }
+
+        @Test
         void vix_트리거시_이전비중보다_tqqq가_늘어나면_이전비중으로_제한한다() {
                 TradingStrategyProps props = new TradingStrategyProps(
                                 new BigDecimal("5.0"),
-                                List.of("QQQ", "QLD", "TQQQ"),
-                                List.of("TQQQ", "QLD", "QQQ"),
-                                List.of("QQQ", "QLD", "TQQQ"));
+                                List.of("QQQM", "QLD", "TQQQ"),
+                                List.of("TQQQ", "QLD", "QQQM"),
+                                List.of("QQQM", "QLD", "TQQQ"));
                 TradingCircuitBreakerProps cbProps = new TradingCircuitBreakerProps(true, true, new BigDecimal("35"), 200);
                 RebalanceDecisionService customService = new RebalanceDecisionService(props, new CircuitBreakerService(cbProps));
 
@@ -173,7 +197,7 @@ class RebalanceDecisionServiceTest {
                 Portfolio portfolio = new Portfolio(
                                 BigDecimal.ZERO,
                                 List.of(
-                                                new Position("QQQ", new BigDecimal("4"), BigDecimal.ZERO, new BigDecimal("100")),
+                                                new Position("QQQM", new BigDecimal("4"), BigDecimal.ZERO, new BigDecimal("100")),
                                                 new Position("QLD", new BigDecimal("4"), BigDecimal.ZERO, new BigDecimal("100")),
                                                 new Position("TQQQ", new BigDecimal("2"), BigDecimal.ZERO, new BigDecimal("100"))));
                 WeightSet prevWeights = WeightSet.of(60, 30, 10);
@@ -194,9 +218,9 @@ class RebalanceDecisionServiceTest {
         void ma와_vix가_동시에_트리거되면_ma를_먼저_적용한_후_vix를_적용한다() {
                 TradingStrategyProps props = new TradingStrategyProps(
                                 new BigDecimal("5.0"),
-                                List.of("QQQ", "QLD", "TQQQ"),
-                                List.of("TQQQ", "QLD", "QQQ"),
-                                List.of("QQQ", "QLD", "TQQQ"));
+                                List.of("QQQM", "QLD", "TQQQ"),
+                                List.of("TQQQ", "QLD", "QQQM"),
+                                List.of("QQQM", "QLD", "TQQQ"));
                 TradingCircuitBreakerProps cbProps = new TradingCircuitBreakerProps(true, true, new BigDecimal("35"), 200);
                 RebalanceDecisionService customService = new RebalanceDecisionService(props, new CircuitBreakerService(cbProps));
 
@@ -214,7 +238,7 @@ class RebalanceDecisionServiceTest {
                 Portfolio portfolio = new Portfolio(
                                 BigDecimal.ZERO,
                                 List.of(
-                                                new Position("QQQ", new BigDecimal("4"), BigDecimal.ZERO, new BigDecimal("100")),
+                                                new Position("QQQM", new BigDecimal("4"), BigDecimal.ZERO, new BigDecimal("100")),
                                                 new Position("QLD", new BigDecimal("4"), BigDecimal.ZERO, new BigDecimal("100")),
                                                 new Position("TQQQ", new BigDecimal("2"), BigDecimal.ZERO, new BigDecimal("100"))));
                 WeightSet prevWeights = WeightSet.of(30, 30, 40);
@@ -236,9 +260,9 @@ class RebalanceDecisionServiceTest {
         void 이전비중이_없어도_vix_트리거만으로_실패하지_않고_원래목표비중을_사용한다() {
                 TradingStrategyProps props = new TradingStrategyProps(
                                 new BigDecimal("5.0"),
-                                List.of("QQQ", "QLD", "TQQQ"),
-                                List.of("TQQQ", "QLD", "QQQ"),
-                                List.of("QQQ", "QLD", "TQQQ"));
+                                List.of("QQQM", "QLD", "TQQQ"),
+                                List.of("TQQQ", "QLD", "QQQM"),
+                                List.of("QQQM", "QLD", "TQQQ"));
                 TradingCircuitBreakerProps cbProps = new TradingCircuitBreakerProps(true, true, new BigDecimal("35"), 200);
                 RebalanceDecisionService customService = new RebalanceDecisionService(props, new CircuitBreakerService(cbProps));
 
@@ -256,7 +280,7 @@ class RebalanceDecisionServiceTest {
                 Portfolio portfolio = new Portfolio(
                                 BigDecimal.ZERO,
                                 List.of(
-                                                new Position("QQQ", new BigDecimal("4"), BigDecimal.ZERO, new BigDecimal("100")),
+                                                new Position("QQQM", new BigDecimal("4"), BigDecimal.ZERO, new BigDecimal("100")),
                                                 new Position("QLD", new BigDecimal("4"), BigDecimal.ZERO, new BigDecimal("100")),
                                                 new Position("TQQQ", new BigDecimal("2"), BigDecimal.ZERO, new BigDecimal("100"))));
 

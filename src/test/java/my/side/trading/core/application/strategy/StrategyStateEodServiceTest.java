@@ -4,8 +4,9 @@ import my.side.trading.core.domain.strategy.DdBucket;
 import my.side.trading.core.domain.strategy.StrategyPhase;
 import my.side.trading.core.domain.strategy.StrategyState;
 import my.side.trading.core.domain.strategy.WeightSet;
+import my.side.trading.core.infrastructure.config.TradingStrategyProps;
 import my.side.trading.core.infrastructure.config.TradingStrategyThresholdProps;
-import my.side.trading.testutil.FakeQqqHistoricalDataProvider;
+import my.side.trading.testutil.FakeSignalHistoricalDataProvider;
 import my.side.trading.testutil.FakeStrategyStateRepository;
 import org.junit.jupiter.api.Test;
 
@@ -17,7 +18,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class StrategyStateEodServiceTest {
 
-    private final FakeQqqHistoricalDataProvider emptyDataProvider = new FakeQqqHistoricalDataProvider();
+    private final FakeSignalHistoricalDataProvider emptyDataProvider = new FakeSignalHistoricalDataProvider();
 
     @Test
     void 신고가에서는Drawdown과최대Drawdown을초기화한다() {
@@ -125,7 +126,7 @@ class StrategyStateEodServiceTest {
 
     @Test
     void 초기상태가없으면과거데이터로Ath를계산한다() {
-        FakeQqqHistoricalDataProvider dataProvider = new FakeQqqHistoricalDataProvider(List.of(
+        FakeSignalHistoricalDataProvider dataProvider = new FakeSignalHistoricalDataProvider(List.of(
                 new BigDecimal("90.00"),
                 new BigDecimal("100.00"),
                 new BigDecimal("95.00")));
@@ -138,6 +139,34 @@ class StrategyStateEodServiceTest {
         assertThat(result.phase()).isEqualTo(StrategyPhase.DRAWDOWN);
         assertThat(result.ddBucket()).isEqualTo(DdBucket.FROM_15_TO_25);
         assertThat(result.targetWeights()).isEqualTo(WeightSet.of(60, 30, 10));
+        assertThat(result.signalSymbol()).isEqualTo("QQQM");
+        assertThat(dataProvider.requestedSymbol()).isEqualTo("QQQM");
+    }
+
+    @Test
+    void 기존상태가_QQQ_기준이면_QQQM_과거데이터로_새로_초기화한다() {
+        StrategyState oldQqqState = new StrategyState(
+                LocalDate.of(2025, 12, 1),
+                "QQQ",
+                new BigDecimal("600.00"),
+                new BigDecimal("570.00"),
+                new BigDecimal("5.0000"),
+                new BigDecimal("5.0000"),
+                DdBucket.LESS_THAN_15,
+                StrategyPhase.NORMAL,
+                WeightSet.normal(),
+                true,
+                1);
+        FakeSignalHistoricalDataProvider dataProvider = new FakeSignalHistoricalDataProvider(List.of(
+                new BigDecimal("200.00"),
+                new BigDecimal("250.00")));
+
+        StrategyState result = service(new FakeStrategyStateRepository(oldQqqState), dataProvider)
+                .runEod(LocalDate.of(2025, 12, 2), new BigDecimal("225.00"));
+
+        assertThat(result.signalSymbol()).isEqualTo("QQQM");
+        assertThat(result.ath()).isEqualByComparingTo("250.00");
+        assertThat(result.drawdownPct()).isEqualByComparingTo("10.0000");
     }
 
     @Test
@@ -164,6 +193,7 @@ class StrategyStateEodServiceTest {
         StrategyState next = new StrategyStateEodService(
                 new FakeStrategyStateRepository(prev),
                 emptyDataProvider,
+                strategyProps(),
                 customThresholds
         ).runEod(LocalDate.of(2025, 12, 2), new BigDecimal("92.00"));
 
@@ -174,12 +204,17 @@ class StrategyStateEodServiceTest {
 
     private StrategyStateEodService service(
             FakeStrategyStateRepository repository,
-            FakeQqqHistoricalDataProvider dataProvider
+            FakeSignalHistoricalDataProvider dataProvider
     ) {
         return new StrategyStateEodService(
                 repository,
                 dataProvider,
+                strategyProps(),
                 new TradingStrategyThresholdProps(null, null));
+    }
+
+    private TradingStrategyProps strategyProps() {
+        return new TradingStrategyProps(null, "QQQM", null, null, null);
     }
 
     private StrategyState state(
@@ -194,6 +229,7 @@ class StrategyStateEodServiceTest {
     ) {
         return new StrategyState(
                 LocalDate.of(2025, 12, 1),
+                "QQQM",
                 ath,
                 close,
                 drawdown,

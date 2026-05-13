@@ -29,7 +29,7 @@
 - 운영 모드 `PAPER`, `MANUAL_LIVE`, `AUTO_LIVE`
 - 실행 트리거 `MANUAL`, `AUTOMATED`
 - 실행 차단 사유 코드화
-- QQQ 종가 기반 전략 상태 계산과 저장
+- QQQM 종가 기반 전략 상태 계산과 저장
 - DD / phase / target weights 계산
 - 상태 기반 Circuit Breaker
 - 리밸런싱 판단과 주문 템플릿 생성

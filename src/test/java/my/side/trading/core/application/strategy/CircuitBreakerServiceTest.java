@@ -78,28 +78,28 @@ class CircuitBreakerServiceTest {
     class MaFilterTest {
 
         @Test
-        @DisplayName("QQQ < 200MA 이면 트리거됨")
-        void qqq_200ma미만이면_트리거() {
+        @DisplayName("QQQM < 200MA 이면 트리거됨")
+        void qqqm_200ma미만이면_트리거() {
             // 준비
             TradingCircuitBreakerProps props = new TradingCircuitBreakerProps(true, true, new BigDecimal("35"), 200);
             CircuitBreakerService service = new CircuitBreakerService(props);
 
             // 실행
-            boolean triggered = service.isMaTriggered(new BigDecimal("400"), new BigDecimal("410"));
+            boolean triggered = service.isMaTriggered("QQQM", new BigDecimal("400"), new BigDecimal("410"));
 
             // 검증
             assertThat(triggered).isTrue();
         }
 
         @Test
-        @DisplayName("QQQ >= 200MA 이면 트리거 안됨")
-        void qqq_200ma이상이면_트리거안됨() {
+        @DisplayName("QQQM >= 200MA 이면 트리거 안됨")
+        void qqqm_200ma이상이면_트리거안됨() {
             // 준비
             TradingCircuitBreakerProps props = new TradingCircuitBreakerProps(true, true, new BigDecimal("35"), 200);
             CircuitBreakerService service = new CircuitBreakerService(props);
 
             // 실행
-            boolean triggered = service.isMaTriggered(new BigDecimal("410"), new BigDecimal("400"));
+            boolean triggered = service.isMaTriggered("QQQM", new BigDecimal("410"), new BigDecimal("400"));
 
             // 검증
             assertThat(triggered).isFalse();

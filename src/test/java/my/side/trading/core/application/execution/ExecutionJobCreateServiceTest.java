@@ -55,13 +55,13 @@ class ExecutionJobCreateServiceTest {
         ExecutionJobCreateService service = createService(repo, BigDecimal.ZERO, BigDecimal.ZERO);
 
         Portfolio portfolio = new Portfolio(new BigDecimal("10.00"), List.of(
-                new Position("QQQ", new BigDecimal("10"), new BigDecimal("100.00"), new BigDecimal("100.00"))));
+                new Position("QQQM", new BigDecimal("10"), new BigDecimal("100.00"), new BigDecimal("100.00"))));
         WeightSet targetWeights = new WeightSet(new BigDecimal("100"), BigDecimal.ZERO, BigDecimal.ZERO);
         RebalanceDecision decision = RebalanceDecision.yes(
                 RebalanceType.THRESHOLD,
                 "test",
                 targetWeights,
-                List.of(new OrderIntent("QQQ", ExecutionOrderSide.BUY, "buy test")));
+                List.of(new OrderIntent("QQQM", ExecutionOrderSide.BUY, "buy test")));
 
         var jobOpt = service.createJob(
                 LocalDate.of(2025, 12, 21),
@@ -124,7 +124,7 @@ class ExecutionJobCreateServiceTest {
             BigDecimal maxDailyTurnoverPct,
             OpsAlertPublisher alertPublisher) {
         FakeRealtimePriceProvider priceProvider = FakeRealtimePriceProvider.withLastPrices(Map.of(
-                "QQQ", new BigDecimal("100.00")));
+                "QQQM", new BigDecimal("100.00")));
         MarketLikePricingPolicy pricing = new MarketLikePricingPolicy(
                 new BigDecimal("0.01"), 0, 0, 1, 1, new BigDecimal("0.25"), 3, 2000);
         ExecutionOrderFactory factory = new ExecutionOrderFactory(priceProvider, pricing);
@@ -144,12 +144,12 @@ class ExecutionJobCreateServiceTest {
         return new ExecutionJobCreateService(planner, repo, alertPublisher);
     }
 
-    private RebalanceDecision decision(BigDecimal targetQqqWeight) {
-        WeightSet targetWeights = new WeightSet(targetQqqWeight, BigDecimal.ZERO, BigDecimal.ZERO);
+    private RebalanceDecision decision(BigDecimal targetBaseWeight) {
+        WeightSet targetWeights = new WeightSet(targetBaseWeight, BigDecimal.ZERO, BigDecimal.ZERO);
         return RebalanceDecision.yes(
                 RebalanceType.THRESHOLD,
                 "test",
                 targetWeights,
-                List.of(new OrderIntent("QQQ", ExecutionOrderSide.BUY, "buy test")));
+                List.of(new OrderIntent("QQQM", ExecutionOrderSide.BUY, "buy test")));
     }
 }

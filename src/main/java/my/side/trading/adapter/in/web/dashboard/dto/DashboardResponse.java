@@ -17,6 +17,8 @@ import java.util.List;
 
 @Builder
 public record DashboardResponse(
+        String baseSymbol,
+        String signalSymbol,
         Portfolio portfolio,
         StrategyState strategyState,
         CircuitBreakerInfo circuitBreaker,
@@ -29,7 +31,9 @@ public record DashboardResponse(
         List<OperatingModeAuditEvent> recentOperatingModeAudits) {
     @Builder
     public record CircuitBreakerInfo(
+            String signalSymbol,
             BigDecimal vix,
+            BigDecimal signal200Ma,
             BigDecimal qqq200Ma) {
     }
 
@@ -182,8 +186,10 @@ public record DashboardResponse(
     public static DashboardResponse of(
             Portfolio portfolio,
             StrategyState strategyState,
+            String baseSymbol,
+            String signalSymbol,
             BigDecimal vix,
-            BigDecimal qqq200Ma,
+            BigDecimal signal200Ma,
             OperationsKpiSnapshot operationsKpi,
             PortfolioPerformanceAnalyticsSummary performance,
             RealtimePortfolioValuationInfo realtimePortfolioValuation,
@@ -192,9 +198,11 @@ public record DashboardResponse(
             List<ExecutionJob> recentJobs,
             List<OperatingModeAuditEvent> recentOperatingModeAudits) {
         return DashboardResponse.builder()
+                .baseSymbol(baseSymbol)
+                .signalSymbol(signalSymbol)
                 .portfolio(portfolio)
                 .strategyState(strategyState)
-                .circuitBreaker(new CircuitBreakerInfo(vix, qqq200Ma))
+                .circuitBreaker(new CircuitBreakerInfo(signalSymbol, vix, signal200Ma, signal200Ma))
                 .operationsKpi(operationsKpi)
                 .performance(PerformanceInfo.from(performance))
                 .realtimePortfolioValuation(realtimePortfolioValuation)

@@ -59,7 +59,8 @@ public class DashboardController {
 
         // 3. 서킷 브레이커 정보 조회 (VIX, 200MA)
         BigDecimal vix = scheduler.getVix();
-        BigDecimal qqq200Ma = scheduler.getQqq200Ma();
+        String signalSymbol = scheduler.getSignalSymbol();
+        BigDecimal signal200Ma = scheduler.getSignal200Ma();
 
         // 4. 최근 실행 작업 조회 (최신 5건)
         var recentJobs = jobRepository.findAll().stream()
@@ -77,8 +78,10 @@ public class DashboardController {
         return ApiResponse.success(DashboardResponse.of(
                 portfolio,
                 state,
+                signalSymbol,
+                signalSymbol,
                 vix,
-                qqq200Ma,
+                signal200Ma,
                 operationsKpi,
                 performance,
                 realtimePortfolioValuation,

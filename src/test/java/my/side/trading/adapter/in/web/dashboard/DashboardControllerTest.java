@@ -62,7 +62,8 @@ class DashboardControllerTest {
         when(portfolioService.getCurrentPortfolio()).thenReturn(new Portfolio(BigDecimal.TEN, List.of()));
         when(strategyStateRepository.findLatestState()).thenReturn(Optional.empty());
         when(scheduler.getVix()).thenReturn(new BigDecimal("20.5"));
-        when(scheduler.getQqq200Ma()).thenReturn(new BigDecimal("500.0"));
+        when(scheduler.getSignalSymbol()).thenReturn("QQQM");
+        when(scheduler.getSignal200Ma()).thenReturn(new BigDecimal("500.0"));
         when(jobRepository.findAll()).thenReturn(List.of(sampleJob()));
         when(executionGuard.snapshot()).thenReturn(new ExecutionGuardSnapshot(
                 OperatingMode.MANUAL_LIVE,
@@ -104,6 +105,11 @@ class DashboardControllerTest {
         DashboardResponse response = controller.getSummary().data();
 
         assertThat(response.operatingMode()).isEqualTo(OperatingMode.MANUAL_LIVE);
+        assertThat(response.baseSymbol()).isEqualTo("QQQM");
+        assertThat(response.signalSymbol()).isEqualTo("QQQM");
+        assertThat(response.circuitBreaker().signalSymbol()).isEqualTo("QQQM");
+        assertThat(response.circuitBreaker().signal200Ma()).isEqualByComparingTo("500.0");
+        assertThat(response.circuitBreaker().qqq200Ma()).isEqualByComparingTo("500.0");
         assertThat(response.performance().dataAvailable()).isTrue();
         assertThat(response.performance().latestNav()).isEqualByComparingTo("1000.0000");
         assertThat(response.performance().actualPerformanceUsd().netActualPnlAmount()).isEqualByComparingTo("12.0000");
@@ -355,7 +361,7 @@ class DashboardControllerTest {
                 ExecutionStatus.COMPLETED,
                 List.of(ExecutionOrder.rehydrate(
                         1L,
-                        "QQQ",
+                        "QQQM",
                         ExecutionOrderSide.BUY,
                         1,
                         new BigDecimal("100"),

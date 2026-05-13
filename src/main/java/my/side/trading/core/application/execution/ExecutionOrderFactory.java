@@ -103,7 +103,7 @@ public class ExecutionOrderFactory {
 
     private BigDecimal getWeightForSymbol(WeightSet weights, String symbol) {
         return switch (symbol) {
-            case "QQQ" -> weights.wQqq();
+            case "QQQM" -> weights.wBase();
             case "QLD" -> weights.wQld();
             case "TQQQ" -> weights.wTqqq();
             default -> BigDecimal.ZERO;

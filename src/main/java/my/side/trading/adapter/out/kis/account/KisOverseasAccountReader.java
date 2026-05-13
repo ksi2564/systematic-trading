@@ -20,7 +20,7 @@ import static my.side.trading.adapter.out.kis.dto.KisOverseasBalanceResponse.Ite
 @RequiredArgsConstructor
 public class KisOverseasAccountReader implements OverseasAccountReader {
 
-    private static final String CASH_REF_SYMBOL = "QQQ";
+    private static final String CASH_REF_SYMBOL = "QQQM";
     private static final BigDecimal CASH_REF_PRICE = new BigDecimal("100.00");
     private static final String PSAMOUNT_EXCHANGE = "NASD"; // 나스닥
 
@@ -96,7 +96,7 @@ public class KisOverseasAccountReader implements OverseasAccountReader {
     private List<AccountPosition> extractPositions(List<Item> items) {
         return items.stream()
                 .map(i -> new AccountPosition(
-                        i.productCode(),                 // "QQQ", "QLD", "TQQQ"
+                        i.productCode(),                 // "QQQM", "QLD", "TQQQ"
                         new BigDecimal(i.qty()),         // 보유 수량
                         new BigDecimal(i.avgPrice())     // 매입평균단가
                 ))

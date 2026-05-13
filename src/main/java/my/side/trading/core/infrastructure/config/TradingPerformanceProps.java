@@ -31,12 +31,12 @@ public record TradingPerformanceProps(
     }
 
     public record HoldingCostSymbolProps(
-            BigDecimal QQQ,
+            BigDecimal QQQM,
             BigDecimal QLD,
             BigDecimal TQQQ
     ) {
         public HoldingCostSymbolProps {
-            QQQ = normalize(QQQ);
+            QQQM = normalize(QQQM);
             QLD = normalize(QLD);
             TQQQ = normalize(TQQQ);
         }

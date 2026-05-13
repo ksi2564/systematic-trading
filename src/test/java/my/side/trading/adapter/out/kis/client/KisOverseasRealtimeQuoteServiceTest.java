@@ -24,18 +24,18 @@ class KisOverseasRealtimeQuoteServiceTest {
     void kis_주간세션이면_R_주간시장코드_trKey를_생성한다() throws Exception {
         KisOverseasRealtimeQuoteService service = serviceAt("2026-05-06T21:30:00Z");
 
-        String trKey = buildUsTrKey(service, "QQQ", "NAS");
+        String trKey = buildUsTrKey(service, "QQQM", "NAS");
 
-        assertThat(trKey).isEqualTo("RBAQQQQ");
+        assertThat(trKey).isEqualTo("RBAQQQQM");
     }
 
     @Test
     void kis_야간세션이면_D_거래소코드_trKey를_생성한다() throws Exception {
         KisOverseasRealtimeQuoteService service = serviceAt("2026-05-06T16:00:00Z");
 
-        String trKey = buildUsTrKey(service, "QQQ", "NAS");
+        String trKey = buildUsTrKey(service, "QQQM", "NAS");
 
-        assertThat(trKey).isEqualTo("DNASQQQ");
+        assertThat(trKey).isEqualTo("DNASQQQM");
     }
 
     @Test
@@ -53,7 +53,7 @@ class KisOverseasRealtimeQuoteServiceTest {
                 mock(KisRealtimeMessageHandler.class),
                 Clock.fixed(Instant.parse("2026-05-06T16:00:00Z"), ZoneOffset.UTC));
 
-        service.subscribeRealtimeQuote("QQQ", "NAS");
+        service.subscribeRealtimeQuote("QQQM", "NAS");
 
         assertThat(subscribed).isTrue();
         verify(authService).issueApprovalKey();

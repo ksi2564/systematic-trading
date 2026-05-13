@@ -20,10 +20,12 @@ import type {
   DashboardHistory,
   DashboardSummary,
   ManualRebalancePreview,
+  Numeric,
   OperatingModeStatus,
   OrderConfirmationResponse,
   OrderHistoryItem,
-  PreviewOrder
+  PreviewOrder,
+  WeightInfo
 } from './api/types';
 import { formatDateTime, formatKrw, formatNumber, formatUsd } from './domain/format';
 import { computeLiveStatus, getConfirmationOrders, type LiveStatus } from './domain/status';
@@ -399,6 +401,24 @@ function PreviewSummary({
   const currentWeights = preview?.portfolio?.currentWeights;
   const targetWeights = preview?.decision?.targetWeights ?? preview?.strategy?.targetWeights;
   const indicators = preview?.marketIndicators ?? summary?.circuitBreaker;
+  const baseSymbol = (
+    preview?.baseSymbol ??
+    preview?.portfolio?.baseSymbol ??
+    summary?.baseSymbol ??
+    'QQQM'
+  ).toUpperCase();
+  const signalSymbol = (
+    preview?.signalSymbol ??
+    indicators?.signalSymbol ??
+    summary?.signalSymbol ??
+    baseSymbol
+  ).toUpperCase();
+  const signal200Ma = indicators?.signal200Ma ?? indicators?.qqq200Ma;
+  const weightRows = [
+    { label: baseSymbol, key: 'base' },
+    { label: 'QLD', key: 'qld' },
+    { label: 'TQQQ', key: 'tqqq' }
+  ] as const;
 
   return (
     <div className="preview-layout">
@@ -416,8 +436,8 @@ function PreviewSummary({
           <dd>{formatNumber(indicators?.vix)}</dd>
         </div>
         <div>
-          <dt>QQQ 200MA</dt>
-          <dd>{formatNumber(indicators?.qqq200Ma)}</dd>
+          <dt>{signalSymbol} 200MA</dt>
+          <dd>{formatNumber(signal200Ma)}</dd>
         </div>
         <div>
           <dt>예상 주문 금액</dt>
@@ -438,13 +458,13 @@ function PreviewSummary({
           </tr>
         </thead>
         <tbody>
-          {(['qqq', 'qld', 'tqqq'] as const).map((symbol) => {
-            const current = currentWeights?.[symbol];
-            const target = targetWeights?.[symbol];
+          {weightRows.map((row) => {
+            const current = weightValue(currentWeights, row.key);
+            const target = weightValue(targetWeights, row.key);
             const delta = Number(target ?? 0) - Number(current ?? 0);
             return (
-              <tr key={symbol}>
-                <td>{symbol.toUpperCase()}</td>
+              <tr key={row.label}>
+                <td>{row.label}</td>
                 <td>{formatNumber(current, 4)}</td>
                 <td>{formatNumber(target, 4)}</td>
                 <td>{formatNumber(delta, 4)}</td>
@@ -455,6 +475,16 @@ function PreviewSummary({
       </table>
     </div>
   );
+}
+
+function weightValue(weights: WeightInfo | null | undefined, key: 'base' | 'qld' | 'tqqq'): Numeric | undefined {
+  if (key === 'base') {
+    return weights?.base ?? weights?.wBase ?? weights?.qqq ?? weights?.wQqq;
+  }
+  if (key === 'qld') {
+    return weights?.qld ?? weights?.wQld;
+  }
+  return weights?.tqqq ?? weights?.wTqqq;
 }
 
 function OrderTable({ orders }: { orders: PreviewOrder[] }) {

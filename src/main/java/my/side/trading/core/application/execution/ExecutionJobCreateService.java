@@ -4,8 +4,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import my.side.trading.core.domain.execution.order.ExecutionJob;
 import my.side.trading.core.domain.execution.order.ExecutionJobRepository;
-import my.side.trading.core.domain.execution.order.ExecutionOrder;
-import my.side.trading.core.domain.execution.plan.OrderIntent;
 import my.side.trading.core.domain.execution.plan.RebalanceDecision;
 import my.side.trading.core.domain.operation.OpsAlert;
 import my.side.trading.core.domain.operation.OpsAlertPublisher;
@@ -15,12 +13,9 @@ import my.side.trading.core.domain.portfolio.Portfolio;
 import my.side.trading.core.domain.strategy.WeightSet;
 import org.springframework.stereotype.Service;
 
-import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.LinkedHashMap;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Optional;
 
 @Slf4j
@@ -28,9 +23,8 @@ import java.util.Optional;
 @RequiredArgsConstructor
 public class ExecutionJobCreateService {
 
-    private final ExecutionOrderFactory orderFactory;
+    private final RebalanceOrderPlanner orderPlanner;
     private final ExecutionJobRepository jobRepository;
-    private final ExecutionRiskLimitService riskLimitService;
     private final OpsAlertPublisher opsAlertPublisher;
 
     public Optional<ExecutionJob> createJob(
@@ -58,62 +52,18 @@ public class ExecutionJobCreateService {
             return Optional.empty();
         }
 
-        List<ExecutionOrder> orders = new ArrayList<>();
-        BigDecimal remainingCash = portfolio.cash();
-        BigDecimal plannedNotional = BigDecimal.ZERO;
+        RebalanceOrderPlan plan = orderPlanner.plan(signalDate, decision, portfolio);
+        plan.orders().stream()
+                .filter(PlannedRebalanceOrder::blocked)
+                .findFirst()
+                .ifPresent(blockedOrder -> {
+                    publishRiskLimitAlert(signalDate, blockedOrder);
+                    throw new ExecutionRiskLimitExceededException(blockedOrder.riskViolation());
+                });
 
-        for (OrderIntent intent : decision.intents()) {
-            OrderAndCashDelta planned = orderFactory.fromTargetWeight(
-                    intent.symbol(),
-                    intent.side(),
-                    targetWeights,
-                    portfolio,
-                    remainingCash).orElse(null);
-
-            if (planned == null) {
-                continue;
-            }
-
-            try {
-                riskLimitService.validatePlannedOrder(signalDate, portfolio, planned.order(), plannedNotional);
-            } catch (ExecutionRiskLimitExceededException e) {
-                LinkedHashMap<String, String> details = new LinkedHashMap<>();
-                details.put("signalDate", signalDate.toString());
-                details.put("symbol", planned.order().getSymbol());
-                details.put("side", planned.order().getSide().name());
-                details.put("violation", e.getViolation().summary());
-                opsAlertPublisher.publish(new OpsAlert(
-                        OpsAlertType.RISK_LIMIT_BREACH,
-                        OpsAlertSeverity.ERROR,
-                        "planned-risk-limit:" + signalDate + ":" + e.getViolation().type(),
-                        "Execution job creation blocked by risk limit",
-                        details));
-                throw e;
-            }
-
-            orders.add(planned.order());
-            remainingCash = remainingCash.add(planned.cashDelta());
-            plannedNotional = plannedNotional.add(riskLimitService.orderNotional(planned.order()));
-
-            if (remainingCash.signum() < 0) {
-                log.warn("remainingCash가 0 미만이라 0으로 보정합니다. symbol={}, side={}, qty={}, limitPrice={}, cashDelta={}, cashBefore={}",
-                        planned.order().getSymbol(),
-                        planned.order().getSide(),
-                        planned.order().getQuantity(),
-                        planned.order().getLimitPrice(),
-                        planned.cashDelta(),
-                        remainingCash.subtract(planned.cashDelta()));
-                remainingCash = BigDecimal.ZERO;
-            }
-
-            log.info("계획 주문을 생성했습니다: sym={}, side={}, qty={}, limit={}, cashDelta={}, remainingCash={}",
-                    planned.order().getSymbol(),
-                    planned.order().getSide(),
-                    planned.order().getQuantity(),
-                    planned.order().getLimitPrice(),
-                    planned.cashDelta(),
-                    remainingCash);
-        }
+        var orders = plan.orders().stream()
+                .map(PlannedRebalanceOrder::order)
+                .toList();
 
         if (orders.isEmpty()) {
             log.info("실행 가능한 주문이 없어 job 생성을 건너뜁니다. intents={}, reason={}",
@@ -126,5 +76,19 @@ public class ExecutionJobCreateService {
 
         log.info("job을 생성했습니다: jobId={}, orders={}", saved.getId(), orders.size());
         return Optional.of(saved);
+    }
+
+    private void publishRiskLimitAlert(LocalDate signalDate, PlannedRebalanceOrder blockedOrder) {
+        LinkedHashMap<String, String> details = new LinkedHashMap<>();
+        details.put("signalDate", signalDate.toString());
+        details.put("symbol", blockedOrder.order().getSymbol());
+        details.put("side", blockedOrder.order().getSide().name());
+        details.put("violation", blockedOrder.riskViolation().summary());
+        opsAlertPublisher.publish(new OpsAlert(
+                OpsAlertType.RISK_LIMIT_BREACH,
+                OpsAlertSeverity.ERROR,
+                "planned-risk-limit:" + signalDate + ":" + blockedOrder.riskViolation().type(),
+                "Execution job creation blocked by risk limit",
+                details));
     }
 }

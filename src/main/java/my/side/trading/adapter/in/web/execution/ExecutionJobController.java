@@ -2,15 +2,18 @@ package my.side.trading.adapter.in.web.execution;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import my.side.trading.adapter.in.web.execution.dto.ManualRebalancePreviewResponse;
 import my.side.trading.adapter.in.web.execution.dto.OrderConfirmationResponse;
 import my.side.trading.adapter.in.scheduler.StrategyEodScheduler;
 import my.side.trading.core.adapter.in.web.common.ApiResponse;
 import my.side.trading.core.application.execution.ExecutionOrderConfirmationService;
 import my.side.trading.core.application.execution.ExecutionJobExecutor;
+import my.side.trading.core.application.orchestration.ManualRebalancePreviewService;
 import my.side.trading.core.application.orchestration.RebalanceOrchestrator;
 import my.side.trading.core.application.orchestration.RebalanceRunResult;
 import my.side.trading.core.domain.execution.ExecutionTriggerType;
 import my.side.trading.core.domain.execution.order.ExecutionJob;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -28,6 +31,7 @@ public class ExecutionJobController {
     private final ExecutionJobExecutor executor;
     private final ExecutionOrderConfirmationService confirmationService;
     private final RebalanceOrchestrator rebalanceOrchestrator;
+    private final ManualRebalancePreviewService previewService;
     private final StrategyEodScheduler eodScheduler;
     private final Clock clock;
 
@@ -51,6 +55,12 @@ public class ExecutionJobController {
     public ApiResponse<RebalanceRunResult> manualRebalance() {
         log.info("수동 리밸런싱 트리거 요청됨.");
         return ApiResponse.success(rebalanceOrchestrator.run(now(), ExecutionTriggerType.MANUAL));
+    }
+
+    @GetMapping("/manual-rebalance/preview")
+    public ApiResponse<ManualRebalancePreviewResponse> manualRebalancePreview() {
+        log.info("수동 리밸런싱 미리보기 요청됨.");
+        return ApiResponse.success(ManualRebalancePreviewResponse.from(previewService.preview()));
     }
 
     @PostMapping("/eod-calculation")

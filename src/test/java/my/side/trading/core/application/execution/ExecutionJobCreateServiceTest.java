@@ -140,7 +140,8 @@ class ExecutionJobCreateServiceTest {
                                 BigDecimal.ZERO),
                         new TradingOperationProps.AlertsProps(false, 30, null)),
                 repo);
-        return new ExecutionJobCreateService(factory, repo, riskLimitService, alertPublisher);
+        RebalanceOrderPlanner planner = new RebalanceOrderPlanner(factory, riskLimitService);
+        return new ExecutionJobCreateService(planner, repo, alertPublisher);
     }
 
     private RebalanceDecision decision(BigDecimal targetQqqWeight) {

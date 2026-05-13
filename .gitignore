@@ -42,5 +42,9 @@ application-secret.yml
 logs/
 .agent/
 .codex/
+.playwright-cli/
+frontend/**/node_modules/
+frontend/**/dist/
+frontend/**/coverage/
 check_result.log
 git_status.txt

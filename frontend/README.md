@@ -4,6 +4,9 @@
 
 현재 구성:
 
+- `admin-dashboard/`
+  - Vite + React + TypeScript 기반 내부 운영자용 Admin Dashboard 앱
+  - `/api/dashboard`, `/api/jobs`, `/api/operations` 운영 API를 소비
 - `admin-dashboard/wireframe/index.html`
   - 내부 운영자용 Admin Dashboard v1 화면 설계 원본
   - 별도 빌드 없이 브라우저에서 직접 열 수 있는 정적 HTML

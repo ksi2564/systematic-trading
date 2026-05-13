@@ -1,7 +1,7 @@
 # 개발 로드맵 및 가이드
 
 > 상태: Active
-> 기준일: 2026-05-08
+> 기준일: 2026-05-13
 > 기준 브랜치: `master`
 
 이 문서는 기준 문서에 정의된 제품, 전략, 운영, 구현 갭을 실제 개발 단위로 연결하기 위한 로드맵이다.
@@ -23,7 +23,7 @@
 - 공개 API는 `/public/api/v1/**` 전용 경로로 분리돼 있고, public rate limit, CORS allowlist, 신뢰 프록시 기반 client IP 해석, 공개 접근 로그를 지원한다.
 - `prod` 프로필에서는 `/api/dashboard`, `/api/jobs`, `/execution`, `/kis`, `/actuator`를 공개 경로로 설정하면 기동이 실패한다.
 - 운영 Dashboard API는 `/api/dashboard/**` 아래에 요약, 이력, 성과 조회를 제공한다.
-- 실행 API는 `/api/jobs/**` 아래에 수동 리밸런싱, 수동 EOD 계산, Job 재실행, `CONFIRMATION_REQUIRED` 주문 확인을 제공한다.
+- 실행 API는 `/api/jobs/**` 아래에 수동 리밸런싱 미리보기, 수동 리밸런싱, 수동 EOD 계산, Job 재실행, `CONFIRMATION_REQUIRED` 주문 확인을 제공한다.
 - 운영 모드 API는 `/api/operations/**` 아래에 현재 모드, 모드 전환, 감사 이력, 파라미터 변경 이력 레지스터를 제공한다.
 - KIS 운영 조회 API와 local/dev 전용 진단 API가 분리돼 있다.
 - Actuator, 로그 롤링, Discord 알림, Flyway 운영 프로필, 단일 VM 배포 산출물이 준비돼 있다.
@@ -41,7 +41,7 @@
 - 운영 모드 3단계와 수동/자동 실행 가드 분리
 - 대시보드 요약, 이력, 성과 API
 - 공개 포트폴리오 요약, 성과 API
-- 수동 리밸런싱, 수동 EOD, Job 재실행, 주문 확인 API
+- 수동 리밸런싱 미리보기, 수동 리밸런싱, 수동 EOD, Job 재실행, 주문 확인 API
 - logback 기반 파일 로그와 에러 로그 분리
 - `prod` Flyway, Hibernate `ddl-auto=validate`, UTC JDBC time zone
 - 단일 VM 배포 템플릿과 reverse proxy 공개 경계 예시
@@ -54,16 +54,18 @@
 - Public Dashboard는 인터넷 공개 가능 화면이며 `/public/api/v1/**`만 호출한다.
 - Admin Dashboard는 내부 전용 화면이며 `/api/dashboard`, `/api/jobs`, `/api/operations`, `/kis`, `/actuator` 등 운영 API를 호출한다.
 - Admin Dashboard는 SSH tunnel, Tailscale, VPN, 또는 별도 인증 계층 뒤에 둔다.
-- 백엔드 저장소는 현재 JSON API를 제공하며, 별도 프론트엔드 앱은 아직 없다.
+- 백엔드 저장소는 현재 JSON API를 제공한다. 실제 API 연동 프론트엔드 앱은 아직 없고, Admin Dashboard v1 화면 설계 원본은 `frontend/admin-dashboard/wireframe/index.html`에 정적 HTML로 둔다.
+- 프론트엔드 산출물은 Git 관리 효율을 위해 백엔드 코드와 분리해 `frontend/` 하위에서 관리한다.
 
 ### P2. Admin Dashboard 수동 실행 flow
 
 수동 실주문은 curl 직접 호출이 아니라 Admin Dashboard의 운영 flow로 만든 뒤 진행한다.
 
 - 실행 전 점검: 운영 모드, `trading.execution.enabled`, Kill Switch, 최신 EOD, 운영 KPI, 미정리 주문, KIS 잔고/시세를 한 화면에서 확인한다.
-- 주문 미리보기: 최신 전략 상태 기준 목표 주문, 예상 수량/금액, 리스크 한도 결과를 운영자가 확인한다.
+- 주문 미리보기: `GET /api/jobs/manual-rebalance/preview`로 최신 전략 상태 기준 목표 주문, 예상 수량/금액, 리스크 한도 결과를 운영자가 확인한다.
 - 최종 확인: 운영자가 명시 확인한 뒤에만 `POST /api/jobs/manual-rebalance` 또는 `POST /api/jobs/{jobId}/execute`를 호출한다.
 - 실행 후 확인: Job/Order 상태, `CONFIRMATION_REQUIRED` 주문 확인 API, 운영 로그와 이력을 확인한다.
+- 화면 설계: Figma는 디자인 시스템 참고용으로만 유지하고, 화면 설계와 문구 수정은 `frontend/admin-dashboard/wireframe/index.html`에서 관리한다.
 - 첫 수동 실거래 리허설은 주문 크기와 실행 조건을 별도 운영 기록으로 남긴다.
 
 ### P3. 성과 해석 체계 고도화
@@ -84,7 +86,7 @@
 
 1. `docs-dashboard-sync`: 현재 문서와 코드 상태를 맞춘다.
 2. `admin-dashboard-manual-flow-spec`: Admin Dashboard 수동 실행 화면/API 요구사항을 구체화한다.
-3. `manual-rebalance-preview-api`: 주문 미리보기와 리스크 결과를 실행 전 조회할 수 있는 백엔드 API를 추가한다.
+3. `manual-rebalance-preview-api`: 주문 미리보기와 리스크 결과를 실행 전 조회할 수 있는 백엔드 API를 추가한다. 완료된 개발 단위다.
 4. `admin-dashboard-app`: 내부 전용 Admin Dashboard 앱을 만든다.
 5. `public-dashboard-app`: 공개 API만 소비하는 Public Dashboard 앱을 만든다.
 

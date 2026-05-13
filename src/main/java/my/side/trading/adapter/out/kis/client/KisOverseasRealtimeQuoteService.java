@@ -68,39 +68,41 @@ public class KisOverseasRealtimeQuoteService {
      * 이 Mono가 에러로 종료되면 위의 retryWhen이 다시 실행한다.
      */
     private Mono<Void> connectAndSubscribe(List<SymbolTarget> targets) {
-        String approvalKey = kisAuthService.issueApprovalKey();
+        return Mono.defer(() -> {
+            String approvalKey = kisAuthService.issueApprovalKey();
 
-        return wsClient.execute(
-                URI.create(WS_URL),
-                session -> {
-                    // tr_key 리스트 생성
-                    List<String> trKeys = targets.stream()
-                            .map(t -> buildUsTrKey(t.symbol(), t.excd()))
-                            .toList();
+            return wsClient.execute(
+                    URI.create(WS_URL),
+                    session -> {
+                        // tr_key 리스트 생성
+                        List<String> trKeys = targets.stream()
+                                .map(t -> buildUsTrKey(t.symbol(), t.excd()))
+                                .toList();
 
-                    // 구독 메시지 생성
-                    Flux<WebSocketMessage> subscribeMessages = Flux.fromIterable(trKeys)
-                            .map(trKey -> buildSubscribePayload(approvalKey, trKey))
-                            .map(session::textMessage);
+                        // 구독 메시지 생성
+                        Flux<WebSocketMessage> subscribeMessages = Flux.fromIterable(trKeys)
+                                .map(trKey -> buildSubscribePayload(approvalKey, trKey))
+                                .map(session::textMessage);
 
-                    Mono<Void> send = session.send(subscribeMessages)
-                            .doOnSubscribe(s -> log.info("[KIS WS] 구독 메시지 전송. trKeys={}", trKeys));
+                        Mono<Void> send = session.send(subscribeMessages)
+                                .doOnSubscribe(s -> log.info("[KIS WS] 구독 메시지 전송. trKeys={}", trKeys));
 
-                    Mono<Void> receive = session.receive()
-                            .map(WebSocketMessage::getPayloadAsText)
-                            .doOnNext(messageHandler::handleMessage)
-                            .doOnError(e ->
-                                    log.error("[KIS WS] 수신 처리 중 오류 발생: {}", e.getMessage(), e)
-                            )
-                            .doFinally(sig ->
-                                    log.warn("[KIS WS] 수신 스트림 종료. signal={}", sig)
-                            )
-                            .then();
+                        Mono<Void> receive = session.receive()
+                                .map(WebSocketMessage::getPayloadAsText)
+                                .doOnNext(messageHandler::handleMessage)
+                                .doOnError(e ->
+                                        log.error("[KIS WS] 수신 처리 중 오류 발생: {}", e.getMessage(), e)
+                                )
+                                .doFinally(sig ->
+                                        log.warn("[KIS WS] 수신 스트림 종료. signal={}", sig)
+                                )
+                                .then();
 
-                    // send 완료 후 receive 구독
-                    return send.then(receive);
-                }
-        ).doOnError(e ->
+                        // send 완료 후 receive 구독
+                        return send.then(receive);
+                    }
+            );
+        }).doOnError(e ->
                 log.error("[KIS WS] 최상위 WebSocket execute 에러 발생: {}", e.getMessage(), e)
         );
     }
@@ -109,7 +111,12 @@ public class KisOverseasRealtimeQuoteService {
      * 컨트롤러 등에서 단일 종목 구독할 때 사용 (테스트용)
      */
     public void subscribeRealtimeQuote(String symbol, String excd) {
-        connectAndSubscribe(List.of(new SymbolTarget(symbol, excd)));
+        connectAndSubscribe(List.of(new SymbolTarget(symbol, excd)))
+                .doOnSubscribe(s -> log.info("[KIS WS] 단일 해외 실시간호가 구독 시작. symbol={}, excd={}", symbol, excd))
+                .subscribe(
+                        null,
+                        e -> log.error("[KIS WS] 단일 해외 실시간호가 구독 종료. symbol={}, excd={}", symbol, excd, e)
+                );
     }
 
     private String buildSubscribePayload(String approvalKey, String trKey) {

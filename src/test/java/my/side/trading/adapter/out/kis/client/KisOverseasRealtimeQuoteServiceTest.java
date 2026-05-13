@@ -3,14 +3,20 @@ package my.side.trading.adapter.out.kis.client;
 import my.side.trading.adapter.out.kis.realtime.KisRealtimeMessageHandler;
 import org.junit.jupiter.api.Test;
 import org.springframework.web.reactive.socket.client.ReactorNettyWebSocketClient;
+import reactor.core.publisher.Mono;
 
 import java.lang.reflect.Method;
+import java.net.URI;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 class KisOverseasRealtimeQuoteServiceTest {
 
@@ -30,6 +36,27 @@ class KisOverseasRealtimeQuoteServiceTest {
         String trKey = buildUsTrKey(service, "QQQ", "NAS");
 
         assertThat(trKey).isEqualTo("DNASQQQ");
+    }
+
+    @Test
+    void 진단용_단일종목_구독은_WebSocket_Mono를_실제로_구독한다() {
+        ReactorNettyWebSocketClient wsClient = mock(ReactorNettyWebSocketClient.class);
+        KisAuthService authService = mock(KisAuthService.class);
+        AtomicBoolean subscribed = new AtomicBoolean(false);
+        when(authService.issueApprovalKey()).thenReturn("approval-key");
+        when(wsClient.execute(any(URI.class), any()))
+                .thenReturn(Mono.fromRunnable(() -> subscribed.set(true)));
+
+        KisOverseasRealtimeQuoteService service = new KisOverseasRealtimeQuoteService(
+                wsClient,
+                authService,
+                mock(KisRealtimeMessageHandler.class),
+                Clock.fixed(Instant.parse("2026-05-06T16:00:00Z"), ZoneOffset.UTC));
+
+        service.subscribeRealtimeQuote("QQQ", "NAS");
+
+        assertThat(subscribed).isTrue();
+        verify(authService).issueApprovalKey();
     }
 
     private KisOverseasRealtimeQuoteService serviceAt(String instant) {

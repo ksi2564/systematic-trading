@@ -116,6 +116,24 @@ class ManualRebalancePreviewServiceTest {
     }
 
     @Test
+    void 실시간_호가_캐시가_없으면_500_대신_실행차단_미리보기를_반환한다() {
+        ManualRebalancePreviewService service = createService(
+                new FakeExecutionJobRepository(),
+                BigDecimal.ZERO,
+                decision(true),
+                null,
+                OperatingMode.MANUAL_LIVE,
+                FakeRealtimePriceProvider.withLastPrices(Map.of()));
+
+        ManualRebalancePreview preview = service.preview();
+
+        assertThat(preview.manualBlockReason()).isEqualTo(ExecutionBlockReason.MARKET_QUOTE_UNAVAILABLE);
+        assertThat(preview.orders()).isEmpty();
+        assertThat(preview.totalOrderNotional()).isEqualByComparingTo(BigDecimal.ZERO);
+        assertThat(preview.executable()).isFalse();
+    }
+
+    @Test
     void 리밸런싱이_필요없으면_주문없이_판단_사유만_반환한다() {
         ManualRebalancePreviewService service = createService(new FakeExecutionJobRepository(), BigDecimal.ZERO,
                 RebalanceDecision.no("비중 오차가 허용범위 이내"), null, OperatingMode.MANUAL_LIVE);
@@ -136,6 +154,24 @@ class ManualRebalancePreviewServiceTest {
             ExecutionBlockReason manualBlockReason,
             OperatingMode operatingMode
     ) {
+        return createService(
+                jobRepository,
+                maxOrderNotionalUsd,
+                decision,
+                manualBlockReason,
+                operatingMode,
+                FakeRealtimePriceProvider.withLastPrices(Map.of(
+                        "QQQ", new BigDecimal("100.00"))));
+    }
+
+    private ManualRebalancePreviewService createService(
+            FakeExecutionJobRepository jobRepository,
+            BigDecimal maxOrderNotionalUsd,
+            RebalanceDecision decision,
+            ExecutionBlockReason manualBlockReason,
+            OperatingMode operatingMode,
+            FakeRealtimePriceProvider priceProvider
+    ) {
         StrategyState state = state();
         FakeStrategyStateRepository stateRepository = new FakeStrategyStateRepository(state);
         Portfolio portfolio = new Portfolio(new BigDecimal("1000.00"), List.of());
@@ -155,8 +191,6 @@ class ManualRebalancePreviewServiceTest {
                 .thenReturn(Optional.ofNullable(manualBlockReason));
         when(executionGuard.currentMode()).thenReturn(operatingMode);
 
-        FakeRealtimePriceProvider priceProvider = FakeRealtimePriceProvider.withLastPrices(Map.of(
-                "QQQ", new BigDecimal("100.00")));
         MarketLikePricingPolicy pricing = new MarketLikePricingPolicy(
                 new BigDecimal("0.01"), 0, 0, 1, 1, BigDecimal.ZERO, 3, 2000);
         ExecutionOrderFactory orderFactory = new ExecutionOrderFactory(priceProvider, pricing);

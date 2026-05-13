@@ -46,7 +46,7 @@ public class ExecutionOrderFactory {
             Portfolio portfolio,
             BigDecimal remainingCashUsd) {
         RealtimeQuote quote = priceProvider.getQuote(symbol)
-                .orElseThrow(() -> new IllegalStateException("quote cache miss: " + symbol));
+                .orElseThrow(() -> new MarketQuoteUnavailableException(symbol));
         BigDecimal refPrice = resolveReferencePrice(side, quote);
         BigDecimal limitPrice = computeLimitPrice(side, refPrice, 1);
         BigDecimal totalValue = portfolio.totalValue();
@@ -85,7 +85,7 @@ public class ExecutionOrderFactory {
 
     public ExecutionOrder repriceForRetry(ExecutionOrder original, long newQty, int attempt) {
         RealtimeQuote quote = priceProvider.getQuote(original.getSymbol())
-                .orElseThrow(() -> new IllegalStateException("quote cache miss: " + original.getSymbol()));
+                .orElseThrow(() -> new MarketQuoteUnavailableException(original.getSymbol()));
         BigDecimal refPrice = resolveReferencePrice(original.getSide(), quote);
         BigDecimal limitPrice = computeLimitPrice(original.getSide(), refPrice, attempt);
         return ExecutionOrder.rehydrate(

@@ -7,6 +7,7 @@ import my.side.trading.adapter.out.kis.dto.KisOverseasCancelResponse;
 import my.side.trading.adapter.out.kis.dto.OverseasOrderRequest;
 import my.side.trading.adapter.out.kis.dto.OverseasOrderResponse;
 import my.side.trading.core.domain.execution.order.ExecutionOrderSide;
+import my.side.trading.shared.security.SensitiveDataSanitizer;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.stereotype.Service;
@@ -67,17 +68,18 @@ public class KisOverseasOrderService {
                     .retrieve()
                     .onStatus(HttpStatusCode::isError, resp -> resp.bodyToMono(String.class)
                             .flatMap(body -> {
+                                String sanitizedBody = SensitiveDataSanitizer.sanitize(body);
                                 log.error("[KIS CANCEL ERROR] status={}, body={}",
-                                        resp.statusCode(), body);
+                                        resp.statusCode(), sanitizedBody);
                                 return Mono.error(new IllegalStateException(
                                         "[KIS CANCEL ERROR] status=%s, body=%s"
-                                                .formatted(resp.statusCode(), body)));
+                                                .formatted(resp.statusCode(), sanitizedBody)));
                     }))
                     .bodyToMono(KisOverseasCancelResponse.class)
                     .block(kisProps.requestTimeout());
         } catch (WebClientResponseException e) {
             log.error("[KIS CANCEL EXCEPTION] status={}, body={}",
-                    e.getStatusCode(), e.getResponseBodyAsString());
+                    e.getStatusCode(), SensitiveDataSanitizer.sanitize(e.getResponseBodyAsString()));
             throw e;
         }
     }
@@ -95,17 +97,18 @@ public class KisOverseasOrderService {
                     .retrieve()
                     .onStatus(HttpStatusCode::isError, resp -> resp.bodyToMono(String.class)
                             .flatMap(body -> {
+                                String sanitizedBody = SensitiveDataSanitizer.sanitize(body);
                                 log.error("[KIS ORDER ERROR] status={}, body={}",
-                                        resp.statusCode(), body);
+                                        resp.statusCode(), sanitizedBody);
                                 return Mono.error(new IllegalStateException(
                                         "[KIS ORDER ERROR] status=%s, body=%s"
-                                                .formatted(resp.statusCode(), body)));
+                                                .formatted(resp.statusCode(), sanitizedBody)));
                     }))
                     .bodyToMono(OverseasOrderResponse.class)
                     .block(kisProps.requestTimeout());
         } catch (WebClientResponseException e) {
             log.error("[KIS ORDER EXCEPTION] status={}, body={}",
-                    e.getStatusCode(), e.getResponseBodyAsString());
+                    e.getStatusCode(), SensitiveDataSanitizer.sanitize(e.getResponseBodyAsString()));
             throw e;
         }
     }

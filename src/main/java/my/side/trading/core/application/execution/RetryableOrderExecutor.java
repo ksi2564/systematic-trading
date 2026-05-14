@@ -11,6 +11,7 @@ import my.side.trading.core.domain.execution.order.FillResult;
 import my.side.trading.core.domain.execution.order.OrderBroker;
 import my.side.trading.core.domain.execution.order.OrderCanceller;
 import my.side.trading.core.domain.execution.order.OrderFillChecker;
+import my.side.trading.shared.security.SensitiveDataSanitizer;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -79,13 +80,15 @@ public class RetryableOrderExecutor {
             cumulativeExposure = projectedExposure;
 
             if (placeResult.confirmationRequired()) {
-                log.error("[RETRY] 주문 확인 필요: symbol={}, message={}", symbol, placeResult.message());
+                String message = SensitiveDataSanitizer.sanitize(placeResult.message());
+                log.error("[RETRY] 주문 확인 필요: symbol={}, message={}", symbol, message);
                 return ExecutionResult.failed(symbol, placeResult.brokerOrderId())
-                        .withBlock(ExecutionBlockReason.ORDER_CONFIRMATION_REQUIRED, placeResult.message());
+                        .withBlock(ExecutionBlockReason.ORDER_CONFIRMATION_REQUIRED, message);
             }
 
             if (!placeResult.success()) {
-                log.warn("[RETRY] 주문 실패: symbol={}, message={}", symbol, placeResult.message());
+                log.warn("[RETRY] 주문 실패: symbol={}, message={}",
+                        symbol, SensitiveDataSanitizer.sanitize(placeResult.message()));
                 continue;
             }
 
@@ -117,7 +120,8 @@ public class RetryableOrderExecutor {
                 log.info("[RETRY] 미체결분 취소 시도: symbol={}, unfilledQty={}", symbol, unfilledQty);
                 CancelResult cancelResult = canceller.cancel(brokerOrderId, symbol);
                 if (!cancelResult.success()) {
-                    log.warn("[RETRY] 취소 실패: symbol={}, message={}", symbol, cancelResult.message());
+                    log.warn("[RETRY] 취소 실패: symbol={}, message={}",
+                            symbol, SensitiveDataSanitizer.sanitize(cancelResult.message()));
                 }
             }
         }

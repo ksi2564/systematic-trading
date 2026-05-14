@@ -14,6 +14,7 @@ import my.side.trading.core.domain.operation.OpsAlertSeverity;
 import my.side.trading.core.domain.operation.OpsAlertType;
 import my.side.trading.core.domain.time.MarketStatus;
 import my.side.trading.core.infrastructure.config.TradingStrategyProps;
+import my.side.trading.shared.security.SensitiveDataSanitizer;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -99,7 +100,7 @@ public class StrategyEodScheduler {
                             "asOfDate", asOfDate.toString(),
                             "source", "StrategyEodScheduler",
                             "error", e.getClass().getSimpleName(),
-                            "message", e.getMessage() == null ? "-" : e.getMessage())));
+                            "message", e.getMessage() == null ? "-" : SensitiveDataSanitizer.sanitize(e.getMessage()))));
             throw e;
         }
     }
@@ -108,7 +109,9 @@ public class StrategyEodScheduler {
         try {
             portfolioPerformanceSnapshotService.captureDailySnapshot(asOfDate);
         } catch (Exception e) {
-            log.error("성과 스냅샷 저장에 실패했습니다: asOfDate={}", asOfDate, e);
+            log.error("성과 스냅샷 저장에 실패했습니다: asOfDate={}, reason={}",
+                    asOfDate,
+                    SensitiveDataSanitizer.sanitizeThrowable(e));
             opsAlertPublisher.publish(new OpsAlert(
                     OpsAlertType.PERFORMANCE_SNAPSHOT_FAILURE,
                     OpsAlertSeverity.ERROR,
@@ -118,7 +121,7 @@ public class StrategyEodScheduler {
                             "asOfDate", asOfDate.toString(),
                             "source", "StrategyEodScheduler",
                             "error", e.getClass().getSimpleName(),
-                            "message", e.getMessage() == null ? "-" : e.getMessage())));
+                            "message", e.getMessage() == null ? "-" : SensitiveDataSanitizer.sanitize(e.getMessage()))));
         }
     }
 

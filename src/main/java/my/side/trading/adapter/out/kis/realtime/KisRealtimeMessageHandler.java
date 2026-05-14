@@ -7,6 +7,7 @@ import lombok.extern.slf4j.Slf4j;
 import my.side.trading.adapter.out.kis.dto.OverseasRealtimeQuote;
 import my.side.trading.adapter.out.kis.util.KisAesUtil;
 import my.side.trading.adapter.out.realtime.InMemoryRealtimePriceProvider;
+import my.side.trading.shared.security.SensitiveDataSanitizer;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
@@ -55,7 +56,7 @@ public class KisRealtimeMessageHandler {
 
             JsonNode body = root.path("body");
             String rtCd = body.path("rt_cd").asText();
-            String msg = body.path("msg1").asText();
+            String msg = SensitiveDataSanitizer.sanitize(body.path("msg1").asText());
 
             if (!"0".equals(rtCd)) {
                 log.warn("KIS WS 오류 응답입니다: rt_cd={}, msg={}", rtCd, msg);
@@ -74,7 +75,8 @@ public class KisRealtimeMessageHandler {
             }
 
         } catch (Exception e) {
-            throw new IllegalStateException("KIS WS JSON 응답 파싱 실패: " + json, e);
+            throw new IllegalStateException("KIS WS JSON 응답 파싱 실패: "
+                    + SensitiveDataSanitizer.sanitize(json));
         }
     }
 
@@ -95,7 +97,7 @@ public class KisRealtimeMessageHandler {
         String[] parts = data.split("\\|", 4); // 앞 4개만 분리
 
         if (parts.length < 4) {
-            log.warn("KIS WS 실시간 데이터 형식이 올바르지 않습니다: {}", data);
+            log.warn("KIS WS 실시간 데이터 형식이 올바르지 않습니다: length={}", data.length());
             return;
         }
 

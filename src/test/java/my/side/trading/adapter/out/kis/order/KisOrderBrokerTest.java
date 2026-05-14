@@ -97,6 +97,30 @@ class KisOrderBrokerTest {
         assertThat(alert.details()).containsEntry("failureCode", "EGW00123");
     }
 
+    @Test
+    void 예외_메시지의_민감정보는_결과와_알림에_남기지_않는다() {
+        ExecutionOrder order = order();
+        when(orderService.placeUsBuyOrder(any()))
+                .thenThrow(new IllegalStateException(
+                        "body={approval_key=secret-approval-key, CANO=12345678, authorization=Bearer raw-access-token}"));
+
+        BrokerOrderResult result = broker.place(order);
+
+        assertThat(result.message())
+                .doesNotContain("secret-approval-key")
+                .doesNotContain("12345678")
+                .doesNotContain("raw-access-token")
+                .contains("approval_key=***")
+                .contains("CANO=***")
+                .contains("Bearer ***");
+
+        OpsAlert alert = captureAlert();
+        assertThat(alert.details().toString())
+                .doesNotContain("secret-approval-key")
+                .doesNotContain("12345678")
+                .doesNotContain("raw-access-token");
+    }
+
     private OpsAlert captureAlert() {
         ArgumentCaptor<OpsAlert> captor = ArgumentCaptor.forClass(OpsAlert.class);
         verify(alertPublisher).publish(captor.capture());

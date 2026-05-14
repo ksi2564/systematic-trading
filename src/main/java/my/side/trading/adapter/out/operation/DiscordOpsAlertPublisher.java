@@ -3,6 +3,7 @@ package my.side.trading.adapter.out.operation;
 import lombok.extern.slf4j.Slf4j;
 import my.side.trading.core.domain.operation.OpsAlert;
 import my.side.trading.core.infrastructure.config.TradingOperationProps;
+import my.side.trading.shared.security.SensitiveDataSanitizer;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
@@ -47,14 +48,17 @@ public class DiscordOpsAlertPublisher implements OpsAlertChannelPublisher {
                     .toBodilessEntity()
                     .block(discord.requestTimeout());
         } catch (Exception e) {
-            log.warn("discord ops alert 전송에 실패했습니다: type={}", alert.type(), e);
+            log.warn("discord ops alert 전송에 실패했습니다: type={}, reason={}",
+                    alert.type(),
+                    SensitiveDataSanitizer.sanitizeThrowable(e));
         }
     }
 
     private DiscordWebhookPayload toPayload(OpsAlert alert) {
+        var sanitizedDetails = SensitiveDataSanitizer.sanitizeMap(alert.details());
         String details = alert.details().isEmpty()
                 ? "-"
-                : alert.details().entrySet().stream()
+                : sanitizedDetails.entrySet().stream()
                 .limit(8)
                 .map(entry -> entry.getKey() + "=" + entry.getValue())
                 .reduce((left, right) -> left + "\n" + right)
@@ -64,10 +68,10 @@ public class DiscordOpsAlertPublisher implements OpsAlertChannelPublisher {
                 "Trading ops alert",
                 List.of(new DiscordEmbed(
                         "[%s] %s".formatted(alert.severity(), alert.type()),
-                        alert.message(),
+                        SensitiveDataSanitizer.sanitize(alert.message()),
                         15158332,
                         List.of(
-                                new DiscordEmbedField("dedupeKey", alert.dedupeKey(), false),
+                                new DiscordEmbedField("dedupeKey", SensitiveDataSanitizer.sanitize(alert.dedupeKey()), false),
                                 new DiscordEmbedField("details", details, false)))));
     }
 

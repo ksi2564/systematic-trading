@@ -7,6 +7,7 @@ import my.side.trading.adapter.out.kis.dto.KisOverseasCcnlResponse;
 import my.side.trading.core.application.market.MarketCalendarService;
 import my.side.trading.core.domain.execution.order.FillResult;
 import my.side.trading.core.domain.execution.order.OrderFillChecker;
+import my.side.trading.shared.security.SensitiveDataSanitizer;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
@@ -34,8 +35,13 @@ public class KisOrderFillChecker implements OrderFillChecker {
                     marketCalendarService.currentMarketDate());
 
             if (response == null || !"0".equals(response.resultCode()) || response.output() == null) {
-                log.warn("체결조회 실패: brokerOrderId={}, symbol={}, response={}",
-                        brokerOrderId, symbol, response);
+                log.warn("체결조회 실패: brokerOrderId={}, symbol={}, rt_cd={}, msg_cd={}, msg={}, outputCount={}",
+                        brokerOrderId,
+                        symbol,
+                        response == null ? null : response.resultCode(),
+                        response == null ? null : response.messageCode(),
+                        response == null ? null : SensitiveDataSanitizer.sanitize(response.message()),
+                        response == null || response.output() == null ? 0 : response.output().size());
                 return FillResult.notFound();
             }
 
@@ -66,7 +72,8 @@ public class KisOrderFillChecker implements OrderFillChecker {
             }
 
         } catch (Exception e) {
-            log.error("체결조회 중 예외 발생: brokerOrderId={}, symbol={}", brokerOrderId, symbol, e);
+            log.error("체결조회 중 예외 발생: brokerOrderId={}, symbol={}, reason={}",
+                    brokerOrderId, symbol, SensitiveDataSanitizer.sanitizeThrowable(e));
             return FillResult.notFound();
         }
     }

@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Test;
 import java.math.BigDecimal;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class KisRealtimeMessageHandlerTest {
 
@@ -22,5 +23,18 @@ class KisRealtimeMessageHandlerTest {
         assertThat(quote.bestBidPrice()).isEqualByComparingTo(new BigDecimal("100.12"));
         assertThat(quote.bestAskPrice()).isEqualByComparingTo(new BigDecimal("100.14"));
         assertThat(quote.lastPrice()).isEqualByComparingTo(new BigDecimal("100.1300"));
+    }
+
+    @Test
+    void json_파싱_실패_메시지에는_raw_approval_key를_남기지_않는다() {
+        InMemoryRealtimePriceProvider priceProvider = new InMemoryRealtimePriceProvider();
+        KisRealtimeMessageHandler handler = new KisRealtimeMessageHandler(priceProvider);
+
+        assertThatThrownBy(() -> handler.handleMessage(
+                "{\"header\":{\"tr_id\":\"HDFSASP0\"},\"body\":\"approval_key=secret-approval-key,CANO=12345678\""))
+                .hasMessageNotContaining("secret-approval-key")
+                .hasMessageNotContaining("12345678")
+                .hasMessageContaining("approval_key=***")
+                .hasMessageContaining("CANO=***");
     }
 }

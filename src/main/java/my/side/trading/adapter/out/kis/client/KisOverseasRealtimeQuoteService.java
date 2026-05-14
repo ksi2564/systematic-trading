@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import my.side.trading.adapter.out.kis.dto.SymbolTarget;
 import my.side.trading.adapter.out.kis.realtime.KisRealtimeMessageHandler;
+import my.side.trading.shared.security.SensitiveDataSanitizer;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.socket.WebSocketMessage;
 import org.springframework.web.reactive.socket.client.ReactorNettyWebSocketClient;
@@ -54,12 +55,13 @@ public class KisOverseasRealtimeQuoteService {
                                 .doBeforeRetry(rs ->
                                         log.warn("[KIS WS] 연결 종료 감지, 재연결 시도 {}회차. reason={}",
                                                 rs.totalRetries() + 1,
-                                                rs.failure().toString())
+                                                SensitiveDataSanitizer.sanitizeThrowable(rs.failure()))
                                 )
                 )
                 .subscribe(
                         null,
-                        e -> log.error("[KIS WS] 재연결 전략으로도 회복 불가, 스트림 종료", e)
+                        e -> log.error("[KIS WS] 재연결 전략으로도 회복 불가, 스트림 종료. reason={}",
+                                SensitiveDataSanitizer.sanitizeThrowable(e))
                 );
     }
 
@@ -91,7 +93,8 @@ public class KisOverseasRealtimeQuoteService {
                                 .map(WebSocketMessage::getPayloadAsText)
                                 .doOnNext(messageHandler::handleMessage)
                                 .doOnError(e ->
-                                        log.error("[KIS WS] 수신 처리 중 오류 발생: {}", e.getMessage(), e)
+                                        log.error("[KIS WS] 수신 처리 중 오류 발생: {}",
+                                                SensitiveDataSanitizer.sanitizeThrowable(e))
                                 )
                                 .doFinally(sig ->
                                         log.warn("[KIS WS] 수신 스트림 종료. signal={}", sig)
@@ -103,7 +106,8 @@ public class KisOverseasRealtimeQuoteService {
                     }
             );
         }).doOnError(e ->
-                log.error("[KIS WS] 최상위 WebSocket execute 에러 발생: {}", e.getMessage(), e)
+                log.error("[KIS WS] 최상위 WebSocket execute 에러 발생: {}",
+                        SensitiveDataSanitizer.sanitizeThrowable(e))
         );
     }
 
@@ -115,7 +119,8 @@ public class KisOverseasRealtimeQuoteService {
                 .doOnSubscribe(s -> log.info("[KIS WS] 단일 해외 실시간호가 구독 시작. symbol={}, excd={}", symbol, excd))
                 .subscribe(
                         null,
-                        e -> log.error("[KIS WS] 단일 해외 실시간호가 구독 종료. symbol={}, excd={}", symbol, excd, e)
+                        e -> log.error("[KIS WS] 단일 해외 실시간호가 구독 종료. symbol={}, excd={}, reason={}",
+                                symbol, excd, SensitiveDataSanitizer.sanitizeThrowable(e))
                 );
     }
 

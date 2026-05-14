@@ -88,6 +88,34 @@ class DiscordOpsAlertPublisherTest {
     }
 
     @Test
+    void discord_payload는_민감정보를_마스킹한다() throws IOException {
+        AtomicReference<String> bodyRef = new AtomicReference<>("");
+        startServer(exchange -> {
+            bodyRef.set(readBody(exchange));
+            respond(exchange, 204, "");
+        });
+
+        DiscordOpsAlertPublisher publisher = new DiscordOpsAlertPublisher(
+                operationProps(serverUrl(), OpsAlertSeverity.ERROR),
+                WebClient.builder().build());
+
+        publisher.publish(new OpsAlert(
+                OpsAlertType.BROKER_API_FAILURE,
+                OpsAlertSeverity.ERROR,
+                "broker-api-failure:approval_key=secret-approval-key",
+                "failure body Bearer raw-access-token",
+                Map.of(
+                        "approval_key", "secret-approval-key",
+                        "message", "{\"CANO\":\"12345678\",\"iv\":\"aes-iv\"}")));
+
+        assertThat(bodyRef.get()).doesNotContain("secret-approval-key");
+        assertThat(bodyRef.get()).doesNotContain("raw-access-token");
+        assertThat(bodyRef.get()).doesNotContain("12345678");
+        assertThat(bodyRef.get()).doesNotContain("aes-iv");
+        assertThat(bodyRef.get()).contains("approval_key=***");
+    }
+
+    @Test
     void discord_전송_실패는_예외를_전파하지_않는다() throws IOException {
         startServer(exchange -> respond(exchange, 500, "boom"));
 

@@ -11,6 +11,7 @@ import my.side.trading.core.domain.operation.OpsAlert;
 import my.side.trading.core.domain.operation.OpsAlertPublisher;
 import my.side.trading.core.domain.operation.OpsAlertSeverity;
 import my.side.trading.core.domain.operation.OpsAlertType;
+import my.side.trading.shared.security.SensitiveDataSanitizer;
 import org.springframework.stereotype.Service;
 
 import java.time.Clock;
@@ -78,7 +79,8 @@ public class ExecutionJobExecutor {
             job.completeIfAllTerminal(now);
             return jobRepository.save(job);
         } catch (Exception e) {
-            log.error("job 실행에 실패했습니다: jobId={}", jobId, e);
+            log.error("job 실행에 실패했습니다: jobId={}, reason={}",
+                    jobId, SensitiveDataSanitizer.sanitizeThrowable(e));
             throw e;
         }
     }
@@ -104,8 +106,9 @@ public class ExecutionJobExecutor {
             }
             return result.isBlocked();
         } catch (Exception e) {
-            log.error("주문 처리 중 오류가 발생했습니다: orderId={}", order.getId(), e);
-            job.rejectOrder(order.getId(), null, "Error: " + e.getMessage(), now);
+            String reason = SensitiveDataSanitizer.sanitizeThrowable(e);
+            log.error("주문 처리 중 오류가 발생했습니다: orderId={}, reason={}", order.getId(), reason);
+            job.rejectOrder(order.getId(), null, "Error: " + reason, now);
             return false;
         }
     }
@@ -122,7 +125,7 @@ public class ExecutionJobExecutor {
     private String orderMessage(String defaultMessage, ExecutionResult result) {
         return result.detailMessage() == null || result.detailMessage().isBlank()
                 ? defaultMessage
-                : defaultMessage + " | " + result.detailMessage();
+                : defaultMessage + " | " + SensitiveDataSanitizer.sanitize(result.detailMessage());
     }
 
     private void publishExecutionAlerts(ExecutionJob job, ExecutionOrder order, ExecutionResult result) {
@@ -146,7 +149,7 @@ public class ExecutionJobExecutor {
             details.put("jobId", String.valueOf(job.getId()));
             details.put("orderId", String.valueOf(order.getId()));
             details.put("symbol", order.getSymbol());
-            details.put("detail", result.detailMessage() == null ? "-" : result.detailMessage());
+            details.put("detail", result.detailMessage() == null ? "-" : SensitiveDataSanitizer.sanitize(result.detailMessage()));
             opsAlertPublisher.publish(new OpsAlert(
                     OpsAlertType.RISK_LIMIT_BREACH,
                     OpsAlertSeverity.ERROR,

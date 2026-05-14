@@ -2,6 +2,7 @@ package my.side.trading.core.adapter.in.web.common;
 
 import my.side.trading.core.application.execution.ExecutionBlockedException;
 import my.side.trading.core.application.operation.ParameterRegistryConflictException;
+import my.side.trading.shared.security.SensitiveDataSanitizer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -28,8 +29,9 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(ParameterRegistryConflictException.class)
     public ResponseEntity<ApiResponse<Void>> handleParameterRegistryConflict(ParameterRegistryConflictException ex) {
-        log.warn("파라미터 레지스트리 충돌: {}", ex.getMessage());
-        return new ResponseEntity<>(ApiResponse.error(ex.getMessage()), HttpStatus.CONFLICT);
+        String message = SensitiveDataSanitizer.sanitize(ex.getMessage());
+        log.warn("파라미터 레지스트리 충돌: {}", message);
+        return new ResponseEntity<>(ApiResponse.error(message), HttpStatus.CONFLICT);
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
@@ -38,7 +40,7 @@ public class GlobalExceptionHandler {
         Map<String, String> errors = new HashMap<>();
         ex.getBindingResult().getAllErrors().forEach((error) -> {
             String fieldName = ((FieldError) error).getField();
-            String errorMessage = error.getDefaultMessage();
+            String errorMessage = SensitiveDataSanitizer.sanitize(error.getDefaultMessage());
             errors.put(fieldName, errorMessage);
         });
         log.warn("검증에 실패했습니다: {}", errors);
@@ -47,19 +49,20 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
     public ResponseEntity<ApiResponse<Void>> handleMethodArgumentTypeMismatch(MethodArgumentTypeMismatchException ex) {
-        log.warn("인자 타입이 일치하지 않습니다: {}", ex.getMessage());
+        log.warn("인자 타입이 일치하지 않습니다: {}", SensitiveDataSanitizer.sanitize(ex.getMessage()));
         return new ResponseEntity<>(ApiResponse.error("Invalid request parameter"), HttpStatus.BAD_REQUEST);
     }
 
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<ApiResponse<Void>> handleIllegalArgumentException(IllegalArgumentException ex) {
-        log.warn("잘못된 인자입니다: {}", ex.getMessage());
-        return new ResponseEntity<>(ApiResponse.error(ex.getMessage()), HttpStatus.BAD_REQUEST);
+        String message = SensitiveDataSanitizer.sanitize(ex.getMessage());
+        log.warn("잘못된 인자입니다: {}", message);
+        return new ResponseEntity<>(ApiResponse.error(message), HttpStatus.BAD_REQUEST);
     }
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<Void>> handleException(Exception ex) {
-        log.error("예상하지 못한 오류가 발생했습니다.", ex);
+        log.error("예상하지 못한 오류가 발생했습니다: {}", SensitiveDataSanitizer.sanitizeThrowable(ex));
         return new ResponseEntity<>(ApiResponse.error("An unexpected error occurred"),
                 HttpStatus.INTERNAL_SERVER_ERROR);
     }

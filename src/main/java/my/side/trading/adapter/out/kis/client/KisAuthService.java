@@ -5,6 +5,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import my.side.trading.adapter.out.kis.config.KisProps;
 import my.side.trading.adapter.out.kis.dto.*;
+import my.side.trading.shared.security.SensitiveDataSanitizer;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
@@ -95,11 +96,12 @@ public class KisAuthService {
                     } else {
                         return response.bodyToMono(String.class)
                                 .flatMap(body -> {
+                                    String sanitizedBody = SensitiveDataSanitizer.sanitize(body);
                                     String msg = "[KIS APPROVAL ERROR] status="
                                             + response.statusCode().value()
-                                            + ", body=" + body;
+                                            + ", body=" + sanitizedBody;
                                     log.warn("KIS approval key 발급이 실패했습니다: status={}, body={}",
-                                            response.statusCode().value(), body);
+                                            response.statusCode().value(), sanitizedBody);
                                     return Mono.error(new IllegalStateException(msg));
                                 });
                     }

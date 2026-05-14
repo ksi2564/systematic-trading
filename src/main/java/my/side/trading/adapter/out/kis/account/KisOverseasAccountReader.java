@@ -7,6 +7,7 @@ import my.side.trading.adapter.out.kis.client.KisOverseasPsAmountService;
 import my.side.trading.adapter.out.kis.dto.KisOverseasBalanceResponse;
 import my.side.trading.adapter.out.kis.dto.KisOverseasPsAmountResponse;
 import my.side.trading.core.domain.portfolio.OverseasAccountReader;
+import my.side.trading.shared.security.SensitiveDataSanitizer;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
@@ -47,7 +48,7 @@ public class KisOverseasAccountReader implements OverseasAccountReader {
             }
             if (!"0".equals(ps.resultCode())) {
                 log.warn("psamount 호출이 실패해 balance usableAmt로 대체합니다. rt_cd={}, msg_cd={}, msg1={}",
-                        ps.resultCode(), ps.messageCode(), ps.message());
+                        ps.resultCode(), ps.messageCode(), SensitiveDataSanitizer.sanitize(ps.message()));
                 return extractUsdCashFromBalance(currencies);
             }
 
@@ -57,11 +58,12 @@ public class KisOverseasAccountReader implements OverseasAccountReader {
             if (overseasOrderableAmount != null) return overseasOrderableAmount;
 
             log.warn("overseasOrderableAmount가 없어 balance usableAmt로 대체합니다. currency={}, msg={}/{}",
-                    ps.output().tradeCurrencyCode(), ps.messageCode(), ps.message());
+                    ps.output().tradeCurrencyCode(), ps.messageCode(), SensitiveDataSanitizer.sanitize(ps.message()));
             return extractUsdCashFromBalance(currencies);
 
         } catch (Exception e) {
-            log.warn("psamount 호출에 실패해 balance usableAmt로 대체합니다. reason={}", e.toString());
+            log.warn("psamount 호출에 실패해 balance usableAmt로 대체합니다. reason={}",
+                    SensitiveDataSanitizer.sanitizeThrowable(e));
             return extractUsdCashFromBalance(currencies);
         }
     }

@@ -6,6 +6,7 @@ import my.side.trading.core.application.execution.ExecutionGuard;
 import my.side.trading.core.domain.execution.order.BrokerOrderResult;
 import my.side.trading.core.domain.execution.order.ExecutionOrder;
 import my.side.trading.core.domain.execution.order.OrderBroker;
+import my.side.trading.shared.security.SensitiveDataSanitizer;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Component;
@@ -25,7 +26,7 @@ public class GuardedOrderBroker implements OrderBroker {
         } catch (ExecutionBlockedException e) {
             // "실패 주문"으로 오염시키지 않도록 BLOCKED reason을 명확히 남긴다.
             // "BLOCKED:" prefix로 구분하므로 message 수정 시 주의한다.
-            return BrokerOrderResult.failure(null, "BLOCKED: " + e.getMessage());
+            return BrokerOrderResult.failure(null, "BLOCKED: " + SensitiveDataSanitizer.sanitize(e.getMessage()));
         }
         return delegate.place(order);
     }

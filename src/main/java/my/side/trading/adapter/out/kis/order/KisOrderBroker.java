@@ -15,6 +15,7 @@ import my.side.trading.core.domain.operation.OpsAlert;
 import my.side.trading.core.domain.operation.OpsAlertPublisher;
 import my.side.trading.core.domain.operation.OpsAlertSeverity;
 import my.side.trading.core.domain.operation.OpsAlertType;
+import my.side.trading.shared.security.SensitiveDataSanitizer;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClientRequestException;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
@@ -59,7 +60,7 @@ public class KisOrderBroker implements OrderBroker {
             publishBrokerFailureAlert(order, trId, null, "http", String.valueOf(e.getStatusCode().value()), failureMessage);
             return BrokerOrderResult.failure(null, failureMessage);
         } catch (Exception e) {
-            String failureMessage = "Exception: " + e.getMessage();
+            String failureMessage = SensitiveDataSanitizer.sanitizeThrowable(e);
             if (requiresConfirmation(e)) {
                 publishBrokerFailureAlert(order, trId, null, "timeout_network", confirmationFailureCode(e), failureMessage);
                 return BrokerOrderResult.confirmationRequired(null, failureMessage);
@@ -103,7 +104,7 @@ public class KisOrderBroker implements OrderBroker {
         details.put("brokerOrderId", brokerOrderId == null || brokerOrderId.isBlank() ? "-" : brokerOrderId);
         details.put("failureKind", failureKind);
         details.put("failureCode", failureCode == null ? "-" : failureCode);
-        details.put("message", sanitizeFailureMessage(failureMessage));
+        details.put("message", SensitiveDataSanitizer.sanitize(failureMessage));
         opsAlertPublisher.publish(new OpsAlert(
                 OpsAlertType.BROKER_API_FAILURE,
                 OpsAlertSeverity.ERROR,
@@ -140,17 +141,5 @@ public class KisOrderBroker implements OrderBroker {
             current = current.getCause();
         }
         return null;
-    }
-
-    private String sanitizeFailureMessage(String failureMessage) {
-        if (failureMessage == null || failureMessage.isBlank()) {
-            return "-";
-        }
-        return failureMessage
-                .replaceAll("(?i)bearer\\s+[A-Za-z0-9._~+/=-]+", "Bearer ***")
-                .replaceAll("(?i)(app[-_ ]?secret\\s*[:=]\\s*)[^,}\\s]+", "$1***")
-                .replaceAll("(?i)(app[-_ ]?key\\s*[:=]\\s*)[^,}\\s]+", "$1***")
-                .replaceAll("(?i)(CANO\\s*[:=]\\s*)[^,}\\s]+", "$1***")
-                .replaceAll("(?i)(ACNT_PRDT_CD\\s*[:=]\\s*)[^,}\\s]+", "$1***");
     }
 }

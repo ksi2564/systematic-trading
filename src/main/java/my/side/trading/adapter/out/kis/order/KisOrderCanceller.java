@@ -6,6 +6,7 @@ import my.side.trading.adapter.out.kis.client.KisOverseasOrderService;
 import my.side.trading.adapter.out.kis.dto.KisOverseasCancelResponse;
 import my.side.trading.core.domain.execution.order.CancelResult;
 import my.side.trading.core.domain.execution.order.OrderCanceller;
+import my.side.trading.shared.security.SensitiveDataSanitizer;
 import org.springframework.stereotype.Component;
 
 /**
@@ -31,17 +32,18 @@ public class KisOrderCanceller implements OrderCanceller {
 
             if (response.isSuccess()) {
                 log.info("주문취소 성공: brokerOrderId={}, symbol={}, message={}",
-                        brokerOrderId, symbol, response.message());
-                return CancelResult.success(response.message());
+                        brokerOrderId, symbol, SensitiveDataSanitizer.sanitize(response.message()));
+                return CancelResult.success(SensitiveDataSanitizer.sanitize(response.message()));
             } else {
                 log.warn("주문취소 실패: brokerOrderId={}, symbol={}, code={}, message={}",
-                        brokerOrderId, symbol, response.messageCode(), response.message());
-                return CancelResult.failure(response.message());
+                        brokerOrderId, symbol, response.messageCode(), SensitiveDataSanitizer.sanitize(response.message()));
+                return CancelResult.failure(SensitiveDataSanitizer.sanitize(response.message()));
             }
 
         } catch (Exception e) {
-            log.error("주문취소 중 예외 발생: brokerOrderId={}, symbol={}", brokerOrderId, symbol, e);
-            return CancelResult.failure("예외: " + e.getMessage());
+            String reason = SensitiveDataSanitizer.sanitizeThrowable(e);
+            log.error("주문취소 중 예외 발생: brokerOrderId={}, symbol={}, reason={}", brokerOrderId, symbol, reason);
+            return CancelResult.failure("예외: " + reason);
         }
     }
 }

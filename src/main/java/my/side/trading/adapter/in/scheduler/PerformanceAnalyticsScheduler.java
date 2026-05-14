@@ -8,6 +8,7 @@ import my.side.trading.core.domain.operation.OpsAlert;
 import my.side.trading.core.domain.operation.OpsAlertPublisher;
 import my.side.trading.core.domain.operation.OpsAlertSeverity;
 import my.side.trading.core.domain.operation.OpsAlertType;
+import my.side.trading.shared.security.SensitiveDataSanitizer;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -49,7 +50,9 @@ public class PerformanceAnalyticsScheduler {
         try {
             portfolioPerformanceAnalyticsService.captureDailyAnalytics(marketDate);
         } catch (Exception e) {
-            log.error("성과 분석 수집에 실패했습니다: asOfDate={}", marketDate, e);
+            log.error("성과 분석 수집에 실패했습니다: asOfDate={}, reason={}",
+                    marketDate,
+                    SensitiveDataSanitizer.sanitizeThrowable(e));
             opsAlertPublisher.publish(new OpsAlert(
                     OpsAlertType.PERFORMANCE_DATA_MISSING,
                     OpsAlertSeverity.ERROR,
@@ -59,7 +62,7 @@ public class PerformanceAnalyticsScheduler {
                             "asOfDate", marketDate.toString(),
                             "source", "PerformanceAnalyticsScheduler",
                             "error", e.getClass().getSimpleName(),
-                            "message", e.getMessage() == null ? "-" : e.getMessage())));
+                            "message", e.getMessage() == null ? "-" : SensitiveDataSanitizer.sanitize(e.getMessage()))));
         }
     }
 }

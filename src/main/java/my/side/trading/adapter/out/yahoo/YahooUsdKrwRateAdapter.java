@@ -8,6 +8,7 @@ import my.side.trading.adapter.out.yahoo.dto.YahooQuoteResponse;
 import my.side.trading.core.application.port.out.CurrentFxRateProvider;
 import my.side.trading.core.application.port.out.FxRateReader;
 import my.side.trading.core.infrastructure.config.TradingFxProps;
+import my.side.trading.shared.security.SensitiveDataSanitizer;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Component;
@@ -94,9 +95,10 @@ public class YahooUsdKrwRateAdapter implements FxRateReader, CurrentFxRateProvid
             }
             return fallbackHistoricalRates(startDate, endDate, "응답 비어 있음");
         } catch (Exception e) {
+            String reason = SensitiveDataSanitizer.sanitizeThrowable(e);
             log.warn("Yahoo USD/KRW 이력 조회에 실패했습니다: startDate={}, endDate={}, reason={}",
-                    startDate, endDate, e.toString());
-            return fallbackHistoricalRates(startDate, endDate, e.toString());
+                    startDate, endDate, reason);
+            return fallbackHistoricalRates(startDate, endDate, reason);
         }
     }
 
@@ -126,8 +128,9 @@ public class YahooUsdKrwRateAdapter implements FxRateReader, CurrentFxRateProvid
             }
             return Optional.of(cacheCurrentRate(price));
         } catch (Exception e) {
-            log.warn("Yahoo USD/KRW 현재가 조회에 실패했습니다: reason={}", e.toString());
-            return fallbackCurrentRate(e.toString());
+            String reason = SensitiveDataSanitizer.sanitizeThrowable(e);
+            log.warn("Yahoo USD/KRW 현재가 조회에 실패했습니다: reason={}", reason);
+            return fallbackCurrentRate(reason);
         }
     }
 
@@ -230,7 +233,7 @@ public class YahooUsdKrwRateAdapter implements FxRateReader, CurrentFxRateProvid
             return ZoneId.of(meta.exchangeTimezoneName());
         } catch (Exception e) {
             log.debug("Yahoo USD/KRW timezone 기본값을 적용합니다: timezone={}, reason={}",
-                    meta.exchangeTimezoneName(), e.toString());
+                    meta.exchangeTimezoneName(), SensitiveDataSanitizer.sanitizeThrowable(e));
             return DEFAULT_ZONE;
         }
     }

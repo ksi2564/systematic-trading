@@ -5,6 +5,7 @@ import lombok.extern.slf4j.Slf4j;
 import my.side.trading.adapter.out.kis.client.KisOverseasPeriodProfitService;
 import my.side.trading.adapter.out.kis.dto.KisOverseasPeriodProfitResponse;
 import my.side.trading.core.application.port.out.BrokerDailyPerformanceReader;
+import my.side.trading.shared.security.SensitiveDataSanitizer;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
@@ -34,7 +35,7 @@ public class KisBrokerDailyPerformanceReader implements BrokerDailyPerformanceRe
                 log.warn("KIS 해외 기간 손익 조회가 실패했습니다: rt_cd={}, msg_cd={}, msg={}",
                         response.resultCode(),
                         response.messageCode(),
-                        response.message());
+                        SensitiveDataSanitizer.sanitize(response.message()));
                 return List.of();
             }
             if (response.items().isEmpty()) {
@@ -60,7 +61,7 @@ public class KisBrokerDailyPerformanceReader implements BrokerDailyPerformanceRe
                     .toList();
         } catch (Exception e) {
             log.warn("KIS 해외 기간 손익 조회 중 예외가 발생했습니다: startDate={}, endDate={}, reason={}",
-                    startDate, endDate, e.toString());
+                    startDate, endDate, SensitiveDataSanitizer.sanitizeThrowable(e));
             return List.of();
         }
     }

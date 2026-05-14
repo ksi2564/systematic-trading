@@ -5,6 +5,7 @@ import my.side.trading.adapter.out.yahoo.dto.YahooQuoteResponse;
 import my.side.trading.core.application.port.out.MarketDataProvider;
 import my.side.trading.core.infrastructure.config.TradingCircuitBreakerProps;
 import my.side.trading.core.infrastructure.config.TradingFxProps;
+import my.side.trading.shared.security.SensitiveDataSanitizer;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
@@ -72,7 +73,8 @@ public class YahooVixService implements MarketDataProvider {
             return Optional.of(vix);
 
         } catch (Exception e) {
-            log.error("Yahoo Finance에서 VIX 조회에 실패했습니다.", e);
+            log.error("Yahoo Finance에서 VIX 조회에 실패했습니다: reason={}",
+                    SensitiveDataSanitizer.sanitizeThrowable(e));
             return Optional.empty();
         }
     }
@@ -113,7 +115,9 @@ public class YahooVixService implements MarketDataProvider {
             return closes;
 
         } catch (Exception e) {
-            log.error("Yahoo Finance에서 신호 ETF 과거 가격 조회에 실패했습니다. symbol={}", normalizedSymbol, e);
+            log.error("Yahoo Finance에서 신호 ETF 과거 가격 조회에 실패했습니다. symbol={}, reason={}",
+                    normalizedSymbol,
+                    SensitiveDataSanitizer.sanitizeThrowable(e));
             return List.of();
         }
     }

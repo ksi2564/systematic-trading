@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import my.side.trading.core.domain.operation.OpsAlert;
 import my.side.trading.core.domain.operation.OpsAlertPublisher;
+import my.side.trading.shared.security.SensitiveDataSanitizer;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -21,10 +22,10 @@ public class CompositeOpsAlertPublisher implements OpsAlertPublisher {
             try {
                 channelPublisher.publish(alert);
             } catch (Exception e) {
-                log.warn("ops alert 채널 전송에 실패했습니다: type={}, publisher={}",
+                log.warn("ops alert 채널 전송에 실패했습니다: type={}, publisher={}, reason={}",
                         alert.type(),
                         channelPublisher.getClass().getSimpleName(),
-                        e);
+                        SensitiveDataSanitizer.sanitizeThrowable(e));
             }
         }
     }

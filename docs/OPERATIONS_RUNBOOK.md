@@ -246,6 +246,12 @@ KIS 토큰/승인키 직접 반환 API와 직접 주문 테스트 API는 운영 
 주문은 `POST /api/jobs/manual-rebalance` 또는 `POST /api/jobs/{jobId}/execute` 경로를 통해 실행 가드와 리스크 한도를 거쳐야 한다.
 운영 실주문은 `ExecutionJobExecutor -> GuardedOrderBroker -> KisOrderBroker` 경로만 사용한다.
 
+### KIS 실시간 시세 구독 운영 기준
+
+운영 환경에서는 `/etc/trading/trading.env`의 `REALTIME_QUOTE_ENABLED=true`를 기준값으로 둔다. 이 환경변수는 Spring Boot relaxed binding으로 `realtime.quote.enabled`에 매핑되며, 애플리케이션 기동 시 핵심 ETF `QQQM`, `QLD`, `TQQQ` 실시간 시세 구독을 시작한다.
+
+KIS WebSocket 장애, approval key 발급 장애, 또는 운영 점검으로 실시간 시세 연결을 의도적으로 멈춰야 하는 경우에만 `REALTIME_QUOTE_ENABLED=false`로 낮춘 뒤 서비스를 재시작한다. 이 경우 장중 주문 가격 산정과 운영 대시보드의 실시간 평가 값이 최신 체결가를 받지 못할 수 있으므로 수동 실행도 보수적으로 제한한다.
+
 ### KIS 개발 진단 API
 
 아래 API는 `dev` 또는 `local` profile에서만 bean이 등록된다. `prod` profile에서는 등록되지 않아야 하며, 운영 직접 주문 API로 사용해서는 안 된다.

@@ -93,6 +93,7 @@ export function computeLiveStatus(input: {
   hasError: boolean;
   summary?: DashboardSummary | null;
   preview?: ManualRebalancePreview | null;
+  confirmationOrderCount?: number;
   history?: DashboardHistory | null;
 }): LiveStatus {
   const checks = buildExecutionChecks(input.summary, input.preview);
@@ -130,8 +131,8 @@ export function computeLiveStatus(input: {
     };
   }
 
-  const confirmationOrders = getConfirmationOrders(input.history);
-  if (confirmationOrders.length > 0) {
+  const confirmationOrderCount = input.confirmationOrderCount ?? getConfirmationOrders(input.history).length;
+  if (confirmationOrderCount > 0) {
     return {
       kind: 'confirm-required',
       title: '브로커 접수 확인 필요',

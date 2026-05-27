@@ -64,7 +64,7 @@ class DashboardControllerTest {
         when(scheduler.getVix()).thenReturn(new BigDecimal("20.5"));
         when(scheduler.getSignalSymbol()).thenReturn("QQQM");
         when(scheduler.getSignal200Ma()).thenReturn(new BigDecimal("500.0"));
-        when(jobRepository.findAll()).thenReturn(List.of(sampleJob()));
+        when(jobRepository.findRecent(0, 5)).thenReturn(List.of(sampleJob()));
         when(executionGuard.snapshot()).thenReturn(new ExecutionGuardSnapshot(
                 OperatingMode.MANUAL_LIVE,
                 true,
@@ -135,9 +135,9 @@ class DashboardControllerTest {
         PortfolioSnapshotRepository portfolioSnapshotRepository = mock(PortfolioSnapshotRepository.class);
         OperatingModeService operatingModeService = mock(OperatingModeService.class);
 
-        when(jobRepository.findAll()).thenReturn(List.of(
-                sampleJob(1L, LocalDate.of(2026, 4, 2), Instant.parse("2026-04-02T23:40:00Z")),
-                sampleJob(2L, LocalDate.of(2026, 4, 3), Instant.parse("2026-04-03T23:45:00Z"))
+        when(jobRepository.findRecent(0, 2)).thenReturn(List.of(
+                sampleJob(2L, LocalDate.of(2026, 4, 3), Instant.parse("2026-04-03T23:45:00Z")),
+                sampleJob(1L, LocalDate.of(2026, 4, 2), Instant.parse("2026-04-02T23:40:00Z"))
         ));
         when(operatingModeService.recentHistory(2)).thenReturn(List.of(
                 auditEvent(2L, Instant.parse("2026-04-03T01:00:00Z")),
@@ -174,6 +174,102 @@ class DashboardControllerTest {
         assertThat(response.performanceSnapshots().getFirst().asOfDate()).isEqualTo(LocalDate.of(2026, 4, 3));
         assertThat(response.performanceAnalyticsSnapshots()).hasSize(2);
         assertThat(response.performanceAnalyticsSnapshots().getFirst().actualDataReady()).isTrue();
+    }
+
+    @Test
+    void job_이력_page_응답은_정렬된_job과_page_메타를_반환한다() {
+        PortfolioService portfolioService = mock(PortfolioService.class);
+        StrategyStateRepository strategyStateRepository = mock(StrategyStateRepository.class);
+        StrategyEodScheduler scheduler = mock(StrategyEodScheduler.class);
+        ExecutionJobRepository jobRepository = mock(ExecutionJobRepository.class);
+        ExecutionGuard executionGuard = mock(ExecutionGuard.class);
+        my.side.trading.core.application.operation.OperationsKpiService operationsKpiService =
+                mock(my.side.trading.core.application.operation.OperationsKpiService.class);
+        PortfolioPerformanceAnalyticsService analyticsService = mock(PortfolioPerformanceAnalyticsService.class);
+        CurrentFxRateProvider currentFxRateProvider = mock(CurrentFxRateProvider.class);
+        PortfolioSnapshotRepository portfolioSnapshotRepository = mock(PortfolioSnapshotRepository.class);
+        OperatingModeService operatingModeService = mock(OperatingModeService.class);
+
+        when(jobRepository.countAll()).thenReturn(5L);
+        when(jobRepository.findRecent(1, 2)).thenReturn(List.of(
+                sampleJob(3L, LocalDate.of(2026, 4, 3), Instant.parse("2026-04-03T23:40:00Z")),
+                sampleJob(2L, LocalDate.of(2026, 4, 2), Instant.parse("2026-04-02T23:40:00Z"))
+        ));
+
+        DashboardController controller = new DashboardController(
+                portfolioService,
+                strategyStateRepository,
+                scheduler,
+                jobRepository,
+                executionGuard,
+                operationsKpiService,
+                analyticsService,
+                currentFxRateProvider,
+                portfolioSnapshotRepository,
+                operatingModeService,
+                marketCalendarProps());
+
+        var response = controller.getJobHistoryPage(1, 2).data();
+
+        assertThat(response.page().page()).isEqualTo(1);
+        assertThat(response.page().size()).isEqualTo(2);
+        assertThat(response.page().totalElements()).isEqualTo(5);
+        assertThat(response.page().totalPages()).isEqualTo(3);
+        assertThat(response.page().hasPrevious()).isTrue();
+        assertThat(response.page().hasNext()).isTrue();
+        assertThat(response.jobs()).extracting(DashboardHistoryResponse.JobHistoryItem::id)
+                .containsExactly(3L, 2L);
+    }
+
+    @Test
+    void 확인필요_주문_page_응답은_status_전용_조회와_page_정규화를_사용한다() {
+        PortfolioService portfolioService = mock(PortfolioService.class);
+        StrategyStateRepository strategyStateRepository = mock(StrategyStateRepository.class);
+        StrategyEodScheduler scheduler = mock(StrategyEodScheduler.class);
+        ExecutionJobRepository jobRepository = mock(ExecutionJobRepository.class);
+        ExecutionGuard executionGuard = mock(ExecutionGuard.class);
+        my.side.trading.core.application.operation.OperationsKpiService operationsKpiService =
+                mock(my.side.trading.core.application.operation.OperationsKpiService.class);
+        PortfolioPerformanceAnalyticsService analyticsService = mock(PortfolioPerformanceAnalyticsService.class);
+        CurrentFxRateProvider currentFxRateProvider = mock(CurrentFxRateProvider.class);
+        PortfolioSnapshotRepository portfolioSnapshotRepository = mock(PortfolioSnapshotRepository.class);
+        OperatingModeService operatingModeService = mock(OperatingModeService.class);
+        ExecutionOrder confirmationOrder = sampleOrder(108L, ExecutionOrderStatus.CONFIRMATION_REQUIRED);
+        ExecutionJob job = sampleJob(
+                43L,
+                LocalDate.of(2026, 4, 3),
+                Instant.parse("2026-04-03T23:45:00Z"),
+                confirmationOrder);
+
+        when(jobRepository.countOrdersByStatus(ExecutionOrderStatus.CONFIRMATION_REQUIRED)).thenReturn(101L);
+        when(jobRepository.findOrdersByStatus(ExecutionOrderStatus.CONFIRMATION_REQUIRED, 0, 100))
+                .thenReturn(List.of(new ExecutionJobRepository.OrderWithJob(job, confirmationOrder)));
+
+        DashboardController controller = new DashboardController(
+                portfolioService,
+                strategyStateRepository,
+                scheduler,
+                jobRepository,
+                executionGuard,
+                operationsKpiService,
+                analyticsService,
+                currentFxRateProvider,
+                portfolioSnapshotRepository,
+                operatingModeService,
+                marketCalendarProps());
+
+        var response = controller.getConfirmationRequiredOrders(-1, 500).data();
+
+        assertThat(response.page().page()).isZero();
+        assertThat(response.page().size()).isEqualTo(100);
+        assertThat(response.page().totalElements()).isEqualTo(101);
+        assertThat(response.page().totalPages()).isEqualTo(2);
+        assertThat(response.orders()).singleElement()
+                .satisfies(target -> {
+                    assertThat(target.job().id()).isEqualTo(43L);
+                    assertThat(target.order().id()).isEqualTo(108L);
+                    assertThat(target.order().status()).isEqualTo("CONFIRMATION_REQUIRED");
+                });
     }
 
     @Test
@@ -354,23 +450,31 @@ class DashboardControllerTest {
     }
 
     private ExecutionJob sampleJob(Long id, LocalDate signalDate, Instant executeAfter) {
+        return sampleJob(id, signalDate, executeAfter, sampleOrder(1L, ExecutionOrderStatus.ACCEPTED));
+    }
+
+    private ExecutionJob sampleJob(Long id, LocalDate signalDate, Instant executeAfter, ExecutionOrder order) {
         return ExecutionJob.rehydrate(
                 id,
                 signalDate,
                 executeAfter,
                 ExecutionStatus.COMPLETED,
-                List.of(ExecutionOrder.rehydrate(
-                        1L,
-                        "QQQM",
-                        ExecutionOrderSide.BUY,
-                        1,
-                        new BigDecimal("100"),
-                        new BigDecimal("100"),
-                        ExecutionOrderStatus.ACCEPTED,
-                        "ORD-001",
-                        "accepted")),
+                List.of(order),
                 executeAfter.plusSeconds(60),
                 executeAfter.plusSeconds(180));
+    }
+
+    private ExecutionOrder sampleOrder(Long id, ExecutionOrderStatus status) {
+        return ExecutionOrder.rehydrate(
+                id,
+                "QQQM",
+                ExecutionOrderSide.BUY,
+                1,
+                new BigDecimal("100"),
+                new BigDecimal("100"),
+                status,
+                status == ExecutionOrderStatus.ACCEPTED ? "ORD-001" : null,
+                status == ExecutionOrderStatus.ACCEPTED ? "accepted" : "confirmation required");
     }
 
     private TradingMarketCalendarProps marketCalendarProps() {

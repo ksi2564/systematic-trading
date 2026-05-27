@@ -2,7 +2,10 @@ package my.side.trading.adapter.in.web.dashboard;
 
 import lombok.RequiredArgsConstructor;
 import my.side.trading.adapter.in.scheduler.StrategyEodScheduler;
+import my.side.trading.adapter.in.web.dashboard.dto.DashboardConfirmationOrdersResponse;
 import my.side.trading.adapter.in.web.dashboard.dto.DashboardHistoryResponse;
+import my.side.trading.adapter.in.web.dashboard.dto.DashboardJobHistoryPageResponse;
+import my.side.trading.adapter.in.web.dashboard.dto.DashboardPageInfo;
 import my.side.trading.adapter.in.web.dashboard.dto.DashboardPerformanceResponse;
 import my.side.trading.adapter.in.web.dashboard.dto.DashboardResponse;
 import my.side.trading.core.adapter.in.web.common.ApiResponse;
@@ -12,8 +15,8 @@ import my.side.trading.core.application.operation.OperationsKpiService;
 import my.side.trading.core.application.port.out.CurrentFxRateProvider;
 import my.side.trading.core.application.portfolio.PortfolioPerformanceAnalyticsService;
 import my.side.trading.core.application.portfolio.PortfolioService;
-import my.side.trading.core.domain.execution.order.ExecutionJob;
 import my.side.trading.core.domain.execution.order.ExecutionJobRepository;
+import my.side.trading.core.domain.execution.order.ExecutionOrderStatus;
 import my.side.trading.core.domain.portfolio.PerformanceAnalyticsSnapshot;
 import my.side.trading.core.domain.portfolio.PortfolioSnapshot;
 import my.side.trading.core.domain.portfolio.PortfolioSnapshotRepository;
@@ -47,6 +50,9 @@ public class DashboardController {
     private static final String OPERATOR_TIME_ZONE = "Asia/Seoul";
     private static final int DEFAULT_HISTORY_LIMIT = 20;
     private static final int MAX_HISTORY_LIMIT = 100;
+    private static final int DEFAULT_PAGE = 0;
+    private static final int DEFAULT_PAGE_SIZE = 20;
+    private static final int MAX_PAGE_SIZE = 100;
 
     @GetMapping("/summary")
     public ApiResponse<DashboardResponse> getSummary() {
@@ -63,10 +69,7 @@ public class DashboardController {
         BigDecimal signal200Ma = scheduler.getSignal200Ma();
 
         // 4. 최근 실행 작업 조회 (최신 5건)
-        var recentJobs = jobRepository.findAll().stream()
-                .sorted(Comparator.comparing(ExecutionJob::getSignalDate).reversed())
-                .limit(5)
-                .toList();
+        var recentJobs = jobRepository.findRecent(DEFAULT_PAGE, 5);
 
         var operationsKpi = operationsKpiService.snapshot();
         var performance = portfolioPerformanceAnalyticsService.getSummary();
@@ -97,9 +100,7 @@ public class DashboardController {
     ) {
         int normalizedLimit = normalizeLimit(limit);
 
-        var jobs = jobRepository.findAll().stream()
-                .sorted(jobComparator())
-                .limit(normalizedLimit)
+        var jobs = jobRepository.findRecent(DEFAULT_PAGE, normalizedLimit).stream()
                 .map(DashboardHistoryResponse.JobHistoryItem::from)
                 .toList();
 
@@ -119,13 +120,53 @@ public class DashboardController {
 
         return ApiResponse.success(new DashboardHistoryResponse(
                 normalizedLimit,
-                new DashboardHistoryResponse.DisplayTimeZones(
-                        OPERATOR_TIME_ZONE,
-                        marketCalendarProps.marketZoneId()),
+                displayTimeZones(),
                 jobs,
                 operatingAudits,
                 performanceSnapshots,
                 performanceAnalyticsSnapshots
+        ));
+    }
+
+    @GetMapping("/history/jobs")
+    public ApiResponse<DashboardJobHistoryPageResponse> getJobHistoryPage(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size
+    ) {
+        int normalizedPage = normalizePage(page);
+        int normalizedSize = normalizePageSize(size);
+        long totalElements = jobRepository.countAll();
+        var jobs = jobRepository.findRecent(normalizedPage, normalizedSize).stream()
+                .map(DashboardHistoryResponse.JobHistoryItem::from)
+                .toList();
+
+        return ApiResponse.success(new DashboardJobHistoryPageResponse(
+                displayTimeZones(),
+                DashboardPageInfo.of(normalizedPage, normalizedSize, totalElements),
+                jobs
+        ));
+    }
+
+    @GetMapping("/orders/confirmation-required")
+    public ApiResponse<DashboardConfirmationOrdersResponse> getConfirmationRequiredOrders(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size
+    ) {
+        int normalizedPage = normalizePage(page);
+        int normalizedSize = normalizePageSize(size);
+        long totalElements = jobRepository.countOrdersByStatus(ExecutionOrderStatus.CONFIRMATION_REQUIRED);
+        var orders = jobRepository.findOrdersByStatus(
+                        ExecutionOrderStatus.CONFIRMATION_REQUIRED,
+                        normalizedPage,
+                        normalizedSize)
+                .stream()
+                .map(DashboardConfirmationOrdersResponse.ConfirmationOrderItem::from)
+                .toList();
+
+        return ApiResponse.success(new DashboardConfirmationOrdersResponse(
+                displayTimeZones(),
+                DashboardPageInfo.of(normalizedPage, normalizedSize, totalElements),
+                orders
         ));
     }
 
@@ -142,10 +183,18 @@ public class DashboardController {
         return limit <= 0 ? DEFAULT_HISTORY_LIMIT : Math.min(limit, MAX_HISTORY_LIMIT);
     }
 
-    private Comparator<ExecutionJob> jobComparator() {
-        return Comparator.comparing(ExecutionJob::getSignalDate, Comparator.nullsLast(Comparator.reverseOrder()))
-                .thenComparing(ExecutionJob::getExecuteAfter, Comparator.nullsLast(Comparator.reverseOrder()))
-                .thenComparing(ExecutionJob::getId, Comparator.nullsLast(Comparator.reverseOrder()));
+    private int normalizePage(int page) {
+        return Math.max(page, DEFAULT_PAGE);
+    }
+
+    private int normalizePageSize(int size) {
+        return size <= 0 ? DEFAULT_PAGE_SIZE : Math.min(size, MAX_PAGE_SIZE);
+    }
+
+    private DashboardHistoryResponse.DisplayTimeZones displayTimeZones() {
+        return new DashboardHistoryResponse.DisplayTimeZones(
+                OPERATOR_TIME_ZONE,
+                marketCalendarProps.marketZoneId());
     }
 
     private Comparator<PortfolioSnapshot> performanceSnapshotComparator() {

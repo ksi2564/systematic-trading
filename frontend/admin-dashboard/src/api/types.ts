@@ -175,6 +175,24 @@ export type DashboardHistory = {
   performanceAnalyticsSnapshots: PerformanceAnalyticsSnapshotItem[];
 };
 
+export type PageInfo = {
+  page: number;
+  size: number;
+  totalElements: number;
+  totalPages: number;
+  hasPrevious: boolean;
+  hasNext: boolean;
+};
+
+export type JobHistoryPage = {
+  displayTimeZones?: {
+    operator: string;
+    market: string;
+  } | null;
+  page: PageInfo;
+  jobs: JobHistoryItem[];
+};
+
 export type JobHistoryItem = {
   id: number;
   signalDate: string | null;
@@ -202,9 +220,27 @@ export type OrderHistoryItem = {
   message: string | null;
 };
 
+export type ConfirmationOrderJobInfo = {
+  id: number;
+  signalDate: string | null;
+  executeAfter: string | null;
+  status: string;
+  startedAt: string | null;
+  completedAt: string | null;
+};
+
 export type ConfirmationOrder = {
-  job: JobHistoryItem;
+  job: ConfirmationOrderJobInfo;
   order: OrderHistoryItem;
+};
+
+export type ConfirmationOrdersPage = {
+  displayTimeZones?: {
+    operator: string;
+    market: string;
+  } | null;
+  page: PageInfo;
+  orders: ConfirmationOrder[];
 };
 
 export type OperatingModeAuditItem = {
@@ -265,4 +301,14 @@ export type OrderConfirmationResponse = {
   brokerOrderId: string | null;
   inquiryStatus: string;
   message: string | null;
+};
+
+export type RebalanceRunResult = {
+  triggerType: string;
+  operatingMode: OperatingMode;
+  jobCreated: boolean;
+  executed: boolean;
+  jobId: number | null;
+  decisionReason: string | null;
+  executionBlockReason: string | null;
 };

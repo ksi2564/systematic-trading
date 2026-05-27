@@ -166,6 +166,7 @@ describe('computeLiveStatus', () => {
         hasError: false,
         summary: baseSummary,
         preview: basePreview,
+        confirmationOrderCount: 1,
         history
       }).kind
     ).toBe('confirm-required');

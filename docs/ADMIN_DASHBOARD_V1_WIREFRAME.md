@@ -23,7 +23,7 @@ Figma는 MCP 호출 제한이 낮아 화면 설계 원본으로 사용하지 않
 
 ## 2. 산출물 구성
 
-HTML 와이어프레임은 왼쪽 햄버거 메뉴와 아래 화면 묶음을 한 파일에 담는다.
+Admin Dashboard 앱은 왼쪽 사이드바를 페이지 내 `#hash` 목차가 아니라 업무 view 전환으로 사용한다.
 
 요약 대시보드는 아래 세 화면 상태를 보여준다.
 
@@ -31,14 +31,13 @@ HTML 와이어프레임은 왼쪽 햄버거 메뉴와 아래 화면 묶음을 �
 - `실행 차단`
 - `실행 후 확인 필요`
 
-상세 화면은 왼쪽 메뉴에서 접근한다.
+사이드바에서 접근하는 view는 아래 세 가지로 제한한다.
 
-- `운영 상태 상세`
-- `Rebalance Preview 상세`
-- `주문/리스크 상세`
+- `운영 홈`
 - `Job/주문 이력`
 - `브로커 확인`
-- `운영 감사/설정`
+
+운영 상태, 실행 전 점검, `Rebalance Preview`, `수동 리밸런싱 주문 후보/리스크`, 운영 감사/설정은 `운영 홈`의 읽기 전용 요약 블록으로 둔다.
 
 프론트엔드 산출물은 백엔드와 분리해 `frontend/` 하위에서 관리한다.
 
@@ -73,7 +72,8 @@ Figma 참고 파일에는 두 개의 페이지가 있다.
 - 상단 상태 뱃지는 코드값만 노출하지 않고 `운영 실주문 가능`, `실주문 ON`, `비상중지 OFF`, `운영지표 정상`, `정규장`처럼 운영자가 읽는 라벨을 우선한다.
 - 상태별 섹션 제목과 CTA 카드 제목은 중립적인 `Rebalance 운영`, `운영 확인`으로 유지하고, 버튼 색과 버튼 문구로 실행 가능/차단/확인 필요 상태를 인지하게 한다.
 - `Rebalance Preview` 카드의 기준일, 중복 실행, `VIX`, `QQQM 200MA`는 표로 구분하고, 비중은 현재/목표/변화를 함께 보여준다.
-- 요약 화면에서 판단이 어려운 경우 왼쪽 메뉴로 각 영역의 상세 화면에 진입한다.
+- 주문 후보/리스크는 최대 3개 후보를 홈에서 모두 확인하게 두고, 더보기 view를 만들지 않는다.
+- Job 이력과 브로커 확인은 왼쪽 메뉴 또는 더보기 버튼으로 진입하며, 실제 page/size 기반 pagination을 제공한다.
 - 데이터 새로고침은 화면마다 반복하지 않고 상단 전역 `전체 새로고침` 하나로 표현한다. 화면별 버튼은 실제 운영 액션인 `실주문 실행`, `실행 차단됨`, `브로커 접수 확인`에만 둔다.
 
 ## 3. 화면 흐름
@@ -112,20 +112,18 @@ Admin Dashboard v1은 내부 운영 API만 호출한다. 모든 호출에는 `X-
 | 실행 전 점검 | `GET /api/dashboard/summary` | `trading.execution.enabled`, Kill Switch, 최신 EOD, 미정리 주문 |
 | Rebalance Preview | `GET /api/jobs/manual-rebalance/preview` | 주문 후보, 리스크 결과, 예상 현금, 실행 가능 여부 |
 | 최종 실행 | `POST /api/jobs/manual-rebalance` | 운영자 확인 후 수동 리밸런싱 실행 |
-| 실행 후 확인 | `GET /api/dashboard/history` | 최근 Job/Order 상태 조회 |
+| 실행 후 확인 | `GET /api/dashboard/orders/confirmation-required?page=0&size=20` | 확인 필요 주문 전용 조회 |
+| Job/주문 이력 | `GET /api/dashboard/history/jobs?page=0&size=20` | 최근 Job/Order 상태 page 조회 |
 | 주문 확인 | `POST /api/jobs/{jobId}/orders/{orderId}/confirm` | `CONFIRMATION_REQUIRED` 주문의 브로커 접수 여부 확인 |
 | 운영 모드 | `GET /api/operations/mode`, `POST /api/operations/mode` | 현재 모드 조회와 수동 전환 승인 기록 |
 
-상세 화면별 API 기준은 아래와 같다.
+사이드바 view별 API 기준은 아래와 같다.
 
-| 상세 화면 | 주요 API | 사용 목적 |
+| View | 주요 API | 사용 목적 |
 | :--- | :--- | :--- |
-| 운영 상태 상세 | `GET /api/dashboard/summary`, `GET /api/operations/mode` | 운영 상태, 실주문 설정, 비상중지, KPI 확인 |
-| Rebalance Preview 상세 | `GET /api/jobs/manual-rebalance/preview` | 전략 입력값, 목표/현재 비중, 예상 주문 확인 |
-| 주문/리스크 상세 | `GET /api/jobs/manual-rebalance/preview` | 주문 후보별 리스크 통과/차단 사유 확인 |
-| Job/주문 이력 | `GET /api/dashboard/history` | 최근 Job, 주문 상태, 확인 필요 주문 추적 |
-| 브로커 확인 | `GET /api/dashboard/history`, `POST /api/jobs/{jobId}/orders/{orderId}/confirm` | `CONFIRMATION_REQUIRED` 주문 확인 |
-| 운영 감사/설정 | `GET /api/dashboard/summary`, `GET /api/dashboard/history` | 운영 감사, 설정 상태, Runbook 연결 |
+| 운영 홈 | `GET /api/dashboard/summary`, `GET /api/jobs/manual-rebalance/preview`, `GET /api/dashboard/history/jobs`, `GET /api/dashboard/orders/confirmation-required`, `GET /api/operations/mode` | 운영 상태, 실행 전 점검, Preview, 주문 후보/리스크, 감사/설정 요약 |
+| Job/주문 이력 | `GET /api/dashboard/history/jobs?page=0&size=20` | 최근 Job, 주문 상태 page 조회 |
+| 브로커 확인 | `GET /api/dashboard/orders/confirmation-required?page=0&size=20`, `POST /api/jobs/{jobId}/orders/{orderId}/confirm` | `CONFIRMATION_REQUIRED` 주문 전용 조회와 확인 |
 
 현재 백엔드에 존재하지만 이번 Admin Dashboard v1 와이어프레임에서 별도 화면으로 깊게 다루지 않는 API는 아래와 같다.
 
@@ -146,6 +144,7 @@ Admin Dashboard v1은 내부 운영 API만 호출한다. 모든 호출에는 `X-
 - `preview.manualBlockReason=null`
 - `preview.duplicateSignalJobExists=false`
 - 모든 주문의 `risk.status=PASS`
+- `GET /api/dashboard/orders/confirmation-required`의 `page.totalElements=0`
 - 운영자가 명시 확인 체크박스를 선택함
 
 아래 상태에서는 실행 버튼을 비활성화한다.
@@ -156,6 +155,7 @@ Admin Dashboard v1은 내부 운영 API만 호출한다. 모든 호출에는 `X-
 - `manualBlockReason` 존재
 - 중복 `signalDate` Job 존재
 - 주문별 risk `BLOCKED`
+- 확인 필요 주문 존재
 - 운영자 명시 확인 미완료
 
 `CONFIRMATION_REQUIRED` 주문에는 실행 버튼을 다시 노출하지 않는다. 해당 주문에는 확인 버튼만 노출하고, 같은 주문을 재전송하지 않는다.

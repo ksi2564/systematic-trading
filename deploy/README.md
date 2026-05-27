@@ -29,7 +29,7 @@
 1. `bootstrap_ubuntu_24_04.sh`로 VM 기본 패키지와 디렉터리를 준비한다.
 2. `mysql/99-trading.cnf`, `caddy/Caddyfile.example`, `systemd/*.service`, `systemd/*.timer`, `logrotate/trading`을 시스템 경로로 복사한다.
 3. `scripts/*.sh` 중 운영에 필요한 스크립트를 `/opt/trading/bin/`에 `0755` 권한으로 복사한다.
-4. `env/trading.env.example`를 `/etc/trading/trading.env`로 복사하고 실제 비밀값과 origin/CIDR을 채운다.
+4. `env/trading.env.example`를 `/etc/trading/trading.env`로 복사하고 실제 비밀값, origin/CIDR, 실시간 시세 플래그(`REALTIME_QUOTE_ENABLED=true`)를 확인한다.
 5. 애플리케이션 jar를 `/opt/trading/app/trading.jar`에 배치한다.
 6. `systemctl daemon-reload && systemctl enable --now mysql caddy trading trading-backup.timer`로 서비스와 백업 타이머 자동기동을 켠다.
 7. `curl http://127.0.0.1:8080/actuator/health`와 `curl https://api.<domain>/public/api/v1/summary`로 내부/외부 경로를 각각 검증한다.

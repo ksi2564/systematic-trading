@@ -1,4 +1,4 @@
-/var/log/trading/*.log /var/log/caddy/trading-public-access.log {
+/var/log/trading/*.log /var/log/caddy/trading-public-access.log /var/log/caddy/trading-admin-dashboard-access.log {
     daily
     rotate 14
     missingok

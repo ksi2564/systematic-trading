@@ -226,6 +226,8 @@ curl 직접 호출은 비상 대응이나 개발자 운영 경로로만 사용�
 - Admin Dashboard는 내부 전용 화면이다.
   - 호출 경로: `/api/dashboard`, `/api/jobs`, `/api/operations`, `/kis`, `/actuator`
   - 접근 경로: SSH tunnel, Tailscale, VPN, 또는 별도 인증 계층 뒤
+  - 현재 단일 VM 배포 기준 접근점: Tailscale 내부 `http://100.66.226.12:18081/`
+  - 배포 경로: `/opt/trading/admin-dashboard/releases/<git-sha>`와 `/opt/trading/admin-dashboard/current`
   - 목적: 운영 상태 확인, 수동 실행, 주문 확인, 장애 대응
 - Public Dashboard는 인터넷 공개 가능 화면이다.
   - 호출 경로: `/public/api/v1/**`
@@ -233,6 +235,7 @@ curl 직접 호출은 비상 대응이나 개발자 운영 경로로만 사용�
   - 목적: 공개 가능한 EOD 기준 포트폴리오 비율과 정규화 성과 조회
 
 Public Dashboard는 운영 API를 호출하지 않는다. Admin Dashboard는 외부 공개 DNS에 직접 매핑하지 않는다.
+Admin Dashboard 정적 파일은 Caddy가 내부 포트 `18081`에서 제공하고, 같은 origin의 `/api`, `/actuator`, `/kis` 요청만 `127.0.0.1:8080`으로 프록시한다.
 
 ### KIS 연동 확인용 API
 
@@ -335,6 +338,7 @@ curl.exe -s `
 
 - `RateLimitFilter`와 `ApiKeyAuthFilter`는 `/*` 전체 경로에 적용된다.
 - 기본값은 공개 경로 없음이다.
+- Admin Dashboard는 공개 예외가 아니라 Tailscale 내부 Caddy site block으로 제공한다. 퍼블릭 `api.<domain>`에는 Admin Dashboard 정적 파일과 운영 API proxy를 추가하지 않는다.
 - 공개 예외는 `trading.security.public-path-prefixes`로만 열 수 있다.
 - 공개 예외를 하나라도 열면 `trading.security.public-path-protection-mode`와 `trading.security.public-path-protection-note`를 함께 설정해야 한다.
 - 공개 읽기 API의 CORS 허용 origin은 `trading.security.public-read-allowed-origins`로 제한한다.

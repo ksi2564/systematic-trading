@@ -14,10 +14,13 @@ env:
   PROD_HOST: 100.66.226.12
   PROD_USER: ubuntu
   PROD_JAR_PATH: /opt/trading/app/trading.jar
+  ADMIN_DASHBOARD_DIR: frontend/admin-dashboard
+  ADMIN_DASHBOARD_ROOT: /opt/trading/admin-dashboard
+  ADMIN_DASHBOARD_URL: http://100.66.226.12:18081
 
 jobs:
   deploy:
-    name: Build and deploy production jar
+    name: Build and deploy production
     runs-on: ubuntu-latest
     environment: production
 
@@ -38,10 +41,25 @@ jobs:
           java-version: '21'
           cache: gradle
 
-      - name: Build and test
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/admin-dashboard/package-lock.json
+
+      - name: Build and test backend
         run: |
           chmod +x ./gradlew
           ./gradlew test bootJar
+
+      - name: Build and test admin dashboard
+        working-directory: ${{ env.ADMIN_DASHBOARD_DIR }}
+        run: |
+          npm ci
+          npm run typecheck
+          npm run test
+          npm run build
 
       - name: Resolve jar metadata
         id: jar
@@ -60,6 +78,20 @@ jobs:
           echo "deploy_name=${deploy_name}" >> "${GITHUB_OUTPUT}"
           echo "Built jar: ${jar_path}"
           echo "SHA-256: ${jar_sha}"
+
+      - name: Package admin dashboard
+        id: admin_dashboard
+        shell: bash
+        run: |
+          set -euo pipefail
+          deploy_name="admin-dashboard-${GITHUB_SHA}.tgz"
+          tar -C "${ADMIN_DASHBOARD_DIR}/dist" -czf "${deploy_name}" .
+          package_sha="$(sha256sum "${deploy_name}" | awk '{print $1}')"
+          echo "path=${deploy_name}" >> "${GITHUB_OUTPUT}"
+          echo "sha=${package_sha}" >> "${GITHUB_OUTPUT}"
+          echo "deploy_name=${deploy_name}" >> "${GITHUB_OUTPUT}"
+          echo "Built admin dashboard package: ${deploy_name}"
+          echo "SHA-256: ${package_sha}"
 
       - name: Connect to Tailscale
         uses: tailscale/github-action@v4
@@ -85,6 +117,13 @@ jobs:
             "${{ steps.jar.outputs.path }}" \
             "${PROD_USER}@${PROD_HOST}:/tmp/${{ steps.jar.outputs.deploy_name }}"
 
+      - name: Upload admin dashboard
+        run: |
+          scp -i ~/.ssh/prod_deploy_key \
+            -o BatchMode=yes \
+            "${{ steps.admin_dashboard.outputs.path }}" \
+            "${PROD_USER}@${PROD_HOST}:/tmp/${{ steps.admin_dashboard.outputs.deploy_name }}"
+
       - name: Install jar and restart service
         shell: bash
         run: |
@@ -104,6 +143,53 @@ jobs:
           systemctl is-active --quiet trading
           REMOTE
 
+      - name: Install admin dashboard and reload Caddy
+        shell: bash
+        run: |
+          set -euo pipefail
+          remote_package="/tmp/${{ steps.admin_dashboard.outputs.deploy_name }}"
+          ssh -i ~/.ssh/prod_deploy_key \
+            -o BatchMode=yes \
+            "${PROD_USER}@${PROD_HOST}" \
+            "sudo bash -s -- '${remote_package}' '${ADMIN_DASHBOARD_ROOT}' '${GITHUB_SHA}' '${{ steps.admin_dashboard.outputs.sha }}'" <<'REMOTE'
+          set -euo pipefail
+          remote_package="$1"
+          deploy_root="$2"
+          release_id="$3"
+          expected_sha="$4"
+
+          if [ "${deploy_root}" != "/opt/trading/admin-dashboard" ]; then
+            echo "Unexpected admin dashboard deploy root: ${deploy_root}"
+            exit 1
+          fi
+
+          actual_sha="$(sha256sum "${remote_package}" | awk '{print $1}')"
+          echo "${actual_sha}  ${remote_package}"
+          if [ "${actual_sha}" != "${expected_sha}" ]; then
+            echo "Admin dashboard package SHA-256 mismatch. expected=${expected_sha} actual=${actual_sha}"
+            exit 1
+          fi
+
+          install -d -o trading -g trading -m 0755 "${deploy_root}" "${deploy_root}/releases"
+          release_dir="${deploy_root}/releases/${release_id}"
+          tmp_release_dir="${release_dir}.tmp"
+          rm -rf "${tmp_release_dir}"
+          install -d -o trading -g trading -m 0755 "${tmp_release_dir}"
+          tar -xzf "${remote_package}" -C "${tmp_release_dir}"
+          chown -R trading:trading "${tmp_release_dir}"
+
+          if [ -e "${release_dir}" ]; then
+            mv "${release_dir}" "${release_dir}.$(date +%Y%m%d-%H%M%S).bak"
+          fi
+          mv "${tmp_release_dir}" "${release_dir}"
+          ln -sfn "${release_dir}" "${deploy_root}/current.next"
+          mv -Tf "${deploy_root}/current.next" "${deploy_root}/current"
+
+          caddy validate --config /etc/caddy/Caddyfile
+          systemctl reload caddy
+          systemctl is-active --quiet caddy
+          REMOTE
+
       - name: Verify deployment
         shell: bash
         run: |
@@ -111,10 +197,11 @@ jobs:
           ssh -i ~/.ssh/prod_deploy_key \
             -o BatchMode=yes \
             "${PROD_USER}@${PROD_HOST}" \
-            "sudo bash -s -- '${PROD_JAR_PATH}' '${{ steps.jar.outputs.sha }}'" <<'REMOTE'
+            "sudo bash -s -- '${PROD_JAR_PATH}' '${{ steps.jar.outputs.sha }}' '${ADMIN_DASHBOARD_URL}'" <<'REMOTE'
           set -euo pipefail
           prod_jar_path="$1"
           expected_sha="$2"
+          admin_dashboard_url="$3"
           . /etc/trading/trading.env
 
           echo SERVICE_STATUS
@@ -148,6 +235,14 @@ jobs:
 
           echo DASHBOARD_SUMMARY
           curl -fsS -H "X-API-KEY: ${TRADING_API_KEY}" http://127.0.0.1:8080/api/dashboard/summary
+          echo
+
+          echo ADMIN_DASHBOARD_HTML
+          curl -fsS "${admin_dashboard_url}/" | grep -F 'id="root"'
+          echo
+
+          echo ADMIN_DASHBOARD_API_PROXY
+          curl -fsS -H "X-API-KEY: ${TRADING_API_KEY}" "${admin_dashboard_url}/api/dashboard/summary"
           echo
 
           echo HIKARI_WARNING_SCAN

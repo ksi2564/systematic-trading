@@ -33,6 +33,7 @@ mock mode는 화면 검증 전용이다. 실제 운영 API 연동 검증은 quer
 ## 검증
 
 ```powershell
+npm ci
 npm run typecheck
 npm run test
 npm run build
@@ -41,7 +42,8 @@ npm run build
 운영 전제:
 
 - 외부 공개 DNS에 직접 노출하지 않는다.
-- SSH tunnel, Tailscale, VPN, 또는 별도 인증 계층 뒤에서 사용한다.
+- 운영 배포 기본 접근점은 Tailscale 내부 `http://100.66.226.12:18081/`이다.
+- Caddy가 `/opt/trading/admin-dashboard/current`의 정적 파일을 제공하고 `/api`, `/actuator`, `/kis` 요청을 `127.0.0.1:8080`으로 proxy한다.
 - 모든 운영 API 호출에는 `X-API-KEY`가 필요하다.
 - API Key는 브라우저 `sessionStorage`에만 저장하고, 화면에서 즉시 지울 수 있어야 한다.
 - `CONFIRMATION_REQUIRED` 주문은 동일 주문 재전송 없이 확인 API로만 처리한다.

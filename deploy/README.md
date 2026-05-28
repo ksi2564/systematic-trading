@@ -7,12 +7,13 @@
 - 백엔드는 단일 VM 한 대에서 `Spring Boot + MySQL + scheduler`를 함께 운영한다.
 - 애플리케이션과 MySQL은 외부에 직접 바인딩하지 않는다.
 - 외부 공개는 reverse proxy가 `/public/api/v1/**`만 전달한다.
-- 운영 API와 Actuator는 퍼블릭 DNS에 매핑하지 않고 SSH 터널로만 접근한다.
+- 운영 API와 Actuator는 퍼블릭 DNS에 매핑하지 않고 Tailscale 내부 Admin Dashboard 또는 SSH 터널로만 접근한다.
 
 구성 파일:
 
 - `env/trading.env.example`: `/etc/trading/trading.env` 예시
 - `caddy/Caddyfile.example`: 공개 API 전용 reverse proxy 예시
+- `caddy/Caddyfile.admin-dashboard.example`: Tailscale 내부 Admin Dashboard 정적 파일 및 운영 API proxy 예시
 - `systemd/trading.service`: 애플리케이션 서비스 유닛
 - `systemd/trading-backup.service`, `systemd/trading-backup.timer`: DB 백업과 맥미니 동기화 일일 타이머
 - `mysql/99-trading.cnf`: MySQL 로컬 바인딩 설정
@@ -21,18 +22,20 @@
 - `scripts/sync_backup_to_mac.sh`: 백업 산출물 맥미니 전송
 - `scripts/restore_mysql.sh`: 백업 SQL 복구
 - `scripts/bootstrap_ubuntu_24_04.sh`: 초기 패키지/디렉터리 준비 스크립트
+- `scripts/bootstrap_admin_dashboard.sh`: Admin Dashboard 정적 배포 디렉터리와 Tailscale 내부 포트 UFW 규칙 준비 스크립트
 - `scripts/install_tailscale_ubuntu.sh`: VM을 Tailscale tailnet에 붙이는 보조 스크립트
 - `scripts/configure_cloudflare_ufw.sh`: Cloudflare 프록시 IP만 80/443에 접근하도록 UFW를 구성하는 보조 스크립트
 
 기본 배포 순서:
 
 1. `bootstrap_ubuntu_24_04.sh`로 VM 기본 패키지와 디렉터리를 준비한다.
-2. `mysql/99-trading.cnf`, `caddy/Caddyfile.example`, `systemd/*.service`, `systemd/*.timer`, `logrotate/trading`을 시스템 경로로 복사한다.
+2. `mysql/99-trading.cnf`, `caddy/Caddyfile.example`, `caddy/Caddyfile.admin-dashboard.example`, `systemd/*.service`, `systemd/*.timer`, `logrotate/trading`을 시스템 경로로 복사한다. Caddyfile은 공개 API site block과 Admin Dashboard 내부 site block을 함께 포함하도록 병합한다.
 3. `scripts/*.sh` 중 운영에 필요한 스크립트를 `/opt/trading/bin/`에 `0755` 권한으로 복사한다.
-4. `env/trading.env.example`를 `/etc/trading/trading.env`로 복사하고 실제 비밀값, origin/CIDR, 실시간 시세 플래그(`REALTIME_QUOTE_ENABLED=true`)를 확인한다.
-5. 애플리케이션 jar를 `/opt/trading/app/trading.jar`에 배치한다.
-6. `systemctl daemon-reload && systemctl enable --now mysql caddy trading trading-backup.timer`로 서비스와 백업 타이머 자동기동을 켠다.
-7. `curl http://127.0.0.1:8080/actuator/health`와 `curl https://api.<domain>/public/api/v1/summary`로 내부/외부 경로를 각각 검증한다.
+4. `scripts/bootstrap_admin_dashboard.sh`를 VM에서 1회 실행해 `/opt/trading/admin-dashboard/releases`, `/opt/trading/admin-dashboard/current`, `tailscale0:18081/tcp` UFW 허용 규칙을 준비한다.
+5. `env/trading.env.example`를 `/etc/trading/trading.env`로 복사하고 실제 비밀값, origin/CIDR, 실시간 시세 플래그(`REALTIME_QUOTE_ENABLED=true`)를 확인한다.
+6. 애플리케이션 jar를 `/opt/trading/app/trading.jar`에 배치한다.
+7. `systemctl daemon-reload && systemctl enable --now mysql caddy trading trading-backup.timer`로 서비스와 백업 타이머 자동기동을 켠다.
+8. `curl http://127.0.0.1:8080/actuator/health`, `curl https://api.<domain>/public/api/v1/summary`, `curl http://100.66.226.12:18081/`로 백엔드, 공개 API, 내부 Admin Dashboard 경로를 각각 검증한다.
 
 GitHub Actions 운영 배포:
 
@@ -50,8 +53,9 @@ GitHub Actions 운영 배포:
 - 서버 준비:
   - `PROD_SSH_PRIVATE_KEY`의 public key를 `/home/ubuntu/.ssh/authorized_keys`에 등록한다.
   - `ubuntu` 계정은 기존 운영 절차처럼 `sudo systemctl restart trading`, `install`, `cp`를 수행할 수 있어야 한다.
-- workflow는 Actions runner에서 `./gradlew test bootJar`로 jar를 만든 뒤 Tailscale IP `100.66.226.12`로 전송한다.
+- workflow는 Actions runner에서 `./gradlew test bootJar`로 jar를 만들고, `frontend/admin-dashboard`에서 `npm ci`, `npm run typecheck`, `npm run test`, `npm run build`로 Admin Dashboard 정적 산출물을 만든 뒤 Tailscale IP `100.66.226.12`로 전송한다.
 - 원격에서는 기존 `/opt/trading/app/trading.jar`를 타임스탬프 백업으로 남기고 새 jar를 설치한 뒤 `trading.service`를 재시작한다.
+- Admin Dashboard 산출물은 `/opt/trading/admin-dashboard/releases/<git-sha>`에 풀고 `/opt/trading/admin-dashboard/current` symlink를 교체한 뒤 Caddy를 reload한다.
 - 실패 시 직전 백업 jar를 `/opt/trading/app/trading.jar`로 복원하고 `sudo systemctl restart trading`을 실행한다.
 
 Flyway 스키마 관리:
@@ -70,6 +74,8 @@ Flyway 스키마 관리:
 운영 검증:
 
 - 퍼블릭 경로에서 `/api/dashboard/summary`, `/api/operations/mode`, `/actuator/health`가 차단되는지 확인한다.
-- SSH 터널 뒤에서만 운영 API가 열리는지 확인한다.
+- Tailscale 내부 `http://100.66.226.12:18081/`에서 Admin Dashboard HTML과 정적 asset이 열리는지 확인한다.
+- Tailscale 내부 Admin Dashboard origin에서 `X-API-KEY`를 포함한 `/api/dashboard/summary` 호출이 성공하는지 확인한다.
+- SSH 터널 또는 Tailscale 내부 경로 뒤에서만 운영 API가 열리는지 확인한다.
 - `systemctl list-timers trading-backup.timer`로 일일 백업 타이머를 확인한다.
 - `systemctl start trading-backup.service`로 백업 생성과 맥미니 전송을 수동 리허설한다.

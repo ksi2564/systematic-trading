@@ -1,0 +1,24 @@
+http://100.66.226.12:18081 {
+    encode zstd gzip
+
+    root * /opt/trading/admin-dashboard/current
+
+    log {
+        output file /var/log/caddy/trading-admin-dashboard-access.log
+        format console
+    }
+
+    @admin_api path /api /api/* /actuator /actuator/* /kis /kis/*
+    handle @admin_api {
+        reverse_proxy 127.0.0.1:8080 {
+            header_up X-Forwarded-For {remote_host}
+            header_up X-Forwarded-Proto {scheme}
+            header_up X-Forwarded-Host {host}
+        }
+    }
+
+    handle {
+        try_files {path} /index.html
+        file_server
+    }
+}

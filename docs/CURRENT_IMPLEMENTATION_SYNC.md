@@ -135,27 +135,28 @@
 - `application-prod.yml`은 단일 VM 운영값을 기준으로 정리돼 있다.
 - Spring Boot는 `127.0.0.1:8080`, MySQL은 `127.0.0.1:3306`에 바인딩하는 운영 토폴로지를 전제로 한다.
 - reverse proxy는 `/public/api/v1/**`만 외부 공개하고 운영 API와 Actuator는 내부 경로로 제한한다.
+- Admin Dashboard는 Tailscale 내부 `http://100.66.226.12:18081/`에서 Caddy 정적 파일 서빙과 운영 API proxy로 배포하는 기준이 추가돼 있다.
 - 운영 프로필은 Flyway를 사용하고 Hibernate는 `ddl-auto=validate`로만 검증한다.
 - 신규 스키마/데이터 보정은 명시 migration으로 추가한다.
 - 운영 시각 보정 기준은 UTC이며, V4 migration은 실행 Job/Order 시각만 보정 대상으로 둔다.
 
 ## 4. 남아 있는 정책-구현 갭
 
-### P1. 별도 프론트엔드 애플리케이션 부재
+### P1. Public Dashboard 프론트엔드 애플리케이션 부재
 
-- 현재 저장소에는 실제 API 연동 Admin Dashboard 또는 Public Dashboard 프론트엔드 앱이 없다.
-- Admin Dashboard v1 화면 설계 원본은 `frontend/admin-dashboard/wireframe/index.html`에 정적 HTML로 추가돼 있다.
-- 백엔드는 JSON API를 제공하며, 실제 화면 구현은 후속 작업이다.
+- 현재 저장소에는 실제 API를 연동하는 `frontend/admin-dashboard` Vite + React 앱이 있다.
+- Admin Dashboard v1 화면 설계 원본은 `frontend/admin-dashboard/wireframe/index.html`에 정적 HTML로 유지한다.
+- Admin Dashboard 운영 배포는 `/opt/trading/admin-dashboard/current` 정적 파일과 Tailscale 내부 Caddy endpoint를 기준으로 한다.
 - Public Dashboard는 `/public/api/v1/**`만 호출해야 한다.
-- Admin Dashboard는 내부 전용 화면으로 `/api/dashboard`, `/api/jobs`, `/api/operations`, `/kis`, `/actuator` 등 운영 API를 호출해야 한다.
+- Public Dashboard 별도 프론트엔드 앱은 아직 없다.
 
 ### P2. Admin Dashboard 수동 실주문 flow 부재
 
-- 현재 `POST /api/jobs/manual-rebalance`는 운영자용 화면 없이 실행 API만 제공한다.
+- 현재 `POST /api/jobs/manual-rebalance`는 Admin Dashboard에서 API Key와 최종 확인 UX를 거쳐 호출된다.
 - curl 직접 호출은 비상/개발자 운영 경로로만 본다.
-- 실제 수동 실주문 전에는 Admin Dashboard에 실행 전 점검, 주문 미리보기, 최종 확인, 실행 후 확인 flow를 실제 앱으로 만들어야 한다.
+- 실제 수동 실주문 전에는 Admin Dashboard의 실행 전 점검, 주문 미리보기, 최종 확인, 실행 후 확인 flow를 운영 환경에서 리허설해야 한다.
 - 주문 미리보기와 리스크 결과를 실행 전에 조회하는 `GET /api/jobs/manual-rebalance/preview`는 구현돼 있다.
-- 남은 갭은 HTML 와이어프레임을 기준으로 이 API를 소비하는 내부 전용 Admin Dashboard 앱과 최종 확인 UX를 구현하는 것이다.
+- 남은 갭은 운영 모드 전환, EOD 수동 실행, 특정 Job 재실행 같은 추가 POST를 UI로 연결할지 여부와 운영 리허설이다.
 
 ### P3. 성과 해석 체계 고도화 필요
 

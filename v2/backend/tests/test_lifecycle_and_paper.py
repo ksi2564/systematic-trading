@@ -1,0 +1,231 @@
+from datetime import date, timedelta
+from pathlib import Path
+
+from fastapi.testclient import TestClient
+
+from wallant.config import Settings
+from wallant.main import create_app
+
+
+def app_settings(tmp_path: Path) -> Settings:
+    return Settings(
+        environment="test",
+        database_url=f"sqlite+pysqlite:///{tmp_path / 'lifecycle.db'}",
+        parquet_root=tmp_path / "market",
+        credential_master_key=None,
+    )
+
+
+def price_bars(days: int = 6) -> list[dict]:
+    rows: list[dict] = []
+    start = date(2026, 1, 1)
+    for offset in range(days):
+        trading_date = start + timedelta(days=offset)
+        for symbol, price in (("QQQM", 100 - offset), ("QLD", 70 - offset), ("TQQQ", 50 - offset)):
+            rows.append(
+                {
+                    "trading_date": trading_date.isoformat(),
+                    "symbol": symbol,
+                    "open": str(price),
+                    "high": str(price + 1),
+                    "low": str(price - 1),
+                    "close": str(price),
+                    "volume": "1000",
+                }
+            )
+    return rows
+
+
+def paper_payload(as_of: str = "2026-01-10", qqqm_close: str = "90") -> dict:
+    return {
+        "context": {
+            "as_of": as_of,
+            "market": {"QQQM.close": qqqm_close},
+            "history": {"QQQM": ["100"]},
+        },
+        "portfolio": {
+            "cash": "100000",
+            "positions": [],
+            "currency": "USD",
+        },
+        "quotes": {"QQQM": "90", "QLD": "65", "TQQQ": "45"},
+        "risk_policy": {
+            "max_order_notional": "100000",
+            "max_daily_notional": "300000",
+            "max_daily_order_count": 10,
+            "max_symbol_weight_pct": "100",
+            "max_daily_loss": "10000",
+            "max_reprice_attempts": 2,
+        },
+    }
+
+
+def account_payload(name: str, market: str, currency: str) -> dict:
+    return {
+        "name": name,
+        "market": market,
+        "currency": currency,
+        "execution_profile": {
+            "order_type": "LIMIT",
+            "max_reprice_attempts": 2,
+        },
+        "risk_policy": {
+            "max_order_notional": "10000",
+            "max_daily_notional": "30000",
+            "max_daily_order_count": 10,
+            "max_symbol_weight_pct": "100",
+            "max_daily_loss": "1000",
+            "max_reprice_attempts": 2,
+        },
+    }
+
+
+def test_전략승격은_각단계의_완료증거를_요구하고_모의입력은_멱등하다(tmp_path) -> None:
+    with TestClient(create_app(app_settings(tmp_path))) as client:
+        created = client.post("/api/v2/strategies/baseline/qqqm")
+        assert created.status_code == 201
+        version_id = created.json()["id"]
+
+        no_backtest = client.post(
+            f"/api/v2/strategies/versions/{version_id}/transition",
+            json={"target": "BACKTESTED"},
+        )
+        assert no_backtest.status_code == 409
+        assert "BACKTEST" in no_backtest.json()["detail"]
+
+        backtest = client.post(
+            "/api/v2/research/backtests",
+            json={"version_id": version_id, "bars": price_bars()},
+        )
+        assert backtest.status_code == 200, backtest.text
+        transitioned = client.post(
+            f"/api/v2/strategies/versions/{version_id}/transition",
+            json={"target": "BACKTESTED", "evidence": {"reviewed": True}},
+        )
+        assert transitioned.status_code == 200
+
+        no_rolling = client.post(
+            f"/api/v2/strategies/versions/{version_id}/transition",
+            json={"target": "ROLLING_VALIDATED"},
+        )
+        assert no_rolling.status_code == 409
+        rolling = client.post(
+            "/api/v2/research/rolling",
+            json={
+                "version_id": version_id,
+                "bars": price_bars(),
+                "window_days": 3,
+                "step_days": 1,
+            },
+        )
+        assert rolling.status_code == 200, rolling.text
+        assert rolling.json()["fixed_parameters"] is True
+        transitioned = client.post(
+            f"/api/v2/strategies/versions/{version_id}/transition",
+            json={"target": "ROLLING_VALIDATED"},
+        )
+        assert transitioned.status_code == 200
+        paper_transition = client.post(
+            f"/api/v2/strategies/versions/{version_id}/transition",
+            json={"target": "PAPER"},
+        )
+        assert paper_transition.status_code == 200
+
+        paper = client.post(
+            "/api/v2/research/paper/sessions",
+            json={"version_id": version_id},
+        )
+        assert paper.status_code == 201, paper.text
+        paper_id = paper.json()["id"]
+        premature = client.post(
+            f"/api/v2/research/paper/sessions/{paper_id}/complete",
+            json={"confirmed": True},
+        )
+        assert premature.status_code == 409
+
+        first_step = client.post(
+            f"/api/v2/research/paper/sessions/{paper_id}/steps",
+            json=paper_payload(),
+        )
+        assert first_step.status_code == 200, first_step.text
+        intent_count = client.get("/api/v2/operations/status").json()["counts"]["order_intents"]
+        repeated_step = client.post(
+            f"/api/v2/research/paper/sessions/{paper_id}/steps",
+            json=paper_payload(),
+        )
+        assert repeated_step.status_code == 200
+        assert repeated_step.json() == first_step.json()
+        assert client.get("/api/v2/operations/status").json()["counts"]["order_intents"] == intent_count
+
+        conflicting_step = client.post(
+            f"/api/v2/research/paper/sessions/{paper_id}/steps",
+            json=paper_payload(qqqm_close="89"),
+        )
+        assert conflicting_step.status_code == 409
+
+        completed = client.post(
+            f"/api/v2/research/paper/sessions/{paper_id}/complete",
+            json={"confirmed": True, "note": "수동 검토 완료"},
+        )
+        assert completed.status_code == 200
+        assert completed.json()["summary"]["evaluated_days"] == 1
+        assert completed.json()["completed_at"].endswith("Z")
+        repeated_completion = client.post(
+            f"/api/v2/research/paper/sessions/{paper_id}/complete",
+            json={"confirmed": True},
+        )
+        assert repeated_completion.status_code == 200
+        assert repeated_completion.json()["completed_at"].endswith("Z")
+
+        no_confirmation = client.post(
+            f"/api/v2/strategies/versions/{version_id}/transition",
+            json={"target": "LIVE_APPROVED", "confirmed": False},
+        )
+        assert no_confirmation.status_code == 400
+        approved = client.post(
+            f"/api/v2/strategies/versions/{version_id}/transition",
+            json={"target": "LIVE_APPROVED", "confirmed": True},
+        )
+        assert approved.status_code == 200
+        assert approved.json()["lifecycle"] == "LIVE_APPROVED"
+
+        us_account = client.post(
+            "/api/v2/accounts",
+            json=account_payload("미국 계좌", "US", "USD"),
+        ).json()
+        assigned = client.post(
+            f"/api/v2/accounts/{us_account['id']}/strategy",
+            json={"strategy_version_id": version_id},
+        )
+        assert assigned.status_code == 200
+
+        krx_account = client.post(
+            "/api/v2/accounts",
+            json=account_payload("한국 계좌", "KRX", "KRW"),
+        ).json()
+        mismatched = client.post(
+            f"/api/v2/accounts/{krx_account['id']}/strategy",
+            json={"strategy_version_id": version_id},
+        )
+        assert mismatched.status_code == 409
+        assert "시장 전략" in mismatched.json()["detail"]
+
+
+def test_실행플래그는_설정객체를_직접_주입해도_거부한다(tmp_path) -> None:
+    settings = app_settings(tmp_path).model_copy(update={"execution_enabled": True})
+    try:
+        create_app(settings)
+    except RuntimeError as exc:
+        assert "실제 주문 실행" in str(exc)
+    else:
+        raise AssertionError("실행 플래그가 활성화된 앱이 생성되었습니다.")
+
+
+def test_실브로커_이름도_설정단계에서_거부한다(tmp_path) -> None:
+    settings = app_settings(tmp_path).model_copy(update={"broker_adapter": "kis"})
+    try:
+        create_app(settings)
+    except RuntimeError as exc:
+        assert "비활성 브로커" in str(exc)
+    else:
+        raise AssertionError("실브로커 이름이 설정된 앱이 생성되었습니다.")

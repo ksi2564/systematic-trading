@@ -46,5 +46,17 @@ logs/
 frontend/**/node_modules/
 frontend/**/dist/
 frontend/**/coverage/
+v2/backend/.venv/
+v2/backend/.pytest_cache/
+v2/backend/.ruff_cache/
+v2/backend/.coverage
+v2/backend/htmlcov/
+v2/backend/**/*.pyc
+v2/backend/**/__pycache__/
+v2/backend/*.db
+v2/backend/data/
+v2/frontend/node_modules/
+v2/frontend/dist/
+v2/frontend/coverage/
 check_result.log
 git_status.txt

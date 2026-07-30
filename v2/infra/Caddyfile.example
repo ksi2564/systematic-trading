@@ -1,0 +1,22 @@
+app.wall-ant.com {
+	encode zstd gzip
+
+	@backend path /api/* /health
+	handle @backend {
+		reverse_proxy 127.0.0.1:8000
+	}
+
+	handle {
+		root * /opt/wallant/v2/frontend
+		try_files {path} /index.html
+		file_server
+	}
+
+	header {
+		-Server
+		X-Content-Type-Options nosniff
+		Referrer-Policy same-origin
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+		Content-Security-Policy "default-src 'self'; font-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'"
+	}
+}

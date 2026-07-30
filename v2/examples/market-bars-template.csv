@@ -1,0 +1,7 @@
+trading_date,symbol,open,high,low,close,volume,provider,official
+2026-01-02,QQQM,100,102,99,101,1000000,research-sample,false
+2026-01-02,QLD,70,72,69,71,800000,research-sample,false
+2026-01-02,TQQQ,50,52,49,51,1200000,research-sample,false
+2026-01-05,QQQM,101,103,100,102,1100000,research-sample,false
+2026-01-05,QLD,71,73,70,72,850000,research-sample,false
+2026-01-05,TQQQ,51,53,50,52,1250000,research-sample,false

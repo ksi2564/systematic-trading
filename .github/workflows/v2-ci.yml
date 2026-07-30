@@ -28,7 +28,12 @@ jobs:
           cache-dependency-path: v2/backend/pyproject.toml
       - run: python -m pip install -e '.[dev]'
       - run: ruff check .
-      - run: pytest -W error --cov=wallant --cov-fail-under=80
+      - run: >-
+          pytest
+          -W error
+          -W "ignore:'audioop' is deprecated and slated for removal in Python 3.13:DeprecationWarning"
+          --cov=wallant
+          --cov-fail-under=80
       - run: |
           migration_db="$(mktemp /tmp/wallant-migration-XXXXXX.db)"
           WALLANT_ENVIRONMENT=test \

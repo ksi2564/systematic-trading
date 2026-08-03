@@ -36,16 +36,21 @@ class RollingValidationService:
         windows: list[RollingWindowResult] = []
         warnings: list[str] = []
         for index, start in enumerate(range(0, len(dates) - window_days + 1, step_days), start=1):
-            selected_dates = set(dates[start : start + window_days])
-            selected_bars = [bar for bar in bars if bar.trading_date in selected_dates]
+            window_dates = dates[start : start + window_days]
+            window_start = window_dates[0]
+            window_end = window_dates[-1]
+            selected_bars = [bar for bar in bars if bar.trading_date <= window_end]
             selected_actions = [
-                action for action in corporate_actions or [] if action.action_date in selected_dates
+                action
+                for action in corporate_actions or []
+                if window_start <= action.action_date <= window_end
             ]
             result = self.backtest.run(
                 version,
                 selected_bars,
                 initial_cash=initial_cash,
                 corporate_actions=selected_actions,
+                evaluation_start_date=window_start,
             )
             warnings.extend(result.warnings)
             windows.append(

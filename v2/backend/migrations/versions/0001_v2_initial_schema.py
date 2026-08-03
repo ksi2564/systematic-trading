@@ -63,19 +63,6 @@ def upgrade() -> None:
         sa.UniqueConstraint("name", name="uq_v2_account_name"),
     )
     op.create_table(
-        "v2_execution_profile",
-        sa.Column("account_id", sa.String(36), primary_key=True),
-        sa.Column("order_type", sa.String(20), nullable=False),
-        sa.Column("schedule", sa.String(40), nullable=False),
-        sa.Column("slices", sa.Integer(), nullable=False),
-        sa.Column("max_reprice_attempts", sa.Integer(), nullable=False),
-        sa.Column("reprice_ticks", sa.Integer(), nullable=False),
-        sa.Column("fee_rate_pct", sa.Numeric(10, 4), nullable=False),
-        sa.Column("fx_mode", sa.String(20), nullable=False),
-        sa.Column("max_auto_fx_amount", sa.Numeric(20, 4)),
-        sa.ForeignKeyConstraint(["account_id"], ["v2_account.id"], ondelete="CASCADE"),
-    )
-    op.create_table(
         "v2_risk_policy",
         sa.Column("account_id", sa.String(36), primary_key=True),
         sa.Column("max_order_notional", sa.Numeric(20, 4), nullable=False),
@@ -83,7 +70,16 @@ def upgrade() -> None:
         sa.Column("max_daily_order_count", sa.Integer(), nullable=False),
         sa.Column("max_symbol_weight_pct", sa.Numeric(10, 4), nullable=False),
         sa.Column("max_daily_loss", sa.Numeric(20, 4), nullable=False),
-        sa.Column("max_reprice_attempts", sa.Integer(), nullable=False),
+        sa.ForeignKeyConstraint(["account_id"], ["v2_account.id"], ondelete="CASCADE"),
+    )
+    op.create_table(
+        "v2_daily_risk_usage",
+        sa.Column("account_id", sa.String(36), primary_key=True),
+        sa.Column("usage_date", sa.Date(), primary_key=True),
+        sa.Column("order_notional", sa.Numeric(20, 4), nullable=False),
+        sa.Column("order_count", sa.Integer(), nullable=False),
+        sa.Column("realized_loss", sa.Numeric(20, 4), nullable=False),
+        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
         sa.ForeignKeyConstraint(["account_id"], ["v2_account.id"], ondelete="CASCADE"),
     )
     op.create_table(
@@ -217,33 +213,9 @@ def upgrade() -> None:
         sa.Column("reason", sa.Text()),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
     )
-    op.create_table(
-        "v2_legacy_history",
-        sa.Column("id", sa.String(36), primary_key=True),
-        sa.Column("account_id", sa.String(36), nullable=False),
-        sa.Column("history_kind", sa.String(40), nullable=False),
-        sa.Column("source_table", sa.String(80), nullable=False),
-        sa.Column("source_row_id", sa.String(100), nullable=False),
-        sa.Column("source_payload", sa.JSON(), nullable=False),
-        sa.Column("read_only", sa.Boolean(), nullable=False),
-        sa.Column("imported_at", sa.DateTime(timezone=True), nullable=False),
-        sa.ForeignKeyConstraint(["account_id"], ["v2_account.id"], ondelete="CASCADE"),
-        sa.UniqueConstraint(
-            "source_table",
-            "source_row_id",
-            name="uq_v2_legacy_history_source",
-        ),
-    )
-    op.create_index(
-        "ix_v2_legacy_history_account_kind",
-        "v2_legacy_history",
-        ["account_id", "history_kind"],
-    )
 
 
 def downgrade() -> None:
-    op.drop_index("ix_v2_legacy_history_account_kind", table_name="v2_legacy_history")
-    op.drop_table("v2_legacy_history")
     op.drop_table("v2_global_control")
     op.drop_index("ix_v2_audit_event_created", table_name="v2_audit_event")
     op.drop_table("v2_audit_event")
@@ -255,8 +227,8 @@ def downgrade() -> None:
     op.drop_index("ix_v2_strategy_run_version_type", table_name="v2_strategy_run")
     op.drop_table("v2_strategy_run")
     op.drop_table("v2_broker_credential")
+    op.drop_table("v2_daily_risk_usage")
     op.drop_table("v2_risk_policy")
-    op.drop_table("v2_execution_profile")
     op.drop_table("v2_account")
     op.drop_index("ix_v2_strategy_version_lifecycle", table_name="v2_strategy_version")
     op.drop_table("v2_strategy_version")

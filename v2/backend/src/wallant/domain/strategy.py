@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import re
 from datetime import UTC, date, datetime
 from decimal import Decimal
@@ -26,6 +27,7 @@ class Resolution(StrEnum):
 class StrategyEngine(StrEnum):
     QQQM_DRAWDOWN_V2 = "QQQM_DRAWDOWN_V2"
     RULE_ALLOCATION_V1 = "RULE_ALLOCATION_V1"
+    SIGNAL_TRADING_V1 = "SIGNAL_TRADING_V1"
 
 
 class StrategyLifecycle(StrEnum):
@@ -35,11 +37,6 @@ class StrategyLifecycle(StrEnum):
     PAPER = "PAPER"
     LIVE_APPROVED = "LIVE_APPROVED"
     RETIRED = "RETIRED"
-
-
-class UniverseKind(StrEnum):
-    FIXED = "FIXED"
-    SCREEN = "SCREEN"
 
 
 class ConditionOperator(StrEnum):
@@ -52,18 +49,11 @@ class ConditionOperator(StrEnum):
     BETWEEN = "BETWEEN"
 
 
-class UniverseFilter(BaseModel):
-    field: str
-    operator: ConditionOperator
-    value: Decimal | str | list[Decimal | str]
-
-
 class UniverseDefinition(BaseModel):
-    kind: UniverseKind = UniverseKind.FIXED
+    model_config = ConfigDict(extra="forbid")
+
     market: Market = Market.US
-    symbols: list[str] = Field(default_factory=list)
-    filters: list[UniverseFilter] = Field(default_factory=list)
-    selection_limit: int = Field(default=50, ge=1, le=500)
+    symbols: list[str] = Field(min_length=1)
 
     @model_validator(mode="after")
     def validate_universe(self) -> UniverseDefinition:
@@ -71,10 +61,35 @@ class UniverseDefinition(BaseModel):
         invalid = [symbol for symbol in self.symbols if not valid_symbol(symbol)]
         if invalid:
             raise ValueError(f"지원하지 않는 종목 코드 형식입니다: {', '.join(invalid)}")
-        if self.kind == UniverseKind.FIXED and not self.symbols:
+        if not self.symbols:
             raise ValueError("고정 종목군에는 하나 이상의 종목이 필요합니다.")
-        if self.kind == UniverseKind.SCREEN and not self.filters:
-            raise ValueError("조건식 종목군에는 하나 이상의 필터가 필요합니다.")
+        return self
+
+
+class SignalKind(StrEnum):
+    PRICE_MA_CROSS = "PRICE_MA_CROSS"
+    MA_CROSS = "MA_CROSS"
+    HIGH_BREAKOUT = "HIGH_BREAKOUT"
+    RSI_RECOVERY = "RSI_RECOVERY"
+
+
+class SignalTradingRules(BaseModel):
+    kind: SignalKind
+    ma_period: int = Field(default=200, ge=2, le=500)
+    fast_period: int = Field(default=20, ge=2, le=500)
+    slow_period: int = Field(default=50, ge=3, le=500)
+    breakout_period: int = Field(default=20, ge=2, le=500)
+    rsi_period: int = Field(default=14, ge=2, le=100)
+    rsi_entry_threshold: Decimal = Field(default=Decimal("30"), gt=0, lt=100)
+    rsi_exit_threshold: Decimal = Field(default=Decimal("70"), gt=0, lt=100)
+    target_weight_pct: Decimal = Field(default=HUNDRED, gt=0, le=100)
+
+    @model_validator(mode="after")
+    def validate_periods_and_thresholds(self) -> SignalTradingRules:
+        if self.fast_period >= self.slow_period:
+            raise ValueError("단기 이동평균 기간은 장기 이동평균 기간보다 짧아야 합니다.")
+        if self.rsi_entry_threshold >= self.rsi_exit_threshold:
+            raise ValueError("RSI 진입 기준은 청산 기준보다 낮아야 합니다.")
         return self
 
 
@@ -160,6 +175,7 @@ class StrategyDefinition(BaseModel):
     parameters: dict[str, Any] = Field(default_factory=dict)
     data_requirements: list[DataRequirement] = Field(default_factory=list)
     rules: list[AllocationRule] = Field(default_factory=list)
+    signal_rules: SignalTradingRules | None = None
     protections: ProtectionRules = Field(default_factory=ProtectionRules)
 
     @model_validator(mode="after")
@@ -169,7 +185,7 @@ class StrategyDefinition(BaseModel):
             raise ValueError(f"지원하지 않는 신호 종목 코드 형식입니다: {self.signal_symbol}")
         if self.universe.market != self.market:
             raise ValueError("전략 시장과 종목군 시장은 같아야 합니다.")
-        if self.signal_symbol not in self.universe.symbols and self.universe.kind == UniverseKind.FIXED:
+        if self.signal_symbol not in self.universe.symbols:
             raise ValueError("신호 종목은 고정 종목군에 포함되어야 합니다.")
         if self.engine == StrategyEngine.QQQM_DRAWDOWN_V2:
             if self.market != Market.US or self.signal_symbol != "QQQM":
@@ -178,23 +194,38 @@ class StrategyDefinition(BaseModel):
                 raise ValueError("QQQM 낙폭 엔진의 거래 종목군은 QQQM, QLD, TQQQ로 고정됩니다.")
         if self.engine == StrategyEngine.RULE_ALLOCATION_V1 and not self.rules:
             raise ValueError("규칙 기반 전략에는 하나 이상의 배분 규칙이 필요합니다.")
+        if self.engine == StrategyEngine.SIGNAL_TRADING_V1:
+            if len(self.universe.symbols) != 1:
+                raise ValueError("개별종목 신호 전략은 한 종목만 지원합니다.")
+            if self.signal_rules is None:
+                raise ValueError("개별종목 신호 전략에는 매수·매도 신호 설정이 필요합니다.")
+            if self.rules:
+                raise ValueError("개별종목 신호 전략에는 배분 규칙을 함께 사용할 수 없습니다.")
+        elif self.signal_rules is not None:
+            raise ValueError("신호 설정은 개별종목 신호 전략에서만 사용할 수 있습니다.")
+        if self.engine != StrategyEngine.SIGNAL_TRADING_V1 and self.protections != ProtectionRules():
+            raise ValueError("손절·익절·트레일링은 개별종목 신호 전략에서만 사용할 수 있습니다.")
         if len({rule.priority for rule in self.rules}) != len(self.rules):
             raise ValueError("배분 규칙 우선순위는 중복될 수 없습니다.")
-        if self.universe.kind == UniverseKind.FIXED:
-            outside = sorted(
-                {
-                    symbol
-                    for rule in self.rules
-                    for symbol in rule.target_weights
-                    if symbol not in self.universe.symbols
-                }
-            )
-            if outside:
-                raise ValueError(f"목표 종목은 고정 종목군에 포함되어야 합니다: {', '.join(outside)}")
+        outside = sorted(
+            {
+                symbol
+                for rule in self.rules
+                for symbol in rule.target_weights
+                if symbol not in self.universe.symbols
+            }
+        )
+        if outside:
+            raise ValueError(f"목표 종목은 고정 종목군에 포함되어야 합니다: {', '.join(outside)}")
         return self
 
     def checksum(self) -> str:
-        payload = self.model_dump_json(exclude_none=False)
+        payload = json.dumps(
+            self.model_dump(mode="json", exclude_none=False),
+            ensure_ascii=False,
+            separators=(",", ":"),
+            sort_keys=True,
+        )
         return sha256(payload.encode("utf-8")).hexdigest()
 
 

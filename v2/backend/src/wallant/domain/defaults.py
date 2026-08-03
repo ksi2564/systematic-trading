@@ -10,7 +10,6 @@ from wallant.domain.strategy import (
     StrategyEngine,
     StrategyVersion,
     UniverseDefinition,
-    UniverseKind,
 )
 
 
@@ -21,7 +20,6 @@ def qqqm_drawdown_definition() -> StrategyDefinition:
         engine=StrategyEngine.QQQM_DRAWDOWN_V2,
         market=Market.US,
         universe=UniverseDefinition(
-            kind=UniverseKind.FIXED,
             market=Market.US,
             symbols=["QQQM", "QLD", "TQQQ"],
         ),

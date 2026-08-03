@@ -38,7 +38,6 @@ def create_account(
             name=payload.name,
             market=payload.market,
             currency=payload.currency,
-            execution_profile=payload.execution_profile,
             risk_policy=payload.risk_policy,
             actor=actor,
         )

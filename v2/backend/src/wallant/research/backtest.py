@@ -31,6 +31,7 @@ class BacktestEngine:
         *,
         initial_cash: Decimal = Decimal("100000"),
         corporate_actions: list[CorporateAction] | None = None,
+        evaluation_start_date: date | None = None,
     ) -> BacktestResult:
         if not bars:
             raise ValueError("백테스트 가격 데이터가 없습니다.")
@@ -83,8 +84,8 @@ class BacktestEngine:
         }
         moving_average_key = f"{signal}.ma_{ma_period}"
         requires_moving_average = moving_average_key in required_rule_market_keys
-        trading_dates = sorted(day for day, values in by_date.items() if signal in values)
-        if not trading_dates:
+        trading_dates = sorted(by_date)
+        if not any(signal in values for values in by_date.values()):
             raise ValueError(f"신호 종목 {signal} 데이터가 없습니다.")
 
         cash = decimal(initial_cash)
@@ -102,45 +103,43 @@ class BacktestEngine:
         warmup_skipped = 0
         missing_vix_days = 0
         missing_ma_guard_days = 0
+        deferred_actions: list[CorporateAction] = []
 
         for trading_date in trading_dates:
             daily = by_date[trading_date]
-            self._apply_actions(action_by_date[trading_date], holdings, average_prices, cash_holder := [cash])
+            close_prices = {symbol: daily[symbol].close for symbol in symbols if symbol in daily}
+            missing = [symbol for symbol in symbols if symbol not in close_prices]
+            if missing:
+                warnings.append(
+                    f"{trading_date}: 필수 가격이 누락되어 주문과 평가를 보류합니다: {', '.join(missing)}"
+                )
+                deferred_actions.extend(action_by_date[trading_date])
+                self._append_available_history(histories, daily)
+                continue
+            if evaluation_start_date is not None and trading_date < evaluation_start_date:
+                self._append_available_history(histories, daily)
+                continue
+
+            actions = [*deferred_actions, *action_by_date[trading_date]]
+            deferred_actions = []
+            self._apply_actions(actions, holdings, average_prices, cash_holder := [cash])
             cash = cash_holder[0]
 
             if pending_target is not None:
                 signal_date, target = pending_target
-                missing_open = [
-                    symbol
-                    for symbol in target
-                    if symbol not in daily
-                    and (target[symbol] > ZERO or holdings.get(symbol, ZERO) > ZERO)
-                ]
-                if missing_open:
-                    missing_text = ", ".join(missing_open)
-                    warnings.append(
-                        f"{trading_date}: 다음 종목 시가가 없어 주문을 보류했습니다: {missing_text}"
-                    )
-                else:
-                    cash, generated = self._rebalance_at_open(
-                        trading_date=trading_date,
-                        signal_date=signal_date,
-                        target=target,
-                        daily=daily,
-                        cash=cash,
-                        holdings=holdings,
-                        average_prices=average_prices,
-                        fee_rate=fee_rate,
-                    )
-                    trades.extend(generated)
-                    pending_target = None
-
-            close_prices = {symbol: daily[symbol].close for symbol in symbols if symbol in daily}
-            missing = [symbol for symbol in symbols if symbol not in close_prices]
-            if missing:
-                warnings.append(f"{trading_date}: 종가 누락으로 평가를 건너뜁니다: {', '.join(missing)}")
-                self._append_available_history(histories, daily)
-                continue
+                cash, generated = self._rebalance_at_open(
+                    trading_date=trading_date,
+                    signal_date=signal_date,
+                    target=target,
+                    daily=daily,
+                    cash=cash,
+                    holdings=holdings,
+                    average_prices=average_prices,
+                    fee_rate=fee_rate,
+                    tolerance_pct=version.definition.tolerance_pct,
+                )
+                trades.extend(generated)
+                pending_target = None
 
             signal_history = histories[signal]
             moving_values = [*signal_history, close_prices[signal]][-ma_period:]
@@ -150,6 +149,11 @@ class BacktestEngine:
                 else None
             )
             if requires_moving_average and moving_average is None:
+                warmup_skipped += 1
+                self._append_available_history(histories, daily)
+                continue
+            signal_warmup = self._signal_warmup_observations(version)
+            if signal_warmup and len(signal_history) < signal_warmup:
                 warmup_skipped += 1
                 self._append_available_history(histories, daily)
                 continue
@@ -176,6 +180,15 @@ class BacktestEngine:
                 "cash": cash,
                 "total_value": portfolio_value,
             }
+            if version.definition.engine == StrategyEngine.SIGNAL_TRADING_V1:
+                quantity = holdings.get(signal, ZERO)
+                portfolio_payload.update(
+                    {
+                        "position_open": quantity > ZERO,
+                        "quantity": quantity,
+                        "average_price": average_prices.get(signal, ZERO),
+                    }
+                )
             evaluation = self.registry.evaluate(
                 version,
                 EvaluationContext(
@@ -211,8 +224,13 @@ class BacktestEngine:
             self._append_available_history(histories, daily)
 
         if warmup_skipped:
+            warmup_label = (
+                "신호 지표"
+                if version.definition.engine == StrategyEngine.SIGNAL_TRADING_V1
+                else f"필수 MA{ma_period}"
+            )
             warnings.append(
-                f"필수 MA{ma_period} 계산을 위해 첫 {warmup_skipped}개 평가일을 워밍업으로 제외했습니다."
+                f"{warmup_label} 계산을 위해 첫 {warmup_skipped}개 평가일을 워밍업으로 제외했습니다."
             )
         if missing_ma_guard_days:
             warnings.append(
@@ -245,6 +263,8 @@ class BacktestEngine:
         )
         if pending_target:
             warnings.append("마지막 평가일의 목표 비중은 다음 거래일 데이터가 없어 체결하지 않았습니다.")
+        if deferred_actions:
+            warnings.append("필수 가격 누락 뒤 적용할 거래일이 없어 일부 기업행사를 반영하지 못했습니다.")
         return BacktestResult(
             strategy_version_id=version.id,
             metrics=metrics,
@@ -265,15 +285,23 @@ class BacktestEngine:
         holdings: dict[str, Decimal],
         average_prices: dict[str, Decimal],
         fee_rate: Decimal,
+        tolerance_pct: Decimal,
     ) -> tuple[Decimal, list[BacktestTrade]]:
         symbols = [symbol for symbol in target if symbol in daily]
         total = cash + sum((holdings.get(symbol, ZERO) * daily[symbol].open for symbol in symbols), ZERO)
-        desired = {
-            symbol: (total * decimal(target[symbol]) / HUNDRED / daily[symbol].open).quantize(
-                Decimal("1"), rounding=ROUND_DOWN
+        desired: dict[str, Decimal] = {}
+        for symbol in symbols:
+            current_weight = (
+                holdings.get(symbol, ZERO) * daily[symbol].open / total * HUNDRED
+                if total > ZERO
+                else ZERO
             )
-            for symbol in symbols
-        }
+            if abs(decimal(target[symbol]) - current_weight) < tolerance_pct:
+                desired[symbol] = holdings.get(symbol, ZERO)
+            else:
+                desired[symbol] = (
+                    total * decimal(target[symbol]) / HUNDRED / daily[symbol].open
+                ).quantize(Decimal("1"), rounding=ROUND_DOWN)
         trades: list[BacktestTrade] = []
 
         for symbol in sorted(
@@ -287,6 +315,8 @@ class BacktestEngine:
             fee = money(notional * fee_rate)
             cash += notional - fee
             holdings[symbol] = desired[symbol]
+            if holdings[symbol] == ZERO:
+                average_prices[symbol] = ZERO
             trades.append(
                 BacktestTrade(
                     trading_date=trading_date,
@@ -334,6 +364,21 @@ class BacktestEngine:
                 )
             )
         return cash, trades
+
+    @staticmethod
+    def _signal_warmup_observations(version: StrategyVersion) -> int:
+        if version.definition.engine != StrategyEngine.SIGNAL_TRADING_V1:
+            return 0
+        rules = version.definition.signal_rules
+        if rules is None:
+            return 0
+        if rules.kind.value == "PRICE_MA_CROSS":
+            return rules.ma_period
+        if rules.kind.value == "MA_CROSS":
+            return rules.slow_period
+        if rules.kind.value == "HIGH_BREAKOUT":
+            return rules.breakout_period
+        return rules.rsi_period + 1
 
     @staticmethod
     def _apply_actions(

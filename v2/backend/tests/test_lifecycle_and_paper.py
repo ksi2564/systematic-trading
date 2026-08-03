@@ -2,9 +2,11 @@ from datetime import date, timedelta
 from pathlib import Path
 
 from fastapi.testclient import TestClient
+from sqlalchemy.orm import Session
 
 from wallant.config import Settings
 from wallant.main import create_app
+from wallant.persistence.models import DailyRiskUsageRecord
 
 
 def app_settings(tmp_path: Path) -> Settings:
@@ -49,14 +51,6 @@ def paper_payload(as_of: str = "2026-01-10", qqqm_close: str = "90") -> dict:
             "currency": "USD",
         },
         "quotes": {"QQQM": "90", "QLD": "65", "TQQQ": "45"},
-        "risk_policy": {
-            "max_order_notional": "100000",
-            "max_daily_notional": "300000",
-            "max_daily_order_count": 10,
-            "max_symbol_weight_pct": "100",
-            "max_daily_loss": "10000",
-            "max_reprice_attempts": 2,
-        },
     }
 
 
@@ -65,23 +59,19 @@ def account_payload(name: str, market: str, currency: str) -> dict:
         "name": name,
         "market": market,
         "currency": currency,
-        "execution_profile": {
-            "order_type": "LIMIT",
-            "max_reprice_attempts": 2,
-        },
         "risk_policy": {
             "max_order_notional": "10000",
             "max_daily_notional": "30000",
             "max_daily_order_count": 10,
             "max_symbol_weight_pct": "100",
             "max_daily_loss": "1000",
-            "max_reprice_attempts": 2,
         },
     }
 
 
 def test_전략승격은_각단계의_완료증거를_요구하고_모의입력은_멱등하다(tmp_path) -> None:
-    with TestClient(create_app(app_settings(tmp_path))) as client:
+    app = create_app(app_settings(tmp_path))
+    with TestClient(app) as client:
         created = client.post("/api/v2/strategies/baseline/qqqm")
         assert created.status_code == 201
         version_id = created.json()["id"]
@@ -131,9 +121,14 @@ def test_전략승격은_각단계의_완료증거를_요구하고_모의입력�
         )
         assert paper_transition.status_code == 200
 
+        us_account = client.post(
+            "/api/v2/accounts",
+            json=account_payload("미국 계좌", "US", "USD"),
+        ).json()
+
         paper = client.post(
             "/api/v2/research/paper/sessions",
-            json={"version_id": version_id},
+            json={"version_id": version_id, "account_id": us_account["id"]},
         )
         assert paper.status_code == 201, paper.text
         paper_id = paper.json()["id"]
@@ -143,11 +138,59 @@ def test_전략승격은_각단계의_완료증거를_요구하고_모의입력�
         )
         assert premature.status_code == 409
 
+        override_payload = paper_payload(as_of="2026-01-08")
+        override_payload["risk_policy"] = {
+            "max_order_notional": "1000000",
+            "max_daily_notional": "1000000",
+            "max_daily_order_count": 100,
+            "max_symbol_weight_pct": "100",
+            "max_daily_loss": "1000000",
+        }
+        override = client.post(
+            f"/api/v2/research/paper/sessions/{paper_id}/steps",
+            json=override_payload,
+        )
+        assert override.status_code == 422
+        assert "risk_policy" in override.text
+
+        failed_payload = paper_payload(as_of="2026-01-09")
+        failed_payload["context"]["market"] = {}
+        failed = client.post(
+            f"/api/v2/research/paper/sessions/{paper_id}/steps",
+            json=failed_payload,
+        )
+        repeated_failure = client.post(
+            f"/api/v2/research/paper/sessions/{paper_id}/steps",
+            json=failed_payload,
+        )
+        assert failed.status_code == repeated_failure.status_code == 422
+        assert failed.json() == repeated_failure.json()
+
+        with Session(app.state.engine) as database:
+            database.add(
+                DailyRiskUsageRecord(
+                    account_id=us_account["id"],
+                    usage_date=date(2026, 1, 10),
+                    order_notional=0,
+                    order_count=0,
+                    realized_loss=1000,
+                )
+            )
+            database.commit()
+
         first_step = client.post(
             f"/api/v2/research/paper/sessions/{paper_id}/steps",
             json=paper_payload(),
         )
         assert first_step.status_code == 200, first_step.text
+        assert any(
+            "MAX_DAILY_LOSS" in intent["violations"]
+            for intent in first_step.json()["order_plan"]["intents"]
+        )
+        assert any(
+            "MAX_ORDER_NOTIONAL" in intent["violations"]
+            for intent in first_step.json()["order_plan"]["intents"]
+        )
         intent_count = client.get("/api/v2/operations/status").json()["counts"]["order_intents"]
         repeated_step = client.post(
             f"/api/v2/research/paper/sessions/{paper_id}/steps",
@@ -169,6 +212,7 @@ def test_전략승격은_각단계의_완료증거를_요구하고_모의입력�
         )
         assert completed.status_code == 200
         assert completed.json()["summary"]["evaluated_days"] == 1
+        assert completed.json()["summary"]["error_count"] == 1
         assert completed.json()["completed_at"].endswith("Z")
         repeated_completion = client.post(
             f"/api/v2/research/paper/sessions/{paper_id}/complete",
@@ -189,10 +233,6 @@ def test_전략승격은_각단계의_완료증거를_요구하고_모의입력�
         assert approved.status_code == 200
         assert approved.json()["lifecycle"] == "LIVE_APPROVED"
 
-        us_account = client.post(
-            "/api/v2/accounts",
-            json=account_payload("미국 계좌", "US", "USD"),
-        ).json()
         assigned = client.post(
             f"/api/v2/accounts/{us_account['id']}/strategy",
             json={"strategy_version_id": version_id},

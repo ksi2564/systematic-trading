@@ -5,9 +5,9 @@ from decimal import Decimal
 from typing import Any
 from uuid import UUID
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from wallant.domain.execution import ExecutionProfile, RiskPolicy
+from wallant.domain.execution import RiskPolicy
 from wallant.domain.portfolio import Portfolio
 from wallant.domain.strategy import (
     EvaluationContext,
@@ -46,7 +46,7 @@ class RollingRequest(BacktestRequest):
 
 class CreatePaperSessionRequest(BaseModel):
     version_id: UUID
-    account_id: UUID | None = None
+    account_id: UUID
 
 
 class CompletePaperSessionRequest(BaseModel):
@@ -55,24 +55,20 @@ class CompletePaperSessionRequest(BaseModel):
 
 
 class PaperStepRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     context: EvaluationContext
     portfolio: Portfolio
     quotes: dict[str, Decimal]
-    risk_policy: RiskPolicy
 
 
 class CreateAccountRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     name: str = Field(min_length=1, max_length=100)
     market: str = Field(pattern="^(US|KRX)$")
     currency: str = Field(pattern="^(USD|KRW)$")
-    execution_profile: ExecutionProfile
     risk_policy: RiskPolicy
-
-    @model_validator(mode="after")
-    def validate_reprice_limit(self) -> CreateAccountRequest:
-        if self.execution_profile.max_reprice_attempts > self.risk_policy.max_reprice_attempts:
-            raise ValueError("실행 프로필의 재가격 횟수는 계좌 위험 한도를 넘을 수 없습니다.")
-        return self
 
 
 class AssignStrategyRequest(BaseModel):
@@ -107,15 +103,6 @@ class StoreBarsRequest(BaseModel):
         if self.resolution == "1m" and any(bar.observed_at is None for bar in self.bars):
             raise ValueError("분봉 데이터에는 observed_at 시각이 필요합니다.")
         return self
-
-
-class LegacyMigrationPreviewRequest(BaseModel):
-    destination_account_id: UUID
-    source_database_url: str
-    include_strategy_state: bool = True
-    include_portfolio_snapshots: bool = True
-    include_performance_snapshots: bool = True
-    include_jobs_and_orders: bool = True
 
 
 class DataCoverageQuery(BaseModel):

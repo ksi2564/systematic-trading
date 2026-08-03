@@ -96,34 +96,11 @@ class AccountRecord(Base):
         onupdate=utc_now,
         nullable=False,
     )
-    execution_profile: Mapped[ExecutionProfileRecord | None] = relationship(
-        back_populates="account",
-        cascade="all, delete-orphan",
-        uselist=False,
-    )
     risk_policy: Mapped[RiskPolicyRecord | None] = relationship(
         back_populates="account",
         cascade="all, delete-orphan",
         uselist=False,
     )
-
-
-class ExecutionProfileRecord(Base):
-    __tablename__ = "v2_execution_profile"
-
-    account_id: Mapped[str] = mapped_column(
-        ForeignKey("v2_account.id", ondelete="CASCADE"),
-        primary_key=True,
-    )
-    order_type: Mapped[str] = mapped_column(String(20), nullable=False, default="LIMIT")
-    schedule: Mapped[str] = mapped_column(String(40), nullable=False, default="REGULAR_SESSION")
-    slices: Mapped[int] = mapped_column(nullable=False, default=1)
-    max_reprice_attempts: Mapped[int] = mapped_column(nullable=False, default=2)
-    reprice_ticks: Mapped[int] = mapped_column(nullable=False, default=1)
-    fee_rate_pct: Mapped[Decimal] = mapped_column(Numeric(10, 4), nullable=False, default=Decimal("0.25"))
-    fx_mode: Mapped[str] = mapped_column(String(20), nullable=False, default="MANUAL")
-    max_auto_fx_amount: Mapped[Decimal | None] = mapped_column(Numeric(20, 4))
-    account: Mapped[AccountRecord] = relationship(back_populates="execution_profile")
 
 
 class RiskPolicyRecord(Base):
@@ -138,8 +115,23 @@ class RiskPolicyRecord(Base):
     max_daily_order_count: Mapped[int] = mapped_column(nullable=False)
     max_symbol_weight_pct: Mapped[Decimal] = mapped_column(Numeric(10, 4), nullable=False)
     max_daily_loss: Mapped[Decimal] = mapped_column(Numeric(20, 4), nullable=False)
-    max_reprice_attempts: Mapped[int] = mapped_column(nullable=False)
     account: Mapped[AccountRecord] = relationship(back_populates="risk_policy")
+
+
+class DailyRiskUsageRecord(Base):
+    __tablename__ = "v2_daily_risk_usage"
+
+    account_id: Mapped[str] = mapped_column(
+        ForeignKey("v2_account.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    usage_date: Mapped[date] = mapped_column(Date, primary_key=True)
+    order_notional: Mapped[Decimal] = mapped_column(Numeric(20, 4), nullable=False, default=Decimal("0"))
+    order_count: Mapped[int] = mapped_column(nullable=False, default=0)
+    realized_loss: Mapped[Decimal] = mapped_column(Numeric(20, 4), nullable=False, default=Decimal("0"))
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, onupdate=utc_now, nullable=False
+    )
 
 
 class BrokerCredentialRecord(Base):
@@ -286,27 +278,3 @@ class GlobalControlRecord(Base):
         onupdate=utc_now,
         nullable=False,
     )
-
-
-class LegacyHistoryRecord(Base):
-    __tablename__ = "v2_legacy_history"
-    __table_args__ = (
-        UniqueConstraint(
-            "source_table",
-            "source_row_id",
-            name="uq_v2_legacy_history_source",
-        ),
-        Index("ix_v2_legacy_history_account_kind", "account_id", "history_kind"),
-    )
-
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
-    account_id: Mapped[str] = mapped_column(
-        ForeignKey("v2_account.id", ondelete="CASCADE"),
-        nullable=False,
-    )
-    history_kind: Mapped[str] = mapped_column(String(40), nullable=False)
-    source_table: Mapped[str] = mapped_column(String(80), nullable=False)
-    source_row_id: Mapped[str] = mapped_column(String(100), nullable=False)
-    source_payload: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
-    read_only: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
-    imported_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)

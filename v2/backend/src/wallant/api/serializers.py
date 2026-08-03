@@ -63,7 +63,6 @@ def strategy_record(record: StrategyRecord) -> dict[str, Any]:
 
 
 def account_record(record: AccountRecord) -> dict[str, Any]:
-    profile = record.execution_profile
     risk = record.risk_policy
     return {
         "id": record.id,
@@ -74,22 +73,6 @@ def account_record(record: AccountRecord) -> dict[str, Any]:
         "status": record.status,
         "status_reason": record.status_reason,
         "active_strategy_version_id": record.active_strategy_version_id,
-        "execution_profile": (
-            {
-                "order_type": profile.order_type,
-                "schedule": profile.schedule,
-                "slices": profile.slices,
-                "max_reprice_attempts": profile.max_reprice_attempts,
-                "reprice_ticks": profile.reprice_ticks,
-                "fee_rate_pct": str(profile.fee_rate_pct),
-                "fx_mode": profile.fx_mode,
-                "max_auto_fx_amount": (
-                    str(profile.max_auto_fx_amount) if profile.max_auto_fx_amount else None
-                ),
-            }
-            if profile
-            else None
-        ),
         "risk_policy": (
             {
                 "max_order_notional": str(risk.max_order_notional),
@@ -97,7 +80,6 @@ def account_record(record: AccountRecord) -> dict[str, Any]:
                 "max_daily_order_count": risk.max_daily_order_count,
                 "max_symbol_weight_pct": str(risk.max_symbol_weight_pct),
                 "max_daily_loss": str(risk.max_daily_loss),
-                "max_reprice_attempts": risk.max_reprice_attempts,
             }
             if risk
             else None

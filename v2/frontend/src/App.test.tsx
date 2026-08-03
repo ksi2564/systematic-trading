@@ -56,6 +56,40 @@ describe('Wall-Ant 콘솔', () => {
     });
   });
 
+  it('개별종목 신호 전략과 보호 청산 설정을 저장한다', async () => {
+    render(<App />);
+    fireEvent.click(await screen.findByRole('button', { name: /전략 빌더/ }));
+    fireEvent.click(screen.getByRole('button', { name: /새 전략/ }));
+    fireEvent.change(screen.getByLabelText('전략 엔진'), {
+      target: { value: 'SIGNAL_TRADING_V1' }
+    });
+    fireEvent.change(screen.getByLabelText('매수 신호'), {
+      target: { value: 'HIGH_BREAKOUT' }
+    });
+    fireEvent.change(screen.getByLabelText('고점·저점 확인 기간'), {
+      target: { value: '30' }
+    });
+    fireEvent.change(screen.getByLabelText('손절 (%)'), { target: { value: '7' } });
+    const save = screen.getByRole('button', { name: /초안 저장/ });
+    fireEvent.submit(save.closest('form') as HTMLFormElement);
+
+    await waitFor(() => {
+      const call = vi.mocked(fetch).mock.calls.find(
+        ([path, init]) => String(path).endsWith('/strategies') && init?.method === 'POST'
+      );
+      expect(call).toBeDefined();
+      const payload = JSON.parse(String(call?.[1]?.body));
+      expect(payload.definition).toEqual(
+        expect.objectContaining({
+          engine: 'SIGNAL_TRADING_V1',
+          universe: { market: 'US', symbols: ['AAPL'] },
+          signal_rules: expect.objectContaining({ kind: 'HIGH_BREAKOUT', breakout_period: 30 }),
+          protections: expect.objectContaining({ stop_loss_pct: '7' })
+        })
+      );
+    });
+  });
+
   it('OHLCV CSV를 연구 API 입력으로 정규화한다', () => {
     const bars = parseMarketBarsCsv(
       [

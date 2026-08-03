@@ -47,24 +47,61 @@ def test_계좌는_위험한도_없이_만들_수_없고_신규상태는_정지�
                 "name": "미국 주식 계좌",
                 "market": "US",
                 "currency": "USD",
-                "execution_profile": {
-                    "order_type": "LIMIT",
-                    "slices": 1,
-                    "max_reprice_attempts": 2,
-                },
                 "risk_policy": {
                     "max_order_notional": "10000",
                     "max_daily_notional": "20000",
                     "max_daily_order_count": 10,
                     "max_symbol_weight_pct": "100",
                     "max_daily_loss": "1000",
-                    "max_reprice_attempts": 2,
                 },
             },
         )
         assert response.status_code == 201, response.text
         assert response.json()["status"] == "PAUSED"
         assert response.json()["risk_policy"]["max_daily_order_count"] == 10
+
+
+def test_제거한_실행프로필과_screen_종목군은_api가_받지_않는다(tmp_path) -> None:
+    with TestClient(create_app(app_settings(tmp_path))) as client:
+        account = client.post(
+            "/api/v2/accounts",
+            json={
+                "name": "구 실행 프로필",
+                "market": "US",
+                "currency": "USD",
+                "execution_profile": {"order_type": "LIMIT"},
+                "risk_policy": {
+                    "max_order_notional": "10000",
+                    "max_daily_notional": "20000",
+                    "max_daily_order_count": 10,
+                    "max_symbol_weight_pct": "100",
+                    "max_daily_loss": "1000",
+                },
+            },
+        )
+        screen_strategy = client.post(
+            "/api/v2/strategies",
+            json={
+                "definition": {
+                    "name": "구 SCREEN 전략",
+                    "engine": "SIGNAL_TRADING_V1",
+                    "market": "US",
+                    "signal_symbol": "SPY",
+                    "universe": {
+                        "kind": "SCREEN",
+                        "market": "US",
+                        "symbols": ["SPY"],
+                        "filters": [{"field": "market_cap", "operator": "GT", "value": 1}],
+                    },
+                    "signal_rules": {"kind": "HIGH_BREAKOUT"},
+                }
+            },
+        )
+
+    assert account.status_code == 422
+    assert "execution_profile" in account.text
+    assert screen_strategy.status_code == 422
+    assert "kind" in screen_strategy.text
 
 
 def test_조건식_전략도_폼_스키마로_저장하고_평가한다(tmp_path) -> None:
@@ -74,7 +111,6 @@ def test_조건식_전략도_폼_스키마로_저장하고_평가한다(tmp_path
         "market": "US",
         "signal_symbol": "SPY",
         "universe": {
-            "kind": "FIXED",
             "market": "US",
             "symbols": ["SPY", "SHY"],
         },

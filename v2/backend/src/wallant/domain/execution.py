@@ -5,7 +5,6 @@ from datetime import date
 from decimal import Decimal
 from enum import StrEnum
 from hashlib import sha256
-from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, Field, model_validator
@@ -25,38 +24,11 @@ class OrderSide(StrEnum):
     SELL = "SELL"
 
 
-class OrderType(StrEnum):
-    MARKET = "MARKET"
-    LIMIT = "LIMIT"
-
-
-class FxMode(StrEnum):
-    MANUAL = "MANUAL"
-    AUTO = "AUTO"
-
-
 class IntentStatus(StrEnum):
     PLANNED = "PLANNED"
     BLOCKED = "BLOCKED"
     PAPER_FILLED = "PAPER_FILLED"
     CONFIRMATION_REQUIRED = "CONFIRMATION_REQUIRED"
-
-
-class ExecutionProfile(BaseModel):
-    order_type: OrderType = OrderType.LIMIT
-    schedule: Literal["REGULAR_SESSION"] = "REGULAR_SESSION"
-    slices: int = Field(default=1, ge=1, le=20)
-    max_reprice_attempts: int = Field(default=2, ge=0, le=10)
-    reprice_ticks: int = Field(default=1, ge=0, le=20)
-    fee_rate_pct: Decimal = Field(default=Decimal("0.25"), ge=0, le=10)
-    fx_mode: FxMode = FxMode.MANUAL
-    max_auto_fx_amount: Decimal | None = Field(default=None, gt=0)
-
-    @model_validator(mode="after")
-    def validate_fx_limit(self) -> ExecutionProfile:
-        if self.fx_mode == FxMode.AUTO and self.max_auto_fx_amount is None:
-            raise ValueError("자동 환전에는 1회 환전 한도가 필요합니다.")
-        return self
 
 
 class RiskPolicy(BaseModel):
@@ -65,8 +37,6 @@ class RiskPolicy(BaseModel):
     max_daily_order_count: int = Field(gt=0)
     max_symbol_weight_pct: Decimal = Field(gt=0, le=100)
     max_daily_loss: Decimal = Field(gt=0)
-    max_reprice_attempts: int = Field(ge=0, le=10)
-
     @model_validator(mode="after")
     def validate_daily_notional(self) -> RiskPolicy:
         if self.max_order_notional > self.max_daily_notional:
@@ -200,8 +170,9 @@ class OrderPlanner:
                     violations=tuple(violations),
                 )
             )
-            planned_daily_notional += projected_notional
-            planned_daily_count += 1
+            if status == IntentStatus.PLANNED:
+                planned_daily_notional += projected_notional
+                planned_daily_count += 1
             pause_reasons.extend(violations)
 
         intents = tuple(

@@ -6,6 +6,7 @@ from hashlib import sha256
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from wallant.api.dependencies import get_actor, get_session
@@ -19,10 +20,13 @@ from wallant.api.schemas import (
 )
 from wallant.api.serializers import json_value
 from wallant.domain.evaluator import EvaluatorRegistry, StrategyEvaluationError
+from wallant.domain.execution import DailyRiskUsage, IntentStatus, RiskPolicy
+from wallant.domain.money import ZERO
 from wallant.domain.strategy import StrategyLifecycle
 from wallant.persistence.models import (
     AccountRecord,
     AuditEventRecord,
+    DailyRiskUsageRecord,
     OrderIntentRecord,
     StrategyRunRecord,
     StrategyStateRecord,
@@ -33,6 +37,22 @@ from wallant.research.paper import PaperSession, PaperTradingService
 from wallant.research.rolling import RollingValidationService
 
 router = APIRouter(prefix="/research", tags=["research"])
+
+
+def _risk_policy(account: AccountRecord) -> RiskPolicy:
+    risk = account.risk_policy
+    if risk is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="저장된 위험 한도가 없는 계좌는 모의투자에 사용할 수 없습니다.",
+        )
+    return RiskPolicy(
+        max_order_notional=risk.max_order_notional,
+        max_daily_notional=risk.max_daily_notional,
+        max_daily_order_count=risk.max_daily_order_count,
+        max_symbol_weight_pct=risk.max_symbol_weight_pct,
+        max_daily_loss=risk.max_daily_loss,
+    )
 
 
 def _version(session: Session, version_id: UUID):
@@ -156,20 +176,20 @@ def create_paper_session(
             status_code=status.HTTP_409_CONFLICT,
             detail="PAPER 단계 전략 버전만 모의투자 세션을 시작할 수 있습니다.",
         )
-    if payload.account_id and session.get(AccountRecord, str(payload.account_id)) is None:
+    account = session.get(AccountRecord, str(payload.account_id))
+    if account is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="모의투자에 연결할 계좌를 찾을 수 없습니다.",
         )
-    paper_account_id = uuid4()
+    _risk_policy(account)
     run = StrategyRunRecord(
         id=str(uuid4()),
         strategy_version_id=str(version.id),
         run_type="PAPER",
         status="RUNNING",
         evidence={
-            "account_id": str(paper_account_id),
-            "persist_account_id": str(payload.account_id) if payload.account_id else None,
+            "account_id": str(payload.account_id),
             "previous_state": {},
             "previous_target_weights": {},
             "evaluated_days": 0,
@@ -186,7 +206,7 @@ def create_paper_session(
             resource_id=str(version.id),
             details={
                 "paper_session_id": run.id,
-                "account_id": str(payload.account_id) if payload.account_id else None,
+                "account_id": str(payload.account_id),
             },
         )
     )
@@ -219,17 +239,26 @@ def paper_step(
             separators=(",", ":"),
         ).encode("utf-8")
     ).hexdigest()
-    if run.end_date == payload.context.as_of:
+    last_attempt_date = evidence.get("last_attempt_date")
+    if last_attempt_date == payload.context.as_of.isoformat():
         if (
             evidence.get("last_request_checksum") == request_checksum
             and evidence.get("last_result") is not None
         ):
             return evidence["last_result"]
+        if (
+            evidence.get("last_request_checksum") == request_checksum
+            and evidence.get("last_error") is not None
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail=evidence["last_error"],
+            )
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="같은 평가일에 서로 다른 모의투자 입력을 적용할 수 없습니다.",
         )
-    if run.end_date and payload.context.as_of < run.end_date:
+    if last_attempt_date and payload.context.as_of.isoformat() < last_attempt_date:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="모의투자 입력은 평가일 순서대로 적용해야 합니다.",
@@ -242,6 +271,27 @@ def paper_step(
         signal_count=int(evidence.get("signal_count", 0)),
         error_count=int(evidence.get("error_count", 0)),
     )
+    account = session.get(AccountRecord, evidence["account_id"])
+    if account is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="연결된 계좌를 찾을 수 없습니다.")
+    risk_policy = _risk_policy(account)
+    usage_key = {
+        "account_id": account.id,
+        "usage_date": payload.context.as_of,
+    }
+    usage_record = session.scalar(
+        select(DailyRiskUsageRecord)
+        .where(
+            DailyRiskUsageRecord.account_id == usage_key["account_id"],
+            DailyRiskUsageRecord.usage_date == usage_key["usage_date"],
+        )
+        .with_for_update()
+    )
+    daily_usage = DailyRiskUsage(
+        order_notional=usage_record.order_notional if usage_record else ZERO,
+        order_count=usage_record.order_count if usage_record else 0,
+        realized_loss=usage_record.realized_loss if usage_record else ZERO,
+    )
     try:
         result = PaperTradingService().step(
             session=paper_session,
@@ -249,28 +299,37 @@ def paper_step(
             context=payload.context,
             portfolio=payload.portfolio,
             quotes=payload.quotes,
-            risk_policy=payload.risk_policy,
+            risk_policy=risk_policy,
+            daily_usage=daily_usage,
         )
     except (ValueError, StrategyEvaluationError) as exc:
-        run.evidence = {**evidence, "error_count": paper_session.error_count}
+        run.evidence = {
+            **evidence,
+            "error_count": paper_session.error_count,
+            "last_attempt_date": payload.context.as_of.isoformat(),
+            "last_request_checksum": request_checksum,
+            "last_error": str(exc),
+            "last_result": None,
+        }
         session.commit()
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)) from exc
 
     serialized_result = json_value(result)
     run.evidence = {
         "account_id": str(paper_session.account_id),
-        "persist_account_id": evidence.get("persist_account_id"),
         "previous_state": json_value(paper_session.previous_state),
         "previous_target_weights": json_value(paper_session.previous_target_weights),
         **result.evidence,
+        "last_attempt_date": payload.context.as_of.isoformat(),
         "last_request_checksum": request_checksum,
+        "last_error": None,
         "last_result": serialized_result,
     }
     run.start_date = run.start_date or result.evaluation.as_of
     run.end_date = result.evaluation.as_of
     session.add(
         StrategyStateRecord(
-            account_id=None,
+            account_id=account.id,
             strategy_version_id=str(version.id),
             as_of_date=result.evaluation.as_of,
             state=json_value(result.evaluation.state),
@@ -282,7 +341,7 @@ def paper_step(
         session.add(
             OrderIntentRecord(
                 idempotency_key=intent.idempotency_key,
-                account_id=evidence.get("persist_account_id"),
+                account_id=account.id,
                 strategy_version_id=str(version.id),
                 signal_date=intent.signal_date,
                 symbol=intent.symbol,
@@ -295,6 +354,18 @@ def paper_step(
                 payload={"violations": list(intent.violations)},
             )
         )
+    planned = [intent for intent in result.order_plan.intents if intent.status != IntentStatus.BLOCKED]
+    if usage_record is None:
+        usage_record = DailyRiskUsageRecord(
+            account_id=account.id,
+            usage_date=payload.context.as_of,
+            order_notional=ZERO,
+            order_count=0,
+            realized_loss=ZERO,
+        )
+        session.add(usage_record)
+    usage_record.order_notional += sum((intent.notional for intent in planned), ZERO)
+    usage_record.order_count += len(planned)
     try:
         session.commit()
     except Exception:

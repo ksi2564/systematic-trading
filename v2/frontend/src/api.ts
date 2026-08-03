@@ -19,21 +19,29 @@ export type StrategyVersion = {
 export type StrategyDefinition = {
   name: string;
   description: string;
-  engine: 'QQQM_DRAWDOWN_V2' | 'RULE_ALLOCATION_V1';
+  engine: 'QQQM_DRAWDOWN_V2' | 'RULE_ALLOCATION_V1' | 'SIGNAL_TRADING_V1';
   market: 'US' | 'KRX';
   signal_symbol: string;
   schedule: string;
   tolerance_pct: string;
   universe: {
-    kind: 'FIXED' | 'SCREEN';
     market: 'US' | 'KRX';
     symbols: string[];
-    filters: unknown[];
-    selection_limit: number;
   };
   parameters: Record<string, unknown>;
   data_requirements: unknown[];
   rules: unknown[];
+  signal_rules: {
+    kind: 'PRICE_MA_CROSS' | 'MA_CROSS' | 'HIGH_BREAKOUT' | 'RSI_RECOVERY';
+    ma_period: number;
+    fast_period: number;
+    slow_period: number;
+    breakout_period: number;
+    rsi_period: number;
+    rsi_entry_threshold: string;
+    rsi_exit_threshold: string;
+    target_weight_pct: string;
+  } | null;
   protections: {
     stop_loss_pct: string | null;
     take_profit_pct: string | null;
@@ -59,23 +67,12 @@ export type Account = {
   status: 'ACTIVE' | 'PAUSED';
   status_reason: string | null;
   active_strategy_version_id: string | null;
-  execution_profile: {
-    order_type: string;
-    schedule: string;
-    slices: number;
-    max_reprice_attempts: number;
-    reprice_ticks: number;
-    fee_rate_pct: string;
-    fx_mode: 'MANUAL' | 'AUTO';
-    max_auto_fx_amount: string | null;
-  };
   risk_policy: {
     max_order_notional: string;
     max_daily_notional: string;
     max_daily_order_count: number;
     max_symbol_weight_pct: string;
     max_daily_loss: string;
-    max_reprice_attempts: number;
   };
 };
 

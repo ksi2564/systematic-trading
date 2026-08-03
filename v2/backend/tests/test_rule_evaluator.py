@@ -12,7 +12,6 @@ from wallant.domain.strategy import (
     EvaluationContext,
     Market,
     Operand,
-    ProtectionRules,
     StrategyDefinition,
     StrategyEngine,
     StrategyVersion,
@@ -75,7 +74,7 @@ def test_폼_규칙은_우선순위에_따라_목표비중을_선택한다() -> 
     }
 
 
-def test_폼_규칙전략에도_공통_손절보호를_적용한다() -> None:
+def test_규칙전략에는_개별종목_손절보호를_섞을_수_없다() -> None:
     rule = AllocationRule(
         name="기본",
         priority=1,
@@ -90,28 +89,16 @@ def test_폼_규칙전략에도_공통_손절보호를_적용한다() -> None:
         ),
         target_weights={"SPY": 100},
     )
-    version = StrategyVersion(
-        definition=StrategyDefinition(
+    with pytest.raises(ValueError, match="개별종목 신호 전략"):
+        StrategyDefinition(
             name="손절 규칙 전략",
             engine=StrategyEngine.RULE_ALLOCATION_V1,
             market=Market.US,
             universe=UniverseDefinition(symbols=["SPY"]),
             signal_symbol="SPY",
             rules=[rule],
-            protections=ProtectionRules(stop_loss_pct=10),
+            protections={"stop_loss_pct": 10},
         )
-    )
-    result = EvaluatorRegistry().evaluate(
-        version,
-        EvaluationContext(
-            as_of=date(2026, 1, 1),
-            market={"SPY.close": 90},
-            portfolio={"unrealized_return_pct": -12},
-        ),
-    )
-    assert result.base_target_weights == {"SPY": Decimal("100")}
-    assert result.target_weights == {"SPY": Decimal("0")}
-    assert "STOP_LOSS" in result.events
 
 
 def test_규칙의_목표종목과_우선순위는_모호할_수_없다() -> None:

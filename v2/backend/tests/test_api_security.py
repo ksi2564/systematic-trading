@@ -18,17 +18,12 @@ def account_payload() -> dict:
         "name": "보안 테스트 계좌",
         "market": "US",
         "currency": "USD",
-        "execution_profile": {
-            "order_type": "LIMIT",
-            "max_reprice_attempts": 2,
-        },
         "risk_policy": {
             "max_order_notional": "10000",
             "max_daily_notional": "30000",
             "max_daily_order_count": 10,
             "max_symbol_weight_pct": "100",
             "max_daily_loss": "1000",
-            "max_reprice_attempts": 2,
         },
     }
 
@@ -133,17 +128,3 @@ def test_운영_api의_조회경로도_access_인증을_요구한다(
             headers={"Cf-Access-Authenticated-User-Email": "owner@wall-ant.com"},
         )
         assert allowed.status_code == 200
-
-
-def test_실행프로필은_계좌_재가격_한도를_넘을_수_없다(tmp_path: Path) -> None:
-    settings = Settings(
-        environment="test",
-        database_url=f"sqlite+pysqlite:///{tmp_path / 'risk.db'}",
-        parquet_root=tmp_path / "market",
-    )
-    payload = account_payload()
-    payload["execution_profile"]["max_reprice_attempts"] = 3
-    with TestClient(create_app(settings)) as client:
-        response = client.post("/api/v2/accounts", json=payload)
-    assert response.status_code == 422
-    assert "재가격 횟수" in response.text

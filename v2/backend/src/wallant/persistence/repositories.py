@@ -7,7 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
-from wallant.domain.execution import ExecutionProfile, RiskPolicy
+from wallant.domain.execution import RiskPolicy
 from wallant.domain.strategy import (
     StrategyDefinition,
     StrategyLifecycle,
@@ -16,7 +16,6 @@ from wallant.domain.strategy import (
 from wallant.persistence.models import (
     AccountRecord,
     AuditEventRecord,
-    ExecutionProfileRecord,
     GlobalControlRecord,
     RiskPolicyRecord,
     StrategyRecord,
@@ -222,7 +221,6 @@ class AccountRepository:
         statement = (
             select(AccountRecord)
             .options(
-                selectinload(AccountRecord.execution_profile),
                 selectinload(AccountRecord.risk_policy),
             )
             .order_by(AccountRecord.created_at)
@@ -235,7 +233,6 @@ class AccountRepository:
         name: str,
         market: str,
         currency: str,
-        execution_profile: ExecutionProfile,
         risk_policy: RiskPolicy,
         actor: str = "system",
     ) -> AccountRecord:
@@ -245,16 +242,6 @@ class AccountRepository:
             currency=currency.strip().upper(),
             status="PAUSED",
             status_reason="신규 계좌는 명시적으로 활성화해야 합니다.",
-        )
-        account.execution_profile = ExecutionProfileRecord(
-            order_type=execution_profile.order_type.value,
-            schedule=execution_profile.schedule,
-            slices=execution_profile.slices,
-            max_reprice_attempts=execution_profile.max_reprice_attempts,
-            reprice_ticks=execution_profile.reprice_ticks,
-            fee_rate_pct=execution_profile.fee_rate_pct,
-            fx_mode=execution_profile.fx_mode.value,
-            max_auto_fx_amount=execution_profile.max_auto_fx_amount,
         )
         account.risk_policy = RiskPolicyRecord(**risk_policy.model_dump())
         self.session.add(account)
@@ -310,7 +297,6 @@ class AccountRepository:
             select(AccountRecord)
             .where(AccountRecord.id == str(account_id))
             .options(
-                selectinload(AccountRecord.execution_profile),
                 selectinload(AccountRecord.risk_policy),
             )
         )

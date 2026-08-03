@@ -11,6 +11,7 @@ from wallant.domain.execution import (
     OrderPlanner,
     RiskPolicy,
 )
+from wallant.domain.money import ZERO
 from wallant.domain.portfolio import Portfolio
 from wallant.domain.strategy import EvaluationContext, EvaluationResult, StrategyVersion
 
@@ -52,10 +53,26 @@ class PaperTradingService:
         risk_policy: RiskPolicy,
         daily_usage: DailyRiskUsage | None = None,
     ) -> PaperStepResult:
+        symbol = version.definition.signal_symbol
+        positions = [position for position in portfolio.positions if position.symbol == symbol]
+        quantity = sum((position.quantity for position in positions), ZERO)
+        average_price = (
+            sum((position.average_price * position.quantity for position in positions), ZERO) / quantity
+            if quantity > ZERO
+            else ZERO
+        )
         merged_context = context.model_copy(
             update={
                 "previous_state": session.previous_state,
                 "previous_target_weights": session.previous_target_weights,
+                "portfolio": {
+                    **context.portfolio,
+                    "position_open": quantity > ZERO,
+                    "quantity": quantity,
+                    "average_price": average_price,
+                    "cash": portfolio.cash,
+                    "total_value": portfolio.total_value,
+                },
             }
         )
         try:

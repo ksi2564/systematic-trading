@@ -307,7 +307,9 @@ function Strategies({
   onTransition: (versionId: string, target: Lifecycle) => void;
 }) {
   const [builderOpen, setBuilderOpen] = useState(false);
-  const [engine, setEngine] = useState<'QQQM_DRAWDOWN_V2' | 'RULE_ALLOCATION_V1'>(
+  const [engine, setEngine] = useState<
+    'QQQM_DRAWDOWN_V2' | 'RULE_ALLOCATION_V1' | 'SIGNAL_TRADING_V1'
+  >(
     'QQQM_DRAWDOWN_V2'
   );
   const [name, setName] = useState('나의 낙폭 자산배분 전략');
@@ -318,26 +320,39 @@ function Strategies({
   const [stopLoss, setStopLoss] = useState('');
   const [takeProfit, setTakeProfit] = useState('');
   const [trailingStop, setTrailingStop] = useState('');
+  const [signalKind, setSignalKind] = useState<
+    'PRICE_MA_CROSS' | 'MA_CROSS' | 'HIGH_BREAKOUT' | 'RSI_RECOVERY'
+  >('PRICE_MA_CROSS');
+  const [maPeriod, setMaPeriod] = useState('200');
+  const [fastPeriod, setFastPeriod] = useState('20');
+  const [slowPeriod, setSlowPeriod] = useState('50');
+  const [breakoutPeriod, setBreakoutPeriod] = useState('20');
+  const [rsiPeriod, setRsiPeriod] = useState('14');
+  const [rsiEntry, setRsiEntry] = useState('30');
+  const [rsiExit, setRsiExit] = useState('70');
   const submit = (event: FormEvent) => {
     event.preventDefault();
     const normalized = symbols.split(',').map((value) => value.trim().toUpperCase()).filter(Boolean);
     const normalizedSignal = signal.toUpperCase();
     const normalizedDefensive = defensiveSymbol.toUpperCase();
     const isRule = engine === 'RULE_ALLOCATION_V1';
+    const isSignal = engine === 'SIGNAL_TRADING_V1';
     const universeSymbols = isRule
       ? Array.from(new Set([...normalized, normalizedSignal, normalizedDefensive]))
-      : normalized;
+      : isSignal ? [normalizedSignal] : normalized;
     const offensiveSymbol = normalized.find((symbol) => symbol !== normalizedDefensive) ?? normalizedSignal;
     onCreate({
       name,
-      description: '폼 기반으로 만든 고정 종목군 전략 초안',
+      description: isSignal
+        ? '새 진입 신호와 자연 청산·보호 청산을 사용하는 개별종목 전략'
+        : '폼 기반으로 만든 고정 종목군 전략 초안',
       engine,
       market: 'US',
       signal_symbol: normalizedSignal,
       schedule: 'EOD',
       tolerance_pct: tolerance,
-      universe: { kind: 'FIXED', market: 'US', symbols: universeSymbols, filters: [], selection_limit: 50 },
-      parameters: isRule ? {} : {
+      universe: { market: 'US', symbols: universeSymbols },
+      parameters: isRule || isSignal ? {} : {
         drawdown_thresholds: ['15', '25', '35', '45'],
         recovery_activation_max_drawdown_pct: '15',
         recovery_drawdown_pct: '10',
@@ -377,10 +392,21 @@ function Strategies({
           next_state: 'NORMAL'
         }
       ] : [],
+      signal_rules: isSignal ? {
+        kind: signalKind,
+        ma_period: Number(maPeriod),
+        fast_period: Number(fastPeriod),
+        slow_period: Number(slowPeriod),
+        breakout_period: Number(breakoutPeriod),
+        rsi_period: Number(rsiPeriod),
+        rsi_entry_threshold: rsiEntry,
+        rsi_exit_threshold: rsiExit,
+        target_weight_pct: '100'
+      } : null,
       protections: {
-        stop_loss_pct: stopLoss || null,
-        take_profit_pct: takeProfit || null,
-        trailing_stop_pct: trailingStop || null
+        stop_loss_pct: isSignal ? stopLoss || null : null,
+        take_profit_pct: isSignal ? takeProfit || null : null,
+        trailing_stop_pct: isSignal ? trailingStop || null : null
       }
     });
     setBuilderOpen(false);
@@ -411,15 +437,20 @@ function Strategies({
                     setSymbols('QQQM, QLD, TQQQ');
                     setSignal('QQQM');
                     setName('나의 낙폭 자산배분 전략');
-                  } else {
+                  } else if (value === 'RULE_ALLOCATION_V1') {
                     setSymbols('SPY');
                     setSignal('SPY');
                     setName('나의 200일선 자산배분 전략');
+                  } else {
+                    setSymbols('AAPL');
+                    setSignal('AAPL');
+                    setName('나의 개별종목 신호 전략');
                   }
                 }}
               >
                 <option value="QQQM_DRAWDOWN_V2">낙폭 상태 전략</option>
                 <option value="RULE_ALLOCATION_V1">조건식 자산배분</option>
+                <option value="SIGNAL_TRADING_V1">개별종목 매수·매도 신호</option>
               </select>
             </Field>
             <Field label="전략 이름"><input value={name} onChange={(e) => setName(e.target.value)} required /></Field>
@@ -434,10 +465,45 @@ function Strategies({
                 />
               </Field>
             ) : null}
+            {engine === 'SIGNAL_TRADING_V1' ? (
+              <>
+                <Field label="매수 신호">
+                  <select value={signalKind} onChange={(event) => setSignalKind(event.target.value as typeof signalKind)}>
+                    <option value="PRICE_MA_CROSS">종가가 이동평균 상향 돌파</option>
+                    <option value="MA_CROSS">단기선이 장기선 상향 돌파</option>
+                    <option value="HIGH_BREAKOUT">이전 고점 돌파</option>
+                    <option value="RSI_RECOVERY">과매도 구간에서 RSI 회복</option>
+                  </select>
+                </Field>
+                {signalKind === 'PRICE_MA_CROSS' ? (
+                  <Field label="이동평균 기간"><input type="number" min="2" max="500" value={maPeriod} onChange={(event) => setMaPeriod(event.target.value)} /></Field>
+                ) : null}
+                {signalKind === 'MA_CROSS' ? (
+                  <>
+                    <Field label="단기 이동평균"><input type="number" min="2" max="500" value={fastPeriod} onChange={(event) => setFastPeriod(event.target.value)} /></Field>
+                    <Field label="장기 이동평균"><input type="number" min="3" max="500" value={slowPeriod} onChange={(event) => setSlowPeriod(event.target.value)} /></Field>
+                  </>
+                ) : null}
+                {signalKind === 'HIGH_BREAKOUT' ? (
+                  <Field label="고점·저점 확인 기간"><input type="number" min="2" max="500" value={breakoutPeriod} onChange={(event) => setBreakoutPeriod(event.target.value)} /></Field>
+                ) : null}
+                {signalKind === 'RSI_RECOVERY' ? (
+                  <>
+                    <Field label="RSI 기간"><input type="number" min="2" max="100" value={rsiPeriod} onChange={(event) => setRsiPeriod(event.target.value)} /></Field>
+                    <Field label="과매도 회복 기준"><input type="number" min="1" max="99" value={rsiEntry} onChange={(event) => setRsiEntry(event.target.value)} /></Field>
+                    <Field label="과매수 청산 기준"><input type="number" min="1" max="99" value={rsiExit} onChange={(event) => setRsiExit(event.target.value)} /></Field>
+                  </>
+                ) : null}
+              </>
+            ) : null}
             <Field label="리밸런싱 허용 오차 (%)"><input type="number" min="0" max="100" step="0.1" value={tolerance} onChange={(e) => setTolerance(e.target.value)} /></Field>
-            <Field label="전략 손절 (%)"><input type="number" min="0.1" max="100" value={stopLoss} placeholder="사용하지 않음" onChange={(e) => setStopLoss(e.target.value)} /></Field>
-            <Field label="전략 익절 (%)"><input type="number" min="0.1" value={takeProfit} placeholder="사용하지 않음" onChange={(e) => setTakeProfit(e.target.value)} /></Field>
-            <Field label="트레일링 스톱 (%)"><input type="number" min="0.1" max="100" value={trailingStop} placeholder="사용하지 않음" onChange={(e) => setTrailingStop(e.target.value)} /></Field>
+            {engine === 'SIGNAL_TRADING_V1' ? (
+              <>
+                <Field label="손절 (%)"><input type="number" min="0.1" max="100" value={stopLoss} placeholder="사용하지 않음" onChange={(e) => setStopLoss(e.target.value)} /></Field>
+                <Field label="익절 (%)"><input type="number" min="0.1" value={takeProfit} placeholder="사용하지 않음" onChange={(e) => setTakeProfit(e.target.value)} /></Field>
+                <Field label="트레일링 스톱 (%)"><input type="number" min="0.1" max="100" value={trailingStop} placeholder="사용하지 않음" onChange={(e) => setTrailingStop(e.target.value)} /></Field>
+              </>
+            ) : null}
             <div className="form-actions"><button className="primary-button" type="submit"><Save size={16} /> 초안 저장</button></div>
           </form>
         </Card>
@@ -758,12 +824,6 @@ function Accounts({
   const [maxCount, setMaxCount] = useState('10');
   const [maxWeight, setMaxWeight] = useState('100');
   const [maxLoss, setMaxLoss] = useState('2000');
-  const [orderType, setOrderType] = useState<'MARKET' | 'LIMIT'>('LIMIT');
-  const [slices, setSlices] = useState('1');
-  const [maxReprice, setMaxReprice] = useState('2');
-  const [repriceTicks, setRepriceTicks] = useState('1');
-  const [fxMode, setFxMode] = useState<'MANUAL' | 'AUTO'>('MANUAL');
-  const [maxAutoFx, setMaxAutoFx] = useState('5000');
   const [assignment, setAssignment] = useState<Record<string, string>>({});
   const [credentialAccount, setCredentialAccount] = useState<Account | null>(null);
   const [appKey, setAppKey] = useState('');
@@ -779,16 +839,10 @@ function Accounts({
     event.preventDefault();
     onCreate({
       name, market: 'US', currency: 'USD',
-      execution_profile: {
-        order_type: orderType, schedule: 'REGULAR_SESSION', slices: Number(slices),
-        max_reprice_attempts: Number(maxReprice), reprice_ticks: Number(repriceTicks),
-        fee_rate_pct: '0.25',
-        fx_mode: fxMode, max_auto_fx_amount: fxMode === 'AUTO' ? maxAutoFx : null
-      },
       risk_policy: {
         max_order_notional: maxOrder, max_daily_notional: maxDaily,
         max_daily_order_count: Number(maxCount), max_symbol_weight_pct: maxWeight,
-        max_daily_loss: maxLoss, max_reprice_attempts: Number(maxReprice)
+        max_daily_loss: maxLoss
       }
     });
     setOpen(false);
@@ -821,32 +875,6 @@ function Accounts({
             <Field label="일일 주문 횟수"><input type="number" value={maxCount} onChange={(e) => setMaxCount(e.target.value)} /></Field>
             <Field label="종목 최대 비중 (%)"><input type="number" value={maxWeight} onChange={(e) => setMaxWeight(e.target.value)} /></Field>
             <Field label="일일 손실 한도 (USD)"><input type="number" value={maxLoss} onChange={(e) => setMaxLoss(e.target.value)} /></Field>
-            <Field label="주문 방식">
-              <select value={orderType} onChange={(event) => setOrderType(event.target.value as 'MARKET' | 'LIMIT')}>
-                <option value="LIMIT">지정가</option>
-                <option value="MARKET">시장가</option>
-              </select>
-            </Field>
-            <Field label="분할 주문 수">
-              <input type="number" min="1" max="20" value={slices} onChange={(event) => setSlices(event.target.value)} />
-            </Field>
-            <Field label="최대 재가격 횟수">
-              <input type="number" min="0" max="10" value={maxReprice} onChange={(event) => setMaxReprice(event.target.value)} />
-            </Field>
-            <Field label="재가격 틱">
-              <input type="number" min="0" max="20" value={repriceTicks} onChange={(event) => setRepriceTicks(event.target.value)} />
-            </Field>
-            <Field label="환전 방식">
-              <select value={fxMode} onChange={(event) => setFxMode(event.target.value as 'MANUAL' | 'AUTO')}>
-                <option value="MANUAL">수동 환전</option>
-                <option value="AUTO">한도 내 자동 환전</option>
-              </select>
-            </Field>
-            {fxMode === 'AUTO' ? (
-              <Field label="1회 자동 환전 한도">
-                <input type="number" value={maxAutoFx} onChange={(event) => setMaxAutoFx(event.target.value)} />
-              </Field>
-            ) : null}
             <div className="form-actions"><button className="primary-button" type="submit"><Save size={16} /> 정지 상태로 생성</button></div>
           </form>
         </Card>
@@ -883,8 +911,8 @@ function Accounts({
               <div><dt>단일 주문</dt><dd>{formatCurrency(account.risk_policy.max_order_notional)}</dd></div>
               <div><dt>일일 합계</dt><dd>{formatCurrency(account.risk_policy.max_daily_notional)}</dd></div>
               <div><dt>최대 비중</dt><dd>{formatNumber(account.risk_policy.max_symbol_weight_pct)}%</dd></div>
-              <div><dt>주문 방식</dt><dd>{account.execution_profile.order_type} · {account.execution_profile.slices}분할</dd></div>
-              <div><dt>재가격</dt><dd>{account.risk_policy.max_reprice_attempts}회 · {account.execution_profile.reprice_ticks}틱</dd></div>
+              <div><dt>일일 주문 수</dt><dd>{account.risk_policy.max_daily_order_count}회</dd></div>
+              <div><dt>일일 손실</dt><dd>{formatCurrency(account.risk_policy.max_daily_loss)}</dd></div>
             </dl>
             <div className="account-assignment">
               <select

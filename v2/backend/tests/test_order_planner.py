@@ -2,12 +2,8 @@ from datetime import date
 from decimal import Decimal
 from uuid import uuid4
 
-import pytest
-
 from wallant.domain.execution import (
     DailyRiskUsage,
-    ExecutionProfile,
-    FxMode,
     IntentStatus,
     OrderPlanner,
     OrderSide,
@@ -35,7 +31,6 @@ def policy(max_order: str = "100000") -> RiskPolicy:
         max_daily_order_count=20,
         max_symbol_weight_pct=100,
         max_daily_loss=10000,
-        max_reprice_attempts=2,
     )
 
 
@@ -94,13 +89,6 @@ def test_단일주문_한도_위반은_계좌정지를_요구한다() -> None:
     assert plan.pause_required
     assert any(item.status == IntentStatus.BLOCKED for item in plan.intents)
     assert "MAX_ORDER_NOTIONAL" in plan.reasons
-
-
-def test_자동환전은_반드시_금액한도를_요구한다() -> None:
-    with pytest.raises(ValueError, match="환전 한도"):
-        ExecutionProfile(fx_mode=FxMode.AUTO)
-    profile = ExecutionProfile(fx_mode=FxMode.AUTO, max_auto_fx_amount="5000")
-    assert profile.max_auto_fx_amount == Decimal("5000")
 
 
 def test_일일손실이_한도에_도달하면_새주문을_차단한다() -> None:

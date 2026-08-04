@@ -74,6 +74,8 @@ for command_name in python3 docker systemctl curl openssl ss tar sha256sum runus
 done
 python3 -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 12) else 1)' \
   || fail "Python 3.12 or newer is required."
+python3 -c 'import ensurepip, venv' \
+  || fail "Python venv support is required; install python3.12-venv."
 docker compose version >/dev/null 2>&1 || fail "Docker Compose plugin is required."
 docker info >/dev/null 2>&1 || fail "Docker daemon is not available."
 

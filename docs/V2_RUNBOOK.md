@@ -132,6 +132,11 @@ Access 로그인 전 리디렉션, 허용 이메일의 OTP 로그인, UI와 동�
 원본 API의 무인증 401, `WALLANT_EXECUTION_ENABLED=false`,
 `WALLANT_BROKER_ADAPTER=disabled`를 모두 확인한다.
 
+Caddy 원본은 loopback에만 바인딩하되 `127.0.0.1`과 `app.wall-ant.com` Host를 모두
+허용한다. Tunnel은 별도 HTTP Host Header override가 없으면 공개 호스트를 원본까지
+전달하므로, 원본 검증도 반드시 `Host: app.wall-ant.com`으로 실행한다. 로컬 IP Host만
+검증하면 실제 브라우저 요청이 빈 `200` 응답을 받는 구성을 놓칠 수 있다.
+
 ## 운영 전환 전 별도 승인 항목
 
 - KIS 공식 데이터 어댑터와 실주문 어댑터 구현·검증

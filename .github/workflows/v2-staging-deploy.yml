@@ -280,6 +280,7 @@ jobs:
             "${STAGING_USER}@${STAGING_HOST}" \
             "sudo bash -s" <<'REMOTE'
           set -euo pipefail
+          public_host="app.wall-ant.com"
           systemctl is-active wallant-v2-api.service
           systemctl is-active wallant-v2-cloudflared.service
           systemctl is-active trading.service
@@ -287,9 +288,11 @@ jobs:
           curl -fsS http://127.0.0.1:8000/health
           echo
           unauthorized_status="$(curl -sS -o /dev/null -w '%{http_code}' \
+            -H "Host: ${public_host}" \
             http://127.0.0.1:18082/api/v2/operations/status)"
           [[ "${unauthorized_status}" == 401 ]]
-          curl -fsS http://127.0.0.1:18082/ | grep -F '<div id="root"></div>' >/dev/null
+          curl -fsS -H "Host: ${public_host}" http://127.0.0.1:18082/ \
+            | grep -F '<div id="root"></div>' >/dev/null
           grep -Fx 'WALLANT_ENVIRONMENT=production' /etc/wallant/v2.env >/dev/null
           grep -Fx 'WALLANT_EXECUTION_ENABLED=false' /etc/wallant/v2.env >/dev/null
           grep -Fx 'WALLANT_BROKER_ADAPTER=disabled' /etc/wallant/v2.env >/dev/null

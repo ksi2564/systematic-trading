@@ -41,6 +41,7 @@ jobs:
             'LoadCredential=tunnel-token:/etc/wallant/cloudflared.token' \
             v2/infra/systemd/wallant-v2-cloudflared.service
           grep -F 'http://127.0.0.1:18082' v2/infra/Caddyfile.staging.example
+          grep -F 'http://app.wall-ant.com:18082' v2/infra/Caddyfile.staging.example
           grep -F 'bind 127.0.0.1' v2/infra/Caddyfile.staging.example
           venv_test_root="$(mktemp -d)"
           python3 -m venv "${venv_test_root}/release.incoming/venv"

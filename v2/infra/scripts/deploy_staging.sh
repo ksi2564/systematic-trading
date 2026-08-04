@@ -18,15 +18,14 @@ readonly systemd_unit="/etc/systemd/system/wallant-v2-api.service"
 
 previous_target=""
 current_switched=false
-service_was_enabled=false
 
 fail() {
   printf 'ERROR: %s\n' "$*" >&2
-  exit 1
+  rollback_on_error 1
 }
 
 rollback_on_error() {
-  local exit_code=$?
+  local exit_code="${1:-$?}"
   trap - ERR
 
   if [[ "${current_switched}" == true ]]; then
@@ -42,16 +41,14 @@ rollback_on_error() {
       printf 'Restored previous application release: %s\n' "${previous_target}" >&2
     else
       systemctl stop wallant-v2-api.service || true
-      if [[ "${service_was_enabled}" != true ]]; then
-        systemctl disable wallant-v2-api.service || true
-      fi
+      systemctl disable wallant-v2-api.service || true
       printf 'Stopped the failed first deployment. MySQL data was retained.\n' >&2
     fi
   fi
 
   exit "${exit_code}"
 }
-trap rollback_on_error ERR
+trap 'rollback_on_error $?' ERR
 
 [[ "${EUID}" -eq 0 ]] || fail "Run this script as root."
 [[ "${archive_path}" == /tmp/wallant-v2-*.tgz ]] || fail "Archive must be a v2 package under /tmp."
@@ -79,11 +76,16 @@ python3 -c 'import ensurepip, venv' \
 docker compose version >/dev/null 2>&1 || fail "Docker Compose plugin is required."
 docker info >/dev/null 2>&1 || fail "Docker daemon is not available."
 
-if systemctl is-enabled --quiet wallant-v2-api.service 2>/dev/null; then
-  service_was_enabled=true
-fi
 if [[ -L "${current_link}" ]]; then
-  previous_target="$(readlink -f "${current_link}")"
+  candidate_previous_target="$(readlink -f "${current_link}")"
+  if systemctl is-active --quiet wallant-v2-api.service \
+    && curl -fsS http://127.0.0.1:8000/health >/dev/null; then
+    previous_target="${candidate_previous_target}"
+  else
+    systemctl stop wallant-v2-api.service || true
+    systemctl disable wallant-v2-api.service || true
+    printf 'Ignoring an unhealthy previous release: %s\n' "${candidate_previous_target}" >&2
+  fi
 fi
 
 getent group wallant >/dev/null 2>&1 || groupadd --system wallant
@@ -198,6 +200,8 @@ for attempt in $(seq 1 30); do
     break
   fi
   if [[ "${attempt}" -eq 30 ]]; then
+    systemctl status wallant-v2-api.service --no-pager || true
+    journalctl -u wallant-v2-api.service -n 80 --no-pager || true
     fail "v2 API did not become healthy within 60 seconds."
   fi
   sleep 2

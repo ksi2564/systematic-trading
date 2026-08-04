@@ -94,6 +94,8 @@ WALLANT_BROKER_ADAPTER=disabled
 `/opt/wallant/current` 심볼릭 링크로 전환된다. API 시작에 실패하면 링크와
 서비스를 직전 릴리스로 되돌린다. DB 마이그레이션은 자동 다운그레이드하지 않으므로
 호환되지 않는 스키마 변경은 배포 전에 별도 백업·복구 계획이 필요하다.
+이동 가능한 릴리스별 가상환경을 위해 systemd는 venv의 console script가 아니라
+`python -m uvicorn`으로 API를 시작한다.
 
 현재 t3.small 스테이징 서버에서 기존 Java 앱을 보호하기 위해 MySQL 컨테이너는
 640 MiB와 1 CPU, API는 512 MiB와 1 CPU를 상한으로 사용한다. swap은 장애 시

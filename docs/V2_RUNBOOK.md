@@ -73,9 +73,12 @@ v2 스테이징은 기존 Java 운영 앱과 같은 서버를 사용하되 다�
 **Deploy Production** 워크플로는 Java 앱 배포이므로 v2 작업에서 실행하지 않는다.
 
 1. 배포 자동화 변경을 `master`에 머지한다.
-2. 머지된 정확한 커밋에서 **v2 Release Candidate**를 다시 실행한다.
-3. **v2 Staging Deploy**에서 `mode=preflight`로 서버 요구 사항을 읽기 전용 점검한다.
-4. 점검이 통과하면 같은 워크플로를 `mode=deploy`로 실행하고 2번의 run ID를 입력한다.
+2. 최초 한 번 **v2 Staging Deploy**를 `mode=bootstrap`으로 실행해 Ubuntu 패키지의
+   Docker·Compose와 2 GiB swap을 준비한다. 기존 swap이 있으면 유지하고, 기존 Java와
+   Caddy 프로세스가 바뀌면 실패 처리한다.
+3. 머지된 정확한 커밋에서 **v2 Release Candidate**를 다시 실행한다.
+4. **v2 Staging Deploy**에서 `mode=preflight`로 서버 요구 사항을 읽기 전용 점검한다.
+5. 점검이 통과하면 같은 워크플로를 `mode=deploy`로 실행하고 3번의 run ID를 입력한다.
 
 배포는 RC 성공 여부와 커밋 SHA를 확인한 뒤에만 진행한다. 최초 설치 시
 `/etc/wallant/mysql.env`와 `/etc/wallant/v2.env`를 생성하고, 실행 차단 설정을
@@ -91,6 +94,12 @@ WALLANT_BROKER_ADAPTER=disabled
 `/opt/wallant/current` 심볼릭 링크로 전환된다. API 시작에 실패하면 링크와
 서비스를 직전 릴리스로 되돌린다. DB 마이그레이션은 자동 다운그레이드하지 않으므로
 호환되지 않는 스키마 변경은 배포 전에 별도 백업·복구 계획이 필요하다.
+
+현재 t3.small 스테이징 서버에서 기존 Java 앱을 보호하기 위해 MySQL 컨테이너는
+640 MiB와 1 CPU, API는 512 MiB와 1 CPU를 상한으로 사용한다. swap은 장애 시
+프로세스 종료 가능성을 낮추는 완충 장치이지, 운영 용량을 늘리는 수단은 아니다.
+실제 주문이나 큰 백테스트를 시작하기 전에는 더 큰 인스턴스에서 메모리 사용량을
+다시 검증한다.
 
 ### 웹 접근 연결
 

@@ -18,10 +18,11 @@ hostnamectl 2>/dev/null || hostname
 uname -a
 printf '\nCAPACITY\n'
 free -h
+swapon --show || true
 df -h / /opt 2>/dev/null || df -h /
 
 printf '\nREQUIRED COMMANDS\n'
-for command_name in python3 docker systemctl curl openssl ss tar sha256sum; do
+for command_name in python3 docker systemctl curl openssl ss swapon tar sha256sum; do
   require_command "${command_name}"
 done
 
@@ -48,6 +49,16 @@ if command -v docker >/dev/null 2>&1; then
     printf 'Docker daemon is not available.\n' >&2
     failures=$((failures + 1))
   fi
+fi
+
+memory_total_kib="$(awk '/^MemTotal:/ {print $2}' /proc/meminfo)"
+swap_total_kib="$(awk '/^SwapTotal:/ {print $2}' /proc/meminfo)"
+if ((memory_total_kib < 4 * 1024 * 1024 && swap_total_kib < 1024 * 1024)); then
+  printf 'Hosts with less than 4 GiB RAM require at least 1 GiB swap; found %d KiB.\n' \
+    "${swap_total_kib}" >&2
+  failures=$((failures + 1))
+else
+  printf 'OK memory safety: RAM=%d KiB swap=%d KiB\n' "${memory_total_kib}" "${swap_total_kib}"
 fi
 
 printf '\nSERVICE STATUS\n'

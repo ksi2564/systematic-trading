@@ -2,6 +2,10 @@ services:
   mysql:
     image: mysql:8.4
     restart: unless-stopped
+    cpus: 1.0
+    mem_limit: 640m
+    mem_reservation: 384m
+    pids_limit: 256
     ports:
       - "127.0.0.1:3307:3306"
     environment:
@@ -14,6 +18,9 @@ services:
       - --default-time-zone=+00:00
       - --character-set-server=utf8mb4
       - --collation-server=utf8mb4_0900_ai_ci
+      - --innodb-buffer-pool-size=256M
+      - --innodb-log-buffer-size=8M
+      - --max-connections=50
     volumes:
       - wallant-v2-mysql:/var/lib/mysql
     healthcheck:

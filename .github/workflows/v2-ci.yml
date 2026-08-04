@@ -14,6 +14,21 @@ permissions:
   contents: read
 
 jobs:
+  infra:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate deployment scripts and Compose config
+        env:
+          WALLANT_MYSQL_PASSWORD: ci-placeholder
+          WALLANT_MYSQL_ROOT_PASSWORD: ci-root-placeholder
+        run: |
+          bash -n \
+            v2/infra/scripts/bootstrap_staging.sh \
+            v2/infra/scripts/preflight_staging.sh \
+            v2/infra/scripts/deploy_staging.sh
+          docker compose -f v2/infra/compose.yaml config --quiet
+
   backend:
     runs-on: ubuntu-latest
     defaults:

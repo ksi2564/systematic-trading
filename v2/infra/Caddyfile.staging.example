@@ -1,9 +1,21 @@
 http://127.0.0.1:18082 {
+	bind 127.0.0.1
 	encode zstd gzip
+
+	log {
+		output file /var/log/caddy/wallant-v2-access.log
+		format console
+	}
 
 	@backend path /api/* /health
 	handle @backend {
-		reverse_proxy 127.0.0.1:8000
+		reverse_proxy 127.0.0.1:8000 {
+			header_up Cf-Access-Authenticated-User-Email {http.request.header.Cf-Access-Authenticated-User-Email}
+			header_up -X-Wallant-Actor
+			header_up X-Forwarded-For {remote_host}
+			header_up X-Forwarded-Proto {scheme}
+			header_up X-Forwarded-Host {host}
+		}
 	}
 
 	handle {
@@ -15,6 +27,7 @@ http://127.0.0.1:18082 {
 	header {
 		-Server
 		X-Content-Type-Options nosniff
+		X-Frame-Options DENY
 		Referrer-Policy same-origin
 		Permissions-Policy "camera=(), microphone=(), geolocation=()"
 		Content-Security-Policy "default-src 'self'; font-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'"

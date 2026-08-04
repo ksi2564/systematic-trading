@@ -25,12 +25,23 @@ jobs:
         run: |
           bash -n \
             v2/infra/scripts/bootstrap_staging.sh \
+            v2/infra/scripts/configure_access_staging.sh \
+            v2/infra/scripts/configure_cloudflare_tunnel.sh \
             v2/infra/scripts/preflight_staging.sh \
+            v2/infra/scripts/preflight_access_staging.sh \
             v2/infra/scripts/deploy_staging.sh
           docker compose -f v2/infra/compose.yaml config --quiet
           grep -F \
             'ExecStart=/opt/wallant/current/venv/bin/python -m uvicorn' \
             v2/infra/systemd/wallant-v2-api.service
+          grep -F -- \
+            '--token-file %d/tunnel-token' \
+            v2/infra/systemd/wallant-v2-cloudflared.service
+          grep -F \
+            'LoadCredential=tunnel-token:/etc/wallant/cloudflared.token' \
+            v2/infra/systemd/wallant-v2-cloudflared.service
+          grep -F 'http://127.0.0.1:18082' v2/infra/Caddyfile.staging.example
+          grep -F 'bind 127.0.0.1' v2/infra/Caddyfile.staging.example
           venv_test_root="$(mktemp -d)"
           python3 -m venv "${venv_test_root}/release.incoming/venv"
           mv "${venv_test_root}/release.incoming" "${venv_test_root}/release"

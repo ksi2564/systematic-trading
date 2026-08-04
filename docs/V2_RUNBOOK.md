@@ -105,15 +105,32 @@ WALLANT_BROKER_ADAPTER=disabled
 
 ### 웹 접근 연결
 
-백엔드 배포는 Caddy나 Cloudflare 설정을 자동으로 바꾸지 않는다. API와 MySQL은
-loopback에만 바인딩된다. 서버 점검 후 `v2/infra/Caddyfile.staging.example`을 기존
-Caddy 설정에 import하고, Cloudflare Tunnel의 origin을
-`http://127.0.0.1:18082`로 연결한다.
+API와 MySQL은 loopback에만 바인딩된다. 웹 접근은 Caddy의
+`http://127.0.0.1:18082` 원본과 Cloudflare Tunnel을 사용하며 원본 포트를 외부
+방화벽에 열지 않는다. GitHub Environment `v2-staging`에는 다음 Secret을 둔다.
 
-Tunnel을 활성화하기 전에는 `/etc/wallant/v2.env`에서 환경을 `production`으로
-바꾸고 `WALLANT_ALLOWED_ACCESS_EMAILS`에 실제 허용 이메일을 설정해야 한다. 변경 후
-`systemctl restart wallant-v2-api`를 실행하고 `/health`와 Access 차단을 모두
-확인한다. 원본 포트 8000, 3307, 18082는 외부 방화벽에 열지 않는다.
+- `V2_ALLOWED_ACCESS_EMAILS`: JSON 이메일 배열
+- `CLOUDFLARE_TUNNEL_TOKEN`: 원격 관리 Tunnel의 실행 전용 토큰
+
+Cloudflare에서는 먼저 `app.wall-ant.com` 전체를 보호하는 Self-hosted Access 앱과
+정확한 이메일 1개만 포함하는 Allow 정책을 만든다. 그 뒤 **v2 Staging Deploy**를
+`mode=access-preflight`로 실행하고, 통과하면 `mode=access-configure`를 실행한다.
+구성 작업은 공식 Cloudflare APT 저장소에서 `cloudflared`를 설치하고 토큰을
+`/etc/wallant/cloudflared.token`에 root 전용으로 저장한 뒤, systemd credential로만
+주입하는 전용 서비스를 시작한다. Tunnel 토큰은 프로세스 인자나 로그에 출력하지
+않는다.
+
+같은 작업에서 기존 Caddy 설정은 `/etc/caddy/conf.d/wallant-v2.caddy`로 분리해
+import하고, `/etc/wallant/v2.env`의 환경을 `production`으로 전환하며 이메일
+허용 목록을 반영한다. Caddy와 환경 파일은 변경 전에
+`/var/backups/wallant/v2-access`에 백업하고 검증 실패 시 복원한다. 기존 Java와
+Caddy PID가 바뀌면 workflow가 실패한다.
+
+서버 원본 구성이 완료된 뒤 Tunnel의 Published application route를
+`app.wall-ant.com` → `http://127.0.0.1:18082`로 연결한다. 최종 검증에서는
+Access 로그인 전 리디렉션, 허용 이메일의 OTP 로그인, UI와 동일 출처 API 응답,
+원본 API의 무인증 401, `WALLANT_EXECUTION_ENABLED=false`,
+`WALLANT_BROKER_ADAPTER=disabled`를 모두 확인한다.
 
 ## 운영 전환 전 별도 승인 항목
 

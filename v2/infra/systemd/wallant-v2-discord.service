@@ -1,0 +1,22 @@
+[Unit]
+Description=Wall-Ant v2 Discord Gateway
+After=network-online.target wallant-v2-api.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=wallant
+Group=wallant
+WorkingDirectory=/opt/wallant/current/v2/backend
+EnvironmentFile=/etc/wallant/v2.env
+ExecStart=/opt/wallant/venv/bin/python -m wallant.alerts.runner
+Restart=on-failure
+RestartSec=10
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

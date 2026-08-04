@@ -1,0 +1,26 @@
+services:
+  mysql:
+    image: mysql:8.4
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3307:3306"
+    environment:
+      MYSQL_DATABASE: wallant_v2
+      MYSQL_USER: wallant
+      MYSQL_PASSWORD: ${WALLANT_MYSQL_PASSWORD:?set WALLANT_MYSQL_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${WALLANT_MYSQL_ROOT_PASSWORD:?set WALLANT_MYSQL_ROOT_PASSWORD}
+      TZ: UTC
+    command:
+      - --default-time-zone=+00:00
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_0900_ai_ci
+    volumes:
+      - wallant-v2-mysql:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  wallant-v2-mysql:

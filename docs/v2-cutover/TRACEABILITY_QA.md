@@ -25,13 +25,13 @@
 | `V2-SAF-001` | `Settings.validate_execution_safety`, `DisabledBroker`, `ExecutionGate`; API 미확인·불일치 시 화면 변경 잠금 | backend 안전 테스트; `App.test.tsx`의 API 401/오류·unsafe fail-closed 회귀 | 인증된 배포 화면에서 false/disabled API·배너·잠금 동시 증적 | 부분 |
 | `V2-OPS-001` | operations status/audit API, 오늘의 운영·안전 화면 | `test_api.py`, `App.test.tsx` 일부 | 스케줄·데이터·Java diff·마지막 성공 카드 | 부분 |
 | `V2-API-001` | 요구·기능·화면 문서의 GET-only API 계약 | 문서 링크·경로 정적 검사 대상 | shadow/QA/cutover 조회 API·권한·cursor·마스킹·신선도 테스트 | 미구현 |
-| `V2-UI-001` | React 6개 메뉴와 반응형 CSS; 안전 API 미확인·부분/전체 불일치 시 위험 증가 조작 잠금과 중복 전송 없는 비상 제출 차단 유지; Playwright 읽기 전용 QA | `App.test.tsx` 13건(10초 timeout·겹친 새로고침의 stale-safe 차단·부분 안전 플래그 불일치·보호 정지 성공/실패 포함); 2026-08-05 로컬 데스크톱·모바일 mock-only 26/26 통과; 이전 PR #57 CI run `30944571043` 통과 | 현재 후보 SHA의 CI, 실제 배포의 인증 브라우저·동일 출처 API, 섀도 화면 | 부분 |
-| `V2-QA-001` | Playwright 스크린샷·network evidence, manifest 안전 검증과 CI artifact 업로드; 인증 배포 GET-only 별도 harness | 로컬 26/26, 78개 attempt 증적 SHA-256 자기검증, 리소스 변경 0; 배포 harness exact 경로/query·출처·메서드 1건, outside/symlink/hardlink/raw/tamper·reporter 실패·독립 verifier·추가 필드 거부 증적 경계 9건, opaque mask pixel sentinel 1건 통과; 이전 PR #57 CI run `30944571043` 통과 | 현재 후보 SHA의 CI·RC 성공 run, 배포 SHA manifest, 인증된 외부 화면 증적 | 부분 |
+| `V2-UI-001` | React 6개 메뉴와 반응형 CSS; 안전 API 미확인·부분/전체 불일치 시 위험 증가 조작 잠금과 중복 전송 없는 비상 제출 차단 유지; Playwright 읽기 전용 QA | `App.test.tsx` 13건(10초 timeout·겹친 새로고침의 stale-safe 차단·부분 안전 플래그 불일치·보호 정지 성공/실패 포함); 직전 범위의 로컬 mock-only 26/26과 이전 PR #57 CI run `30944571043` 통과. 현재 후보에서 `QA-RWD-001` 가로 넘침 단언을 확장했으므로 커밋 뒤 clean-tree 재검증 전에는 새 범위 PASS로 세지 않음 | 현재 후보 SHA의 26/26·CI, 실제 배포의 인증 브라우저·동일 출처 API, 섀도 화면 | 부분 |
+| `V2-QA-001` | Playwright 스크린샷·network evidence, manifest 안전 검증과 CI artifact 업로드; 인증 배포 GET-only 별도 harness | 직전 범위에서 로컬 26/26, 78개 attempt 증적 SHA-256 자기검증, 리소스 변경 0; 배포 harness exact 경로/query·출처·메서드 1건, outside/symlink/hardlink/raw/tamper·reporter 실패·독립 verifier·추가 필드 거부 증적 경계 9건, opaque mask pixel sentinel 1건 통과. 현재 후보의 확장된 `QA-RWD-001`은 clean-tree 재검증·CI 대기 | 현재 후보 SHA의 CI·RC 성공 run, 배포 SHA manifest, 인증된 외부 화면 증적 | 부분 |
 | `V2-APR-001` | LIVE 후보·재개 확인, 감사 로그, 현재 LIVE 설정 시작 거부 | `test_lifecycle_and_paper.py`, `test_api.py` | DNS/트래픽·Java 소유권·롤백 승인 모델 | 부분 |
 | `V2-LIV-001` | 자동 제출·접수·미체결/부분체결·대조 완료 계약만 문서화 | 없음 | C3·C4·사용자 실행 승인 후 별도 설계·canary·인수 QA | 미구현 |
 | `V2-REL-001` | C0/CUTOVER 문서의 세 독립 20거래일 레인과 C5-A/C5-B/C6 계약 | 없음 | 연속 섀도 집계, 승인 게이트, 단건 canary, 예약 5주기, 전체 전환·안정화 | 미구현 |
-| `V2-RBK-001` | SHA+attempt 불변 릴리스 경로와 심볼릭 링크 복구, 첫 배포 실패 시 서비스 정지, 실패 attempt 정리와 current/rollback/latest-3 보존, host 동시 배포 잠금 | active/stale host lock fail-closed, TERM→rollback status 143, same-SHA 교체 전/후 실패 시 이전 bytes 유지·복귀 및 실제 명령 순서 계약 검사, run-attempt별 원격 임시 경로, 기존 Java active·동일 PID, 배포 후 SHA·false/disabled 재검증 계약, infra CI shell 검사 | 실제 deploy 본문에 systemd·health 장애를 주입한 격리 통합시험, 실제 staging retention warning·DB 복구·미확정 주문·Java 복귀 훈련과 사용자 확정 | 부분 |
-| `V2-DOC-001` | `docs/v2-cutover/` 문서 묶음 | `git diff --check` 대상 | 사용자 검토·승인 후 PR별 ID 연결 | 부분 |
+| `V2-RBK-001` | SHA+attempt 불변 릴리스 경로와 심볼릭 링크 복구, 첫 배포 실패 시 서비스 정지, 검증 실패 release 보존과 current/rollback/latest-3 보존, host 동시 배포 잠금 | active/stale host lock fail-closed; HUP/TERM→129/143; modern·#54 legacy·same-SHA 복구; health transport·안전값·SHA 오류; 안전 env 중복·기존 비정상 서비스 stop 실패의 pre-switch 거부; rollback 경로/SHA 불일치; systemd restart 오류; rollback health/restart 실패 시 새 bytes 보존; 최초 배포 stop 성공/실패·상태 조회 오류; lock cleanup 실패 non-green을 whole-script 격리 fault test로 검증. workflow의 기존 Java active·nonzero·동일 PID wrapper를 실제 shell matrix로 실행하고 배포 후 SHA·false/disabled 계약을 검사 | 실제 staging retention warning·DB 복구·systemd/health 장애·미확정 주문·Java 복귀 훈련과 사용자 확정 | 부분 |
+| `V2-DOC-001` | `docs/v2-cutover/` 문서 묶음, 단일 `DELIVERY_TRACE`, 기능 제안·선택형 PR 템플릿, 비개발자용 review board | D-01~D-10·핵심 화면·요구사항 ID 계약 검사; review board desktop/mobile 2/2와 local-only GET 요청·무저장 메모·가로 overflow·비활성 위험 버튼 검증 | 사용자 D-01~D-10 검토·승인과 이후 PR별 승인 SHA 연결 | 부분 |
 
 역할은 다음과 같이 나눈다. `v2 CI`는 PR·push의 빠른 피드백을 위한 동일 테스트이며
 PR #57에서는 실제 통과했다. `v2 Release Candidate`는 Staging Deploy가 신뢰하는 정확한 `master` SHA에서
@@ -75,21 +75,32 @@ PR #57에서는 실제 통과했다. `v2 Release Candidate`는 Staging Deploy가
 | `QA-RES-003` | 같은 CSV로 롤링 | 고정 파라미터, 구간별 결과·최악 구간 표시 | run/audit 저장 | C0에서 연구 run·감사 생성 범위 승인 후 자동 진행 가능 |
 | `QA-ERR-001` | 필수 CSV 열 누락 | 실행 전 이해 가능한 오류, 다른 화면 정상 | 없음 | 자동 진행 가능 |
 | `QA-ACCNT-001` | 고유 이름의 QA 계좌 생성 | 필수 위험 한도와 `PAUSED` 상태, 주문 없음 | 테스트 계좌 1건 | C0에서 테스트 계좌 생성 여부·종류·건수 승인 후, 승인된 범위 내 자동 생성 가능 |
-| `QA-OPS-001` | v2 전체 정지 후 해제 | v2 상태와 감사 기록 변경, Java에는 영향 없음 | 제어·감사 기록 | C0에서 v2 제어 변경 범위 승인 후 스테이징에서 자동 진행 가능 |
+| `QA-OPS-001` | 이미 전체 정지된 가상 화면에서 상태 확인 후 해제 확인창을 취소 | 정지 상태·안전 설정을 표시하고 변경 요청 0건 | 없음 | 로컬 가상 데이터로 자동 진행 가능 |
+| `QA-OPS-002` | 공유 시험 서버에서 v2 전체 정지 후 해제 | v2 상태와 감사 기록 변경, Java에는 영향 없음 | 제어·감사 기록 | C0에서 v2 제어 변경 범위 승인 후에만 진행 가능; 현재 미실행 |
 | `QA-AUD-001` | 최근 감사 기록 확인 | 행위자·동작·대상·KST 시각 표시, 비밀값 없음 | 없음 | 자동 진행 가능 |
-| `QA-RWD-001` | 1440px·360px에서 핵심 흐름 | 가로 잘림 없이 안전 상태·메뉴·결과 확인 | 없음 | 자동 진행 가능 |
+| `QA-RWD-001` | 1440px·360px에서 키보드로 주요 메뉴를 열고 핵심 흐름 확인 | 가로 잘림 1px 이하, 포커스 순서와 선택 화면 결과 확인 | 없음 | 자동 진행 가능 |
+| `QA-PLN-001` | 비개발자용 v2 전환 검토 보드에서 D-01~D-10·S-01/S-04/S-08/S-09·단일 추적표 이동 | desktop/mobile에서 가로 잘림 없음, 검토 메모는 저장·전송 안 됨, 위험 버튼 비활성, 동일 origin GET만 발생 | 없음 | 자동 진행 가능 |
+| `QA-PAR-001` | 같은 정규화 입력을 Java/Python 후보에 공급 | 낙폭·회복·VIX·200MA·5% 게이트와 주문 종목·매수/매도 방향 일치. Java/Python 수량, 실제 운영 입력·설정·DB·스케줄 성공은 범위 밖 | 없음 | 공통 fixture 회귀는 자동 진행 가능, 수량·운영 대조는 C0-B 이후 |
+| `QA-CUT-001` | 배포 workflow의 Java 연속성 wrapper 격리 실행 | 배포 전 active·nonzero PID, 배포 뒤 active·동일 PID. 전략 on/off·최근 16:15/09:45 성공은 범위 밖 | 없음 | 격리 테스트 자동 진행 가능, 운영 snapshot은 C0-B 이후 |
+| `QA-INF-001` | 임시 경로에서 배포 스크립트 전체 fault matrix 실행 | modern/legacy/same-SHA 복구, systemd·health·signal·lock·안전 env·rollback 검증 실패를 fail-closed 처리. 실제 staging DB/systemd 훈련은 범위 밖 | 임시 파일만 생성·자동 정리 | 격리 테스트 자동 진행 가능, 공유 환경 훈련은 사용자 승인 필수 |
 | `QA-SHD-001` | fake clock으로 16:15 EOD 섀도 실행 | 기준 비중만 저장하고 09:45 입력·주문 의도는 만들지 않음 | 섀도 fixture | C0 범위 승인 이후 자동 진행 가능 |
 | `QA-SHD-002` | 다음 거래일 09:45 리밸런싱 섀도 실행 | 당시 계좌·호가·VIX·200MA로 최종 비중과 의도를 만들고 브로커 호출 0건 | 섀도 fixture | C0 범위 승인 이후 자동 진행 가능 |
 
 실행 상태:
 
-- 로컬 mock-only UI QA: 2026-08-05 KST 데스크톱·모바일 26/26 `PASS`,
+- 직전 범위의 로컬 mock-only UI QA: 2026-08-05 KST 데스크톱·모바일 26/26 `PASS`,
   flaky 0, 생성·변경 리소스 0, 외부·위험·WebSocket 요청 0. manifest가 마지막 attempt의
   스크린샷·network JSON·trace 78개 SHA-256과 안전 범위를 자기검증했다. 전체 26개와
   QA ID별 16/2/2/6, 데스크톱·모바일 각 13개 matrix도 고정한다. unsafe fixture의
   `true/kis-live` 기대값은 harness의 주문 제출 능력 없음과 별도 필드로 기록한다. 이는
   로컬 후보 검증이며 배포 QA가 아니다. CI artifact는 이 78개 참조를 다시 hash 검증해
-  평탄화한 `verified` 번들만 업로드하고 HTML/JUnit·원본 중복 파일은 제외한다.
+  평탄화한 `verified` 번들만 업로드하고 HTML/JUnit·원본 중복 파일은 제외한다. 현재 후보는
+  `QA-RWD-001`에 1440/360 가로 넘침 단언을 추가했으므로 커밋 뒤 같은 SHA의 clean-tree
+  26/26과 CI가 끝날 때까지 이 직전 결과를 확장 범위의 통과 증적으로 사용하지 않는다.
+- `QA-PLN-001`: review board desktop/mobile 2/2 `PASS`. D-01~D-10 10개, 실제 대안
+  30개, 핵심 화면 기획 4개, 추적 행 13개를 확인했고 GET 이외 네트워크·저장·승인 제출·활성 위험 버튼과
+  문서 전체 가로 overflow는 0건이다. CI와 RC에서 별도 screenshot/HTML/JUnit artifact로
+  남기며, 이 결과는 기획 화면의 사용성 증적이지 v2 기능 구현·배포 증적이 아니다.
 - `QA-ACC-001`: 2026-08-05 KST 읽기 전용 외부 검증 `PASS`. `/`와
   `/api/v2/operations/status` 모두 앱 본문을 직접 반환하지 않고 Cloudflare Access
   로그인으로 `302` 이동했다. 상세 근거는

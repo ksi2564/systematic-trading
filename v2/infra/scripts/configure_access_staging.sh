@@ -19,6 +19,44 @@ fail() {
   rollback_on_error 1
 }
 
+validate_execution_safety_env() {
+  local target_env_file="$1"
+  python3 - "${target_env_file}" <<'PY'
+from pathlib import Path
+import re
+import sys
+
+path = Path(sys.argv[1])
+expected = {
+    "WALLANT_EXECUTION_ENABLED": "false",
+    "WALLANT_BROKER_ADAPTER": "disabled",
+}
+seen: dict[str, int] = {}
+for line_number, raw_line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+    stripped = raw_line.strip()
+    if not stripped or stripped.startswith("#"):
+        continue
+    assignment = re.match(r"\s*([A-Za-z_][A-Za-z0-9_]*)\s*=", raw_line)
+    if assignment is None:
+        continue
+    key = assignment.group(1)
+    if key not in expected:
+        continue
+    canonical_line = f"{key}={expected[key]}"
+    if key in seen:
+        raise SystemExit(
+            f"duplicate safety key {key} at lines {seen[key]} and {line_number}"
+        )
+    seen[key] = line_number
+    if raw_line != canonical_line:
+        raise SystemExit(f"unsafe or non-canonical value for {key} at line {line_number}")
+
+missing = [key for key in expected if key not in seen]
+if missing:
+    raise SystemExit(f"missing safety key(s): {', '.join(missing)}")
+PY
+}
+
 rollback_on_error() {
   local exit_code="${1:-$?}"
   trap - ERR
@@ -60,10 +98,8 @@ grep -F 'bind 127.0.0.1' "${caddy_site_source}" >/dev/null \
 getent group wallant >/dev/null 2>&1 || fail "Required wallant group is missing."
 getent group caddy >/dev/null 2>&1 || fail "Required caddy group is missing."
 
-grep -Fx 'WALLANT_EXECUTION_ENABLED=false' "${env_file}" >/dev/null \
-  || fail "Execution must remain disabled."
-grep -Fx 'WALLANT_BROKER_ADAPTER=disabled' "${env_file}" >/dev/null \
-  || fail "Broker adapter must remain disabled."
+validate_execution_safety_env "${env_file}" \
+  || fail "Execution safety environment is missing, duplicated, or unsafe."
 caddy validate --config "${caddyfile}"
 
 if ss -lntp 2>/dev/null | awk '$4 ~ /:18082$/ && $0 !~ /caddy/ {found=1} END {exit(found ? 0 : 1)}'; then
@@ -140,6 +176,8 @@ os.replace(temporary, env_path)
 PY
 chown root:wallant "${env_file}"
 chmod 0640 "${env_file}"
+validate_execution_safety_env "${env_file}" \
+  || fail "Access configuration changed the execution safety environment."
 
 install -d -o root -g caddy -m 0750 "${caddy_include_dir}"
 install -o root -g caddy -m 0644 "${caddy_site_source}" "${caddy_site}.next"

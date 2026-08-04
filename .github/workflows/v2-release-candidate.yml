@@ -26,7 +26,7 @@ jobs:
           cache: npm
           cache-dependency-path: v2/frontend/package-lock.json
       # v2 CI와 동일한 핵심 패리티를 배포 대상 SHA에서 다시 검증한다.
-      - name: Verify Java/Python QQQM strategy and scheduler parity
+      - name: Verify Java/Python QQQM strategy parity and Java scheduler contracts
         run: >-
           bash gradlew test
           --tests my.side.trading.core.application.strategy.QqqmJavaPythonGoldenParityTest
@@ -54,6 +54,9 @@ jobs:
       - name: Verify deployed screenshot confidentiality mask
         working-directory: v2/frontend
         run: npm run test:e2e:masking
+      - name: Verify the non-mutating v2 planning board
+        working-directory: v2/frontend
+        run: npm run test:e2e:planning
       - name: Run zero-real-order UI QA
         working-directory: v2/frontend
         env:
@@ -77,7 +80,7 @@ jobs:
           ));
           const projects = ['desktop-chromium', 'mobile-chromium'];
           const definitions = [
-            ['QA-RWD-001', 'populated', 'interaction.spec.ts › [QA-RWD-001] 키보드 포커스로 주요 메뉴를 이동하고 화면을 연다'],
+            ['QA-RWD-001', 'populated', 'interaction.spec.ts › [QA-RWD-001] 1440/360 화면에서 가로 잘림 없이 키보드로 주요 메뉴를 연다'],
             ['QA-NAV-001', 'populated', 'interaction.spec.ts › [QA-NAV-001] UI 새로고침과 브라우저 reload 뒤에도 mock 안전 상태를 유지한다'],
             ['QA-NAV-001', 'populated', 'navigation.spec.ts › [QA-NAV-001] 채워진 상태의 오늘의 운영 화면을 보여준다'],
             ['QA-NAV-001', 'populated', 'navigation.spec.ts › [QA-NAV-001] 채워진 상태의 전략 빌더 화면을 보여준다'],
@@ -88,7 +91,7 @@ jobs:
             ['QA-SAF-001', 'populated', 'safety-policy.spec.ts › [QA-SAF-001] 주문·계좌 재개·LIVE 승인 API를 금지 요청으로 분류한다'],
             ['QA-SAF-001', 'populated', 'safety-policy.spec.ts › [QA-SAF-001] 6개 화면 읽기 전용 QA에서 위험 요청이 0건이다'],
             ['QA-NAV-001', 'empty', 'states.spec.ts › 빈 상태 › [QA-NAV-001] 6개 화면이 처음 사용자에게 다음 행동을 안내한다'],
-            ['QA-OPS-001', 'emergency-paused', 'states.spec.ts › 전체 긴급 정지 상태 › [QA-OPS-001] 정지 상태를 명확히 표시하고 확인 없이 해제하지 않는다'],
+            ['QA-OPS-001', 'emergency-paused', 'states.spec.ts › 전체 긴급 정지 상태 › [QA-OPS-001] 가상 정지 상태를 표시하고 해제 확인 취소 시 변경하지 않는다'],
             ['QA-SAF-001', 'unsafe', 'states.spec.ts › 안전 설정 불일치 › [QA-SAF-001] 서버 차단 설정이 예상과 다르면 변경 기능을 잠근다']
           ];
           const expectedInventory = definitions
@@ -230,6 +233,7 @@ jobs:
           const expectedManualScopes = {
             'QA-ACC-001': 'OUT_OF_SCOPE_FOR_THIS_ARTIFACT',
             'QA-ACC-002': 'BLOCKED',
+            'QA-OPS-002': 'BLOCKED',
             'QA-MAN-001': 'MANUAL',
             'QA-MAN-002': 'MANUAL',
             'QA-MAN-003': 'MANUAL',
@@ -248,13 +252,13 @@ jobs:
               expectedManualScopes[item.qaId] === item.status
             );
           const selfCheckCounts = {
-            'qa-id-mapping': 37,
+            'qa-id-mapping': 38,
             'scenario-matrix': 26,
             'attempt-history': 26,
             'final-attempt-attachments': 26,
             'observed-network-safety': 26,
             'evidence-sha256': 78,
-            'safety-scope': 11
+            'safety-scope': 12
           };
           const selfChecks = manifest.selfValidation?.checks;
           const selfChecksComplete = Array.isArray(selfChecks)
@@ -273,7 +277,7 @@ jobs:
             flaky: 0,
             totalAttempts: 26,
             manual: 9,
-            blocked: 1,
+            blocked: 2,
             outOfScope: 1
           });
           const bundleRoot = realpathSync('artifacts/playwright/verified');
@@ -382,6 +386,14 @@ jobs:
           path: v2/frontend/artifacts/playwright/verified
           if-no-files-found: warn
           retention-days: 30
+      - name: Upload RC planning board QA evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wallant-v2-rc-planning-board-${{ github.run_attempt }}
+          path: v2/frontend/artifacts/planning-board
+          if-no-files-found: warn
+          retention-days: 30
       - name: Validate deployment scripts and Compose config
         env:
           WALLANT_MYSQL_PASSWORD: rc-placeholder
@@ -394,8 +406,12 @@ jobs:
             v2/infra/scripts/preflight_staging.sh \
             v2/infra/scripts/preflight_access_staging.sh \
             v2/infra/scripts/deploy_staging.sh \
-            v2/infra/tests/release_switch_test.sh
+            v2/infra/tests/release_switch_test.sh \
+            v2/infra/tests/deploy_staging_fault_injection_test.sh \
+            v2/infra/tests/documentation_contract_test.sh
           bash v2/infra/tests/release_switch_test.sh
+          bash v2/infra/tests/deploy_staging_fault_injection_test.sh
+          bash v2/infra/tests/documentation_contract_test.sh
           docker compose -f v2/infra/compose.yaml config --quiet
           grep -F \
             'ExecStart=/opt/wallant/current/venv/bin/python -m uvicorn' \

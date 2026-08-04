@@ -3,5 +3,5 @@
   "compilerOptions": {
     "types": ["node", "@playwright/test"]
   },
-  "include": ["playwright.config.ts", "playwright.deployed.config.ts", "playwright.masking.config.ts", "e2e/**/*.ts", "e2e-deployed/**/*.ts", "e2e-security/**/*.ts"]
+  "include": ["playwright.config.ts", "playwright.deployed.config.ts", "playwright.masking.config.ts", "playwright.planning.config.ts", "e2e/**/*.ts", "e2e-deployed/**/*.ts", "e2e-security/**/*.ts", "e2e-planning/**/*.ts"]
 }

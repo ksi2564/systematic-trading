@@ -4,6 +4,9 @@ on:
   push:
     paths:
       - "v2/**"
+      - "docs/v2-cutover/**"
+      - "docs/templates/V2_FEATURE_PROPOSAL_TEMPLATE.md"
+      - ".github/PULL_REQUEST_TEMPLATE/v2-feature.md"
       - "build.gradle"
       - "settings.gradle"
       - "gradle/**"
@@ -28,6 +31,9 @@ on:
   pull_request:
     paths:
       - "v2/**"
+      - "docs/v2-cutover/**"
+      - "docs/templates/V2_FEATURE_PROPOSAL_TEMPLATE.md"
+      - ".github/PULL_REQUEST_TEMPLATE/v2-feature.md"
       - "build.gradle"
       - "settings.gradle"
       - "gradle/**"
@@ -70,8 +76,12 @@ jobs:
             v2/infra/scripts/preflight_staging.sh \
             v2/infra/scripts/preflight_access_staging.sh \
             v2/infra/scripts/deploy_staging.sh \
-            v2/infra/tests/release_switch_test.sh
+            v2/infra/tests/release_switch_test.sh \
+            v2/infra/tests/deploy_staging_fault_injection_test.sh \
+            v2/infra/tests/documentation_contract_test.sh
           bash v2/infra/tests/release_switch_test.sh
+          bash v2/infra/tests/deploy_staging_fault_injection_test.sh
+          bash v2/infra/tests/documentation_contract_test.sh
           docker compose -f v2/infra/compose.yaml config --quiet
           grep -F \
             'ExecStart=/opt/wallant/current/venv/bin/python -m uvicorn' \
@@ -106,7 +116,7 @@ jobs:
           distribution: temurin
           java-version: "21"
           cache: gradle
-      - name: Verify Java/Python QQQM strategy and scheduler parity
+      - name: Verify Java/Python QQQM strategy parity and Java scheduler contracts
         run: >-
           bash gradlew test
           --tests my.side.trading.core.application.strategy.QqqmJavaPythonGoldenParityTest
@@ -178,6 +188,8 @@ jobs:
         run: npx playwright install --with-deps chromium
       - name: Verify deployed screenshot confidentiality mask
         run: npm run test:e2e:masking
+      - name: Verify the non-mutating v2 planning board
+        run: npm run test:e2e:planning
       - name: Run zero-real-order UI QA
         env:
           QA_GIT_SHA: ${{ github.sha }}
@@ -189,5 +201,13 @@ jobs:
         with:
           name: v2-ui-qa-local-mock-${{ github.run_attempt }}
           path: v2/frontend/artifacts/playwright/verified
+          if-no-files-found: warn
+          retention-days: 30
+      - name: Upload planning board QA evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: v2-planning-board-qa-${{ github.run_attempt }}
+          path: v2/frontend/artifacts/planning-board
           if-no-files-found: warn
           retention-days: 30

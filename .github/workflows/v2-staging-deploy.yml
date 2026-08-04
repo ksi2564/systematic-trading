@@ -329,8 +329,14 @@ jobs:
           archive_sha="$4"
           trading_before_state="$(systemctl is-active trading.service 2>/dev/null || true)"
           trading_before_pid="$(systemctl show trading.service -p MainPID --value 2>/dev/null || true)"
-          [[ "${trading_before_state}" == active ]]
-          [[ "${trading_before_pid}" =~ ^[0-9]+$ && "${trading_before_pid}" -gt 0 ]]
+          if [[ "${trading_before_state}" != active ]]; then
+            echo "Existing trading.service must be active before v2 deploy; got ${trading_before_state}." >&2
+            exit 1
+          fi
+          if [[ ! "${trading_before_pid}" =~ ^[0-9]+$ || "${trading_before_pid}" -le 0 ]]; then
+            echo "Existing trading.service must have a non-zero PID before v2 deploy; got ${trading_before_pid}." >&2
+            exit 1
+          fi
 
           set +e
           bash "${deploy_script}" "${archive_path}" "${release_sha}" "${archive_sha}"

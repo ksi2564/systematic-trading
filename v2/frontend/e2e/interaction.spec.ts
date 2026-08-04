@@ -1,7 +1,7 @@
 import { attachNetworkEvidence, expect, test } from './support/qa-test';
 import { attachViewportScreenshot, openConsole } from './support/ui';
 
-test('[QA-RWD-001] 키보드 포커스로 주요 메뉴를 이동하고 화면을 연다', async ({ page, networkEvidence }, testInfo) => {
+test('[QA-RWD-001] 1440/360 화면에서 가로 잘림 없이 키보드로 주요 메뉴를 연다', async ({ page, networkEvidence }, testInfo) => {
   await openConsole(page);
   const navigation = page.getByRole('navigation', { name: '주요 메뉴' });
   const overview = navigation.getByRole('button', { name: '오늘의 운영', exact: true });
@@ -27,6 +27,10 @@ test('[QA-RWD-001] 키보드 포커스로 주요 메뉴를 이동하고 화면�
   await expect(strategies).toBeFocused();
   await page.keyboard.press('Enter');
   await expect(page.getByRole('heading', { level: 1, name: '전략 빌더' })).toBeVisible();
+  const viewportOverflow = await page.evaluate(
+    () => document.documentElement.scrollWidth - document.documentElement.clientWidth
+  );
+  expect(viewportOverflow).toBeLessThanOrEqual(1);
 
   await attachViewportScreenshot(page, testInfo, 'keyboard-menu-navigation');
   await attachNetworkEvidence(testInfo, 'populated', networkEvidence);

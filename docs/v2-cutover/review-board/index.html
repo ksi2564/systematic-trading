@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <title>Wall-Ant v2 전환 검토 보드</title>
+    <link rel="stylesheet" href="./styles.css" />
+    <script src="./app.js" defer></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main-content">본문으로 바로가기</a>
+    <header class="topbar">
+      <a class="brand" href="#top" aria-label="Wall-Ant v2 검토 보드 처음으로">
+        <span class="brand-mark" aria-hidden="true">W</span>
+        <span>Wall-Ant v2</span>
+      </a>
+      <span class="status-pill status-waiting">기획안 · 승인 대기</span>
+    </header>
+
+    <main id="main-content">
+      <section class="hero" id="top">
+        <p class="eyebrow">Python v2 전환 · 개발 전 검토</p>
+        <h1>지금 결정할 건<br />딱 10가지예요</h1>
+        <p class="hero-copy">
+          Java 서비스와 프로세스 번호(PID)는 건드리지 않았습니다. 실제 전략 켜짐/꺼짐·최근 실행·주문 모드는
+          아직 확인 전이므로, 아래 기준을 정한 뒤 C0-B에서 읽기 전용으로 확인합니다.
+        </p>
+        <div class="safety-strip" aria-label="현재 안전 상태">
+          <div><span>기존 시스템</span><strong>서비스 유지 · 운용 확인 대기</strong></div>
+          <div><span>Python 자동 병행 비교</span><strong>아직 미구현</strong></div>
+          <div><span>v2 주문</span><strong>구조적으로 차단</strong></div>
+        </div>
+      </section>
+
+      <section class="gate-section" aria-labelledby="gate-title">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">개발 기준 승인 순서</p>
+            <h2 id="gate-title">정책을 정한 뒤 개발해요</h2>
+          </div>
+          <p>아래는 기능 개발의 순서입니다.</p>
+        </div>
+        <ol class="gate-rail">
+          <li class="gate-current">
+            <span>1</span><div><strong>C0-A</strong><small>D-01~D-10 정책 결정</small></div>
+          </li>
+          <li>
+            <span>2</span><div><strong>C0-B</strong><small>운영값 읽기 전용 재확인</small></div>
+          </li>
+          <li>
+            <span>3</span><div><strong>C2</strong><small>Python 자동 병행 비교 개발</small></div>
+          </li>
+          <li>
+            <span>4</span><div><strong>C3~C4</strong><small>20거래일 관찰·복구 훈련</small></div>
+          </li>
+          <li class="gate-locked">
+            <span>5</span><div><strong>C5+</strong><small>단건·범위 승인 뒤 제한 자동운용</small></div>
+          </li>
+        </ol>
+        <aside class="parallel-lane" aria-label="병렬로 진행할 배포 화면 검증">
+          <span class="parallel-badge">병렬</span>
+          <div>
+            <strong>C1 인증 화면 읽기 검증은 C0-A와 동시에 진행할 수 있어요.</strong>
+            <p>비밀번호·일회용 인증번호는 저장하지 않아요. 사용자가 제공한 임시 로그인 세션은 저장소 밖 소유자 전용 경로에서 조회 검증에만 사용하고 바로 폐기해요.</p>
+          </div>
+          <span class="parallel-status">사용자 로그인 필요</span>
+        </aside>
+      </section>
+
+      <nav class="view-tabs" aria-label="검토 보드 보기 선택">
+        <button type="button" class="view-tab is-active" data-view="decisions" aria-selected="true">
+          결정 10가지
+        </button>
+        <button type="button" class="view-tab" data-view="screens" aria-selected="false">
+          화면 미리보기
+        </button>
+        <button type="button" class="view-tab" data-view="trace" aria-selected="false">
+          개발 추적표
+        </button>
+      </nav>
+
+      <section class="view-panel" data-panel="decisions" aria-labelledby="decision-title">
+        <div class="section-heading sticky-heading">
+          <div>
+            <p class="eyebrow">C0-A 제품 결정</p>
+            <h2 id="decision-title">위에서부터 차례로 확인해 주세요</h2>
+          </div>
+          <div class="review-counter" aria-live="polite">
+            <strong id="reviewed-count">0</strong><span>/ 10 살펴봄</span>
+          </div>
+        </div>
+        <div class="notice-card">
+          <strong>이 화면의 표시는 검토 메모일 뿐이에요.</strong>
+          <span>저장·전송·승인되지 않으며 실제 승인은 문서 또는 대화로 확정합니다.</span>
+        </div>
+        <div class="decision-groups" id="decision-groups"></div>
+      </section>
+
+      <section class="view-panel" data-panel="screens" aria-labelledby="screen-title" hidden>
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">개발 전 화면 기획</p>
+            <h2 id="screen-title">앞으로 보게 될 핵심 화면이에요</h2>
+          </div>
+          <p>모두 더미 데이터이며 기능은 작동하지 않습니다.</p>
+        </div>
+        <div class="screen-selector" id="screen-selector" aria-label="화면 선택"></div>
+        <div id="screen-preview" aria-live="polite"></div>
+      </section>
+
+      <section class="view-panel" data-panel="trace" aria-labelledby="trace-title" hidden>
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">누락 방지</p>
+            <h2 id="trace-title">결정부터 증적까지 한 줄로 봐요</h2>
+          </div>
+          <p>승인 전 항목은 개발 완료로 표시하지 않습니다.</p>
+        </div>
+        <div class="trace-table-wrap">
+          <table class="trace-table">
+            <thead>
+              <tr>
+                <th scope="col">결정</th>
+                <th scope="col">요구사항</th>
+                <th scope="col">화면</th>
+                <th scope="col">QA ID</th>
+                <th scope="col">실행·증적</th>
+                <th scope="col">현재 상태</th>
+                <th scope="col">다음 승인</th>
+              </tr>
+            </thead>
+            <tbody id="trace-body"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="next-step" aria-labelledby="next-title">
+        <div>
+          <p class="eyebrow">다음 행동</p>
+          <h2 id="next-title">개발 기준은 D-01~D-10부터, 화면 검증은 지금 병렬로</h2>
+          <p>각 카드의 대안과 숫자를 검토해 주세요. 인증 화면은 사용자가 로그인할 수 있을 때 조회 전용으로 따로 확인합니다.</p>
+        </div>
+        <div class="next-links">
+          <a href="../C0_DECISIONS.md">상세 결정 문서</a>
+          <a href="../README.md">15분 검토 순서</a>
+          <a href="../DELIVERY_TRACE.md">전체 추적표</a>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <span>실제 주문 · 증권사 자격증명 · Java 중단 · 접속 경로 변경 없음</span>
+      <span>기준일 2026-08-05 KST</span>
+    </footer>
+  </body>
+</html>

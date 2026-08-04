@@ -3,6 +3,7 @@ set -Eeuo pipefail
 
 readonly test_script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 readonly deploy_script="${test_script_dir}/../scripts/deploy_staging.sh"
+readonly configure_access_script="${test_script_dir}/../scripts/configure_access_staging.sh"
 readonly staging_workflow="${test_script_dir}/../../../.github/workflows/v2-staging-deploy.yml"
 readonly test_root_input="$(mktemp -d /tmp/wallant-release-switch.XXXXXX)"
 readonly test_root="$(cd -- "${test_root_input}" && pwd -P)"
@@ -13,6 +14,48 @@ cleanup() {
   rm -rf -- "${test_root}"
 }
 trap cleanup EXIT
+
+deploy_safety_validator_source="$(awk '
+  /^validate_execution_safety_env\(\)/ { capture=1 }
+  /^attest_wallant_v2_inactive\(\)/ { capture=0 }
+  capture { print }
+' "${deploy_script}")"
+access_safety_validator_source="$(awk '
+  /^validate_execution_safety_env\(\)/ { capture=1 }
+  /^rollback_on_error\(\)/ { capture=0 }
+  capture { print }
+' "${configure_access_script}")"
+[[ -n "${deploy_safety_validator_source}" ]]
+[[ "${deploy_safety_validator_source}" == "${access_safety_validator_source}" ]]
+
+(
+  eval "${deploy_safety_validator_source}"
+  safe_env="${test_root}/safe.env"
+  printf '# comment\nUNRELATED=value\nWALLANT_EXECUTION_ENABLED=false\nWALLANT_BROKER_ADAPTER=disabled\n' \
+    >"${safe_env}"
+  validate_execution_safety_env "${safe_env}"
+
+  invalid_env="${test_root}/invalid.env"
+  invalid_cases=(
+    $'WALLANT_EXECUTION_ENABLED=false\nWALLANT_EXECUTION_ENABLED=false\nWALLANT_BROKER_ADAPTER=disabled\n'
+    $'WALLANT_EXECUTION_ENABLED=false\nWALLANT_EXECUTION_ENABLED=true\nWALLANT_BROKER_ADAPTER=disabled\n'
+    $'WALLANT_EXECUTION_ENABLED=true\nWALLANT_BROKER_ADAPTER=disabled\n'
+    $'WALLANT_EXECUTION_ENABLED=false\nWALLANT_BROKER_ADAPTER=kis-live\n'
+    $'WALLANT_EXECUTION_ENABLED=false\n'
+    $' WALLANT_EXECUTION_ENABLED=false\nWALLANT_BROKER_ADAPTER=disabled\n'
+    $'WALLANT_EXECUTION_ENABLED=false\n WALLANT_EXECUTION_ENABLED=true\nWALLANT_BROKER_ADAPTER=disabled\n'
+    $'WALLANT_EXECUTION_ENABLED=false\nWALLANT_BROKER_ADAPTER=disabled\n\tWALLANT_BROKER_ADAPTER=kis-live\n'
+    $'WALLANT_EXECUTION_ENABLED=false\nWALLANT_EXECUTION_ENABLED =true\nWALLANT_BROKER_ADAPTER=disabled\n'
+    $'WALLANT_EXECUTION_ENABLED=false\nWALLANT_BROKER_ADAPTER = kis-live\n'
+  )
+  for invalid_case in "${invalid_cases[@]}"; do
+    printf '%s' "${invalid_case}" >"${invalid_env}"
+    if validate_execution_safety_env "${invalid_env}" >/dev/null 2>&1; then
+      printf 'strict safety environment parser accepted an invalid case\n' >&2
+      exit 1
+    fi
+  done
+)
 
 lock_function_source="$(awk '
   /^acquire_deploy_lock\(\)/ { capture=1 }
@@ -155,23 +198,28 @@ for required in [
     "readonly retain_recent_releases=3",
     "cleanup_failed_attempt()",
     "prune_completed_releases()",
+    "is_managed_previous_release_path()",
+    "on_exit()",
+    "ROLLBACK_STATUS=verified-legacy",
+    "FAILED_RELEASE_PRESERVED=",
     "trap 'rollback_on_error $?' ERR",
     'rollback_on_error 1',
 ]:
     if required not in body:
         raise SystemExit(f"missing rollback contract: {required}")
 
-cleanup_call = body.find("  cleanup_failed_attempt ||")
+preserve_cleanup_call = body.find("    cleanup_failed_attempt false ||")
+verified_cleanup_call = body.find("    cleanup_failed_attempt true ||")
 lock_call = body.find('acquire_deploy_lock || fail "Could not acquire the host deployment lock."')
 archive_hash = body.find('actual_archive_sha="$(sha256sum')
 signal_handler = body.find("rollback_on_signal()")
 signal_trap = body.find("trap 'rollback_on_signal TERM 143' TERM")
-rollback_exit = body.find('  exit "${exit_code}"')
+rollback_exit = body.rfind('  exit "${exit_code}"')
 health_gate = body.rfind("systemctl is-active --quiet wallant-v2-api.service")
 prune_call = body.rfind("if ! prune_completed_releases; then")
 retention_output = body.rfind("RELEASE_RETENTION=%s")
-if not (0 <= cleanup_call < rollback_exit):
-    raise SystemExit("failed attempt cleanup must run before rollback exits")
+if not (0 <= preserve_cleanup_call < verified_cleanup_call < rollback_exit):
+    raise SystemExit("rollback cleanup must preserve completed bytes until recovery is verified")
 if not (0 <= lock_call < archive_hash):
     raise SystemExit("host deploy lock must be acquired before archive processing")
 if not (0 <= signal_handler < signal_trap < lock_call):
@@ -192,8 +240,8 @@ deploy = body[start:end]
 required = [
     "          set -euo pipefail",
     '          trading_before_state="$(systemctl is-active trading.service',
-    '          [[ "${trading_before_state}" == active ]]',
-    '          [[ "${trading_before_pid}" =~ ^[0-9]+$ && "${trading_before_pid}" -gt 0 ]]',
+    '          if [[ "${trading_before_state}" != active ]]; then',
+    '          if [[ ! "${trading_before_pid}" =~ ^[0-9]+$ || "${trading_before_pid}" -le 0 ]]; then',
     "          set +e",
     '          bash "${deploy_script}"',
     '          trading_after_state="$(systemctl is-active trading.service',
@@ -203,6 +251,113 @@ positions = [deploy.find(item) for item in required]
 if -1 in positions or positions != sorted(positions) or len(set(positions)) != len(positions):
     raise SystemExit(f"Java continuity precondition/order contract failed: {positions}")
 PY
+
+# Execute the exact remote shell body used by the deploy workflow. The inner
+# deploy command is a fake here; deploy_staging_fault_injection_test.sh covers
+# the deployment body itself. This verifies the Java continuity wrapper's
+# precondition, postcondition, and exit-code propagation as executable shell.
+workflow_deploy_wrapper="${test_root}/workflow-deploy-wrapper.sh"
+awk '
+  /^      - name: Upload and deploy v2$/ { in_step=1; next }
+  in_step && /<<'\''REMOTE'\''$/ { capture=1; next }
+  capture && /^          REMOTE$/ { exit }
+  capture {
+    sub(/^          /, "")
+    print
+  }
+' "${staging_workflow}" >"${workflow_deploy_wrapper}"
+grep -Fx 'set -euo pipefail' "${workflow_deploy_wrapper}" >/dev/null
+grep -F 'trading_before_state=' "${workflow_deploy_wrapper}" >/dev/null
+grep -F 'trading_after_pid=' "${workflow_deploy_wrapper}" >/dev/null
+
+workflow_fake_bin="${test_root}/workflow-fake-bin"
+mkdir -p "${workflow_fake_bin}"
+cat >"${workflow_fake_bin}/systemctl" <<'SH'
+#!/bin/bash
+set -euo pipefail
+case "${1:-}" in
+  is-active)
+    cat "${WORKFLOW_TRADING_STATE_FILE:?}"
+    ;;
+  show)
+    cat "${WORKFLOW_TRADING_PID_FILE:?}"
+    ;;
+  *)
+    printf 'unexpected workflow fake systemctl call: %s\n' "$*" >&2
+    exit 2
+    ;;
+esac
+SH
+cat >"${workflow_fake_bin}/bash" <<'SH'
+#!/bin/bash
+set -euo pipefail
+: >"${WORKFLOW_DEPLOY_CALLED_MARKER:?}"
+printf '%s\n' "${WORKFLOW_AFTER_STATE:?}" >"${WORKFLOW_TRADING_STATE_FILE:?}"
+printf '%s\n' "${WORKFLOW_AFTER_PID:?}" >"${WORKFLOW_TRADING_PID_FILE:?}"
+exit "${WORKFLOW_DEPLOY_EXIT:?}"
+SH
+chmod 0755 "${workflow_fake_bin}/systemctl" "${workflow_fake_bin}/bash"
+
+run_workflow_wrapper_case() {
+  local case_name="$1"
+  local before_state="$2"
+  local before_pid="$3"
+  local deploy_exit="$4"
+  local after_state="$5"
+  local after_pid="$6"
+  local expected_exit="$7"
+  local expect_deploy_call="$8"
+  local case_root="${test_root}/workflow-${case_name}"
+  local actual_exit=0
+
+  mkdir -p "${case_root}"
+  printf '%s\n' "${before_state}" >"${case_root}/state"
+  printf '%s\n' "${before_pid}" >"${case_root}/pid"
+  set +e
+  PATH="${workflow_fake_bin}:${PATH}" \
+  WORKFLOW_TRADING_STATE_FILE="${case_root}/state" \
+  WORKFLOW_TRADING_PID_FILE="${case_root}/pid" \
+  WORKFLOW_DEPLOY_CALLED_MARKER="${case_root}/deploy-called" \
+  WORKFLOW_DEPLOY_EXIT="${deploy_exit}" \
+  WORKFLOW_AFTER_STATE="${after_state}" \
+  WORKFLOW_AFTER_PID="${after_pid}" \
+    /bin/bash "${workflow_deploy_wrapper}" \
+      /tmp/fake-deploy.sh /tmp/wallant-v2-fake.tgz \
+      1111111111111111111111111111111111111111 \
+      aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa \
+      >"${case_root}/output.log" 2>&1
+  actual_exit=$?
+  set -e
+
+  if [[ "${actual_exit}" -ne "${expected_exit}" ]]; then
+    printf 'workflow wrapper case %s exited %s, expected %s\n' \
+      "${case_name}" "${actual_exit}" "${expected_exit}" >&2
+    sed -n '1,160p' "${case_root}/output.log" >&2
+    return 1
+  fi
+  if [[ "${expect_deploy_call}" == true ]]; then
+    if [[ ! -f "${case_root}/deploy-called" ]]; then
+      printf 'workflow wrapper case %s did not invoke the deploy command\n' \
+        "${case_name}" >&2
+      sed -n '1,160p' "${case_root}/output.log" >&2
+      return 1
+    fi
+  else
+    if [[ -e "${case_root}/deploy-called" ]]; then
+      printf 'workflow wrapper case %s invoked deploy before satisfying Java continuity preconditions\n' \
+        "${case_name}" >&2
+      sed -n '1,160p' "${case_root}/output.log" >&2
+      return 1
+    fi
+  fi
+}
+
+run_workflow_wrapper_case stable-success active 4242 0 active 4242 0 true
+run_workflow_wrapper_case inactive-precondition inactive 0 0 active 4242 1 false
+run_workflow_wrapper_case zero-pid-precondition active 0 0 active 4242 1 false
+run_workflow_wrapper_case deploy-error-propagated active 4242 17 active 4242 17 true
+run_workflow_wrapper_case pid-changed active 4242 0 active 5252 1 true
+run_workflow_wrapper_case state-changed active 4242 0 inactive 4242 1 true
 
 # Execute the real cleanup/retention functions against an isolated release tree.
 release_function_source="$(awk '
@@ -238,8 +393,15 @@ release_function_source="$(awk '
   release_dir="${release_root}/6666666666666666666666666666666666666666.20260806T010101Z.106"
   incoming_dir="${release_dir}.incoming"
   mkdir -p "${release_dir}" "${incoming_dir}"
-  cleanup_failed_attempt
+  cleanup_failed_attempt true
   [[ ! -e "${release_dir}" && ! -e "${incoming_dir}" ]]
+
+  release_dir="${release_root}/7777777777777777777777777777777777777777.20260807T010101Z.107"
+  incoming_dir="${release_dir}.incoming"
+  mkdir -p "${release_dir}" "${incoming_dir}"
+  cleanup_failed_attempt false
+  [[ -d "${release_dir}" && ! -e "${incoming_dir}" ]]
+  rm -rf -- "${release_dir}"
 
   release_dir="${unmanaged_release}"
   incoming_dir=""
@@ -276,4 +438,4 @@ replace_symlink_atomically "${test_root}/current.rollback" "${current_link}"
 [[ "$(readlink -f "${current_link}")" == "${old_release}" ]]
 grep -Fx 'old-same-sha' "${current_link}/marker" >/dev/null
 
-printf 'host lock, signal rollback, Java continuity, release retention, immutable same-SHA order contract, and rollback simulation PASS\n'
+printf 'strict safety env, host lock, signal rollback, Java continuity, release retention, immutable same-SHA order contract, and rollback simulation PASS\n'

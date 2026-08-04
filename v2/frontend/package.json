@@ -10,6 +10,7 @@
     "test": "vitest run",
     "test:e2e": "npm run build && playwright test",
     "test:e2e:masking": "playwright test --config playwright.masking.config.ts",
+    "test:e2e:planning": "playwright test --config playwright.planning.config.ts",
     "test:e2e:deployed:readonly": "npm run build && playwright test --config playwright.deployed.config.ts && node ./e2e-deployed/verify-sanitized-evidence.mjs",
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.e2e.json"
   },

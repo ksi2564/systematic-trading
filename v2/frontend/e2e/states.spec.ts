@@ -34,7 +34,7 @@ test.describe('빈 상태', () => {
 test.describe('전체 긴급 정지 상태', () => {
   test.use({ apiScenario: 'emergency-paused' });
 
-  test('[QA-OPS-001] 정지 상태를 명확히 표시하고 확인 없이 해제하지 않는다', async ({ page, networkEvidence }, testInfo) => {
+  test('[QA-OPS-001] 가상 정지 상태를 표시하고 해제 확인 취소 시 변경하지 않는다', async ({ page, networkEvidence }, testInfo) => {
     await openConsole(page);
     await expect(page.getByText('전체 거래 판단이 정지되어 있습니다')).toBeVisible();
     await expect(page.getByText('전체 정지', { exact: true })).toBeVisible();

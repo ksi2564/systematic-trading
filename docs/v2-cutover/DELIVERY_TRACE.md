@@ -1,0 +1,35 @@
+# v2 단일 개발·검증 추적표
+
+기준일: 2026-08-05 KST
+목적: `결정 → 요구사항 → 기능/API → 화면 → QA → 증적 → 승인`을 한 행에서 확인한다.
+
+상태 의미:
+
+- `완료`: 현재 범위의 인수 근거가 존재한다.
+- `부분`: 기반은 있으나 실제 운영·배포 인수 근거가 남았다.
+- `미구현`: 계약만 있고 실행 코드 또는 증적이 없다.
+- `승인 대기`: 구현자가 대신 결정할 수 없는 사용자 게이트다.
+
+| 결정·게이트 | 정본 요구사항 | 기능·API | 화면 | QA ID·검증 범위 | 실행 SHA·run/artifact | 증적 링크 | 상태 | 다음 필수 승인 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| D-01~02 · C0-B | `V2-STR-001`, `V2-STR-002`, `V2-DAT-001` | Python 평가기, Java/Python 공통 입력 비교, 미래 읽기 전용 exporter/comparator | `S-02`, `S-04`, `S-06` | `QA-PAR-001`: 공통 입력 수식·경계만 검증. 실제 운영값은 범위 밖 | 직전 검증 `ac0c632` · [v2 CI 30955131910](https://github.com/ksi2564/systematic-trading/actions/runs/30955131910) | [C0-B 미수집 항목](C0_DECISIONS.md#c0-b-운영-기준선-재확인-기록) | 부분 | C0-A 뒤 읽기 전용 snapshot 수집·C0-B 재승인 |
+| D-03 | `V2-AUT-001`, `V2-DAT-001` | 16:15 ET 상태 저장과 다음 거래일 09:45 판단을 분리하는 내구성 자동 실행기 | `S-01`, `S-04`, `S-06` | `QA-SHD-001~002`: fake-clock·휴장·DST·재시도·멱등성은 **계획** | 실행 없음 · artifact 없음 | [QA 계획](TRACEABILITY_QA.md) | 미구현 | C0-B |
+| D-04 | `V2-DAT-001`, `V2-SAF-001` | 입력 누락·지연 시 계산 차단, DisabledBroker | `S-01`, `S-07` | `QA-SAF-001`: 현재 화면의 unsafe/unavailable 잠금만 검증 | 직전 검증 `ac0c632` · [v2 CI 30955131910](https://github.com/ksi2564/systematic-trading/actions/runs/30955131910) | [검증 범위](TRACEABILITY_QA.md) | 부분 | 운영 입력 계약 C0-B·동일 SHA 인증 화면 QA |
+| D-05~06 | `V2-STR-002`, `V2-PER-001` | 수량 계산기, 입력 해시, 미래 운영 결과 비교기 | `S-04`, `S-05` | `QA-PAR-001`: 공통 입력에서 수식·주문 종목·매수/매도 방향만 교차 검증. Python 후보 수량·멱등 저장은 별도 검증했으며 Java/Python 수량과 Java 실제 주문 미리보기는 범위 밖 | 직전 검증 `ac0c632` · [v2 CI 30955131910](https://github.com/ksi2564/systematic-trading/actions/runs/30955131910) | [차이 판정 계약](TRACEABILITY_QA.md) | 부분 | C0-B |
+| D-07 | `V2-QA-001` | QA 기록 묶음·정리 tombstone·GET-only 배포 화면 harness | `S-03`, `S-08` | `QA-NAV-001`, `QA-OPS-001`, `QA-RWD-001`, `QA-SAF-001`: 로컬 가상 데이터 화면·증적 경계만 검증. 상태를 바꾸는 `QA-OPS-002`, `QA-MAN-001~009` 위험 작업과 `QA-ACC-002` 인증 화면은 모두 미실행 | 직전 범위 `ac0c632` 26/26·78개 파일. 현재 후보의 확장된 반응형 단언은 커밋 뒤 clean-tree 재검증·CI 대기 | [자동·수동 QA 경계](TRACEABILITY_QA.md#4-사용자에게-남길-수동-전용-시나리오) | 부분 | 승인 배포 SHA·사용자 준비 로그인 storage |
+| D-08 | `V2-REL-001` | 알고리즘·운영 결과·운영 준비의 독립 20거래일 3개 레인 | `S-04`, `S-09` | `QA-SHD-001~002`: 연속 기간·제외일·초기화 규칙은 **계획** | 실행 없음 · 0/20 | [통과 계약](C0_DECISIONS.md#d-08-무엇을-통과해야-섀도가-끝났다고-할까요) | 미구현 | C3 진입·차이 예외 수용 |
+| D-09 | `V2-RBK-001` | 불변 릴리스, host lock, signal/legacy rollback, 실패 바이트 보존 | `S-07`, `S-09` | `QA-INF-001`: 격리 whole-script fault matrix만 검증. 실제 staging 훈련은 범위 밖 | 현재 후보 로컬 PASS · CI/artifact 대기 | [격리/실환경 경계](CUTOVER_ROLLBACK.md) | 부분 | 공유 환경 훈련 실행 직전 승인 |
+| D-10 | `V2-LIV-001`, `V2-APR-001` | 단일 주문 소유권, 제출 1회, 접수·부분체결·대조·감사 | `S-05`, `S-09` | C5-A 단건·C5-B 5주기 simulator/canary QA는 **계획** | 실행 없음 · 실제 주문 0건 | [미래 자동운용 계약](C0_DECISIONS.md#d-10-java를-대체한-뒤에도-무엇이-자동이어야-할까요) | 미구현 | C5-A 단건 승인 → C5-B 범위·기간 승인 → C6 전환 승인 |
+| C1 접근 | `V2-ACC-001` | Cloudflare Access, loopback API, 동일 출처 UI/API | `S-00` | `QA-ACC-001`: 미인증 경계만 PASS. `QA-ACC-002`: 허용 계정 화면 BLOCKED | `8eb580b` · [run 30937893445](https://github.com/ksi2564/systematic-trading/actions/runs/30937893445) | [QA-ACC-001 증적](evidence/2026-08-05-QA-ACC-001.md) | 부분 | 로그인/OTP는 사용자 입력, GET-only QA |
+| C1 격리 | `V2-CUT-001`, `V2-CUT-002` | Java와 v2의 서비스·포트·DB 분리, 접근/섀도/LIVE 상태 분리 | `S-01`, `S-09` | `QA-CUT-001`: workflow의 Java active·동일 PID wrapper만 검증 | 현재 후보 로컬 PASS · CI 대기; 실제 전략 on/off·최근 성공 미확인 | [현재 미확인 사실](C0_DECISIONS.md#d-01-무엇을-최종-기준으로-볼까요) | 부분 | C0-B 읽기 전용 확인 |
+| C1 현재 UI | `V2-UI-001`, `V2-OPS-001` | 현재 6개 화면, 안전 상태 `checking/verified/unsafe/unavailable` | 현재 운영 콘솔(S-01 일부·S-02·S-03·S-05·S-06·S-07) | `QA-NAV-001`, `QA-OPS-001`, `QA-SAF-001`, `QA-RWD-001`: **현재 구현 화면** desktop/mobile mock 후보 | 새 반응형 단언을 포함한 현재 후보는 커밋 뒤 clean-tree 26/26·CI 재검증 대기 | [현재 UI QA 범위](TRACEABILITY_QA.md) | 부분 | 동일 SHA 배포·인증 QA |
+| C2 미래 화면 | `V2-OPS-001`, `V2-API-001` | 스케줄·데이터·차이·마지막 성공의 GET 조회 API | `S-01`, `S-04`, `S-08` | `QA-SHD-001~002`: 자동 섀도 runtime·API·화면 모두 **계획** | 실행 없음 · artifact 없음 | [기능 명세](FUNCTIONAL_SPEC.md) | 미구현 | C0-B |
+| 공통 명세 | `V2-DOC-001` | 요구·기능·화면·QA·롤백·기능 제안 템플릿 | **기획 미리보기** `S-01/S-04/S-08/S-09` | `QA-PLN-001`: 기획 보드 탐색·무저장·동일 origin GET·위험 버튼 비활성만 검증 | 현재 후보 로컬 desktop/mobile 2/2 · CI artifact 대기 | [상세 QA 판정](TRACEABILITY_QA.md) | 부분 | D-01~D-10 검토 |
+
+## PR에서 사용하는 방법
+
+1. 해당 행의 결정·요구사항 ID를 PR 본문에 적는다.
+2. 기능/API와 화면이 바뀌면 두 열을 함께 갱신한다.
+3. QA ID, 검증 범위, 실행 SHA/run, artifact·증적 링크를 각각 기록한다.
+4. 로컬·mock 성공을 운영·배포 성공으로 올려 적지 않는다.
+5. 다음 필수 승인이 남아 있으면 PR과 화면 상태를 `부분` 또는 `승인 대기`로 유지한다.

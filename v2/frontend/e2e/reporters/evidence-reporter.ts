@@ -127,7 +127,7 @@ const expectedScenarioMatrix = {
   }
 } as const;
 const expectedScenarioDefinitions = [
-  ['QA-RWD-001', 'populated', 'interaction.spec.ts › [QA-RWD-001] 키보드 포커스로 주요 메뉴를 이동하고 화면을 연다'],
+  ['QA-RWD-001', 'populated', 'interaction.spec.ts › [QA-RWD-001] 1440/360 화면에서 가로 잘림 없이 키보드로 주요 메뉴를 연다'],
   ['QA-NAV-001', 'populated', 'interaction.spec.ts › [QA-NAV-001] UI 새로고침과 브라우저 reload 뒤에도 mock 안전 상태를 유지한다'],
   ['QA-NAV-001', 'populated', 'navigation.spec.ts › [QA-NAV-001] 채워진 상태의 오늘의 운영 화면을 보여준다'],
   ['QA-NAV-001', 'populated', 'navigation.spec.ts › [QA-NAV-001] 채워진 상태의 전략 빌더 화면을 보여준다'],
@@ -138,7 +138,7 @@ const expectedScenarioDefinitions = [
   ['QA-SAF-001', 'populated', 'safety-policy.spec.ts › [QA-SAF-001] 주문·계좌 재개·LIVE 승인 API를 금지 요청으로 분류한다'],
   ['QA-SAF-001', 'populated', 'safety-policy.spec.ts › [QA-SAF-001] 6개 화면 읽기 전용 QA에서 위험 요청이 0건이다'],
   ['QA-NAV-001', 'empty', 'states.spec.ts › 빈 상태 › [QA-NAV-001] 6개 화면이 처음 사용자에게 다음 행동을 안내한다'],
-  ['QA-OPS-001', 'emergency-paused', 'states.spec.ts › 전체 긴급 정지 상태 › [QA-OPS-001] 정지 상태를 명확히 표시하고 확인 없이 해제하지 않는다'],
+  ['QA-OPS-001', 'emergency-paused', 'states.spec.ts › 전체 긴급 정지 상태 › [QA-OPS-001] 가상 정지 상태를 표시하고 해제 확인 취소 시 변경하지 않는다'],
   ['QA-SAF-001', 'unsafe', 'states.spec.ts › 안전 설정 불일치 › [QA-SAF-001] 서버 차단 설정이 예상과 다르면 변경 기능을 잠근다']
 ] as const;
 
@@ -375,7 +375,7 @@ function scenarioAssertions(qaId: string, title: string) {
     ],
     'QA-RWD-001': [
       '키보드 포커스만으로 주요 메뉴를 이동하고 화면을 연다.',
-      '현재 scenario의 manifest viewport에서 메뉴 포커스 순서를 검증한다.'
+      '현재 scenario의 manifest viewport에서 메뉴 포커스 순서와 가로 오버플로 1px 이하를 검증한다.'
     ],
     'QA-SAF-001': [
       '위험 API 분류 또는 읽기 전용 화면 탐색을 시나리오 제목대로 완료한다.',
@@ -470,6 +470,12 @@ function manualAndBlockedScope() {
       status: 'BLOCKED',
       scope: 'Cloudflare Access 인증 후 배포 UI·API 읽기 전용 확인',
       reason: '로그인된 Access 세션과 OTP를 자동 QA에 사용하지 않는다.'
+    },
+    {
+      qaId: 'QA-OPS-002',
+      status: 'BLOCKED',
+      scope: '공유 시험 서버에서 v2 전체 정지·해제와 감사 기록 확인',
+      reason: 'C0에서 제어 변경 범위를 승인하기 전에는 상태 변경 QA를 실행하지 않는다.'
     },
     {
       qaId: 'QA-MAN-001',

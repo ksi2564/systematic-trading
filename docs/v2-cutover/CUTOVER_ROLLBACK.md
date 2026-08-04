@@ -107,21 +107,45 @@ C2·C3의 개발·테스트·관찰은 C0 범위 승인 이후에만 시작하�
 바꿀 수 없다. 정상 종료와 오류 trap은 잠금 디렉터리를 해제한다. 강제 종료 뒤 잠금이
 남으면 다음 배포는 자동 삭제나 PID 추정 없이 실패하고, 운영자가 실행 중 프로세스가
 없음을 확인한 뒤에만 정확한 잠금 디렉터리를 수동 정리한다. 릴리스 경로는
-`SHA.UTC시각.PID` 단위로 불변이다. 정상적인 실패
-trap은 현재 attempt의 `.incoming`과 현재/직전 링크가 아닌 실패 release만 정확한
-경로 형식을 확인한 뒤 정리한다. 성공 뒤에는 현재 release, 직전 rollback 대상,
+`SHA.UTC시각.PID` 단위로 불변이다. 실패 trap은 현재 attempt의 `.incoming`을 정리하되,
+이전 서비스의 재시작·health 검증까지 성공한 `ROLLBACK_STATUS=verified`일 때만 실패
+release를 지운다. rollback 자체가 검증되지 않으면 실행 중인 프로세스가 새 release의
+바이트를 참조할 수 있으므로 `FAILED_RELEASE_PRESERVED`로 보존하고 수동 확인을 요구한다.
+성공 뒤에는 현재 release, 직전 rollback 대상,
 최신 완료 attempt 3개(중복 제외)를 보존하고 나머지 관리 대상만 정리한다. 정리에
 실패하면 서비스 성공을 되돌리지 않고 `RELEASE_RETENTION=warning`을 출력해 수동
-확인을 요구한다. 이 보존 정책은 배포 실행 권한이나 공유 환경 변경 승인을 대신하지
-않는다.
+확인을 요구한다. host lock owner/rmdir 정리에 실패하면 성공 exit를 유지하지 않고
+workflow를 실패시켜 다음 배포가 잠금 잔존을 놓치지 않게 한다. 이 보존 정책은 배포
+실행 권한이나 공유 환경 변경 승인을 대신하지 않는다.
+
+서비스 전환 전 `/etc/wallant/v2.env`의 주문 안전 키는 단순 포함 여부가 아니라 strict
+parser로 확인한다. `WALLANT_EXECUTION_ENABLED=false`와
+`WALLANT_BROKER_ADAPTER=disabled`가 공백 변형 없이 각각 정확히 한 번만 있어야 하며,
+중복·누락·다른 값·systemd가 같은 키로 해석할 앞/뒤 공백 변형은 current 링크나 서비스를
+바꾸기 전에 배포를 중단한다. Access 설정 변경도 같은 검사를 변경 전후에 수행한다.
 
 배포 프로세스가 HUP·INT·TERM을 받으면 미검증 current를 남기지 않고 일반 오류와 같은
 rollback을 먼저 수행한 뒤 EXIT 단계에서 host lock을 해제한다. SIGKILL처럼 trap을
 실행할 수 없는 종료는 잠금이 남아 다음 실행을 막으므로 수동 확인 없이 자동 재개하지
 않는다. rollback 경로 자체는 `set -e` 조기 중단을 끄고 링크·unit·restart를 모두 시도한
-뒤 이전 release SHA와 health UP·execution false·broker disabled가 일치할 때만
-`ROLLBACK_STATUS=verified`를 출력한다. 하나라도 확인하지 못하면 `failed`로 남겨 복구
-완료를 단정하지 않는다.
+뒤 이전 release 경로의 SHA prefix·`release.env` SHA·health SHA와 health
+UP·execution false·broker disabled가 모두 일치할 때만
+`ROLLBACK_STATUS=verified`를 출력한다. #54처럼 `release.env`가 없고 release 경로가
+정확한 40자 SHA인 legacy 형식은 이전 unit을 복구·재시작한 뒤 health UP·execution
+false·broker disabled까지 확인하고 `verified-legacy`로 구분한다. 이 경우 health의
+build SHA 증명은 불가능하다는 사실을 함께 남긴다. 하나라도 확인하지 못하면 `failed`로
+남기고 새 release를 보존해 복구 완료를 단정하지 않는다. 최초 배포 rollback도 stop과
+`is-active=inactive`(정상적인 exit 3), `MainPID=0`이 모두 확인된 뒤에만 current 링크와
+실패 release를 제거한다. D-Bus·systemd 상태 조회 오류는 inactive로 해석하지 않는다.
+
+`deploy_staging_fault_injection_test.sh`는 운영 서버와 분리된 임시 경로에서 배포 스크립트
+전체 제어 흐름을 실행한다. modern·legacy·same-SHA 성공/복구, health transport·안전값·SHA
+오류, 안전 키 중복 충돌의 pre-switch 거부, 기존 비정상 서비스 stop 실패의 pre-switch
+거부, rollback 경로/SHA 불일치, systemd restart 오류, HUP·TERM, rollback health/restart
+실패, 최초 배포 stop 성공/실패·상태 조회 오류, active/stale/cleanup-failed lock을 상태형
+fake systemd·runtime SHA로 검증한다.
+실제 staging의 systemd·DB·health 장애 훈련은 공유 환경 변경 승인을 받은 뒤 별도 증적으로
+남긴다.
 
 workflow의 원격 script·archive 임시 경로에는 GitHub run ID와 run attempt가 모두 들어가
 재시도 cleanup이 다른 실행의 파일을 지우지 않는다. 배포 스크립트가 잠금을 놓은 뒤에도

@@ -1,7 +1,8 @@
 [Unit]
 Description=Wall-Ant v2 FastAPI
-After=network-online.target mysql.service
+After=network-online.target docker.service
 Wants=network-online.target
+Requires=docker.service
 
 [Service]
 Type=simple
@@ -9,7 +10,7 @@ User=wallant
 Group=wallant
 WorkingDirectory=/opt/wallant/current/v2/backend
 EnvironmentFile=/etc/wallant/v2.env
-ExecStart=/opt/wallant/venv/bin/uvicorn wallant.main:app --host 127.0.0.1 --port 8000 --workers 2
+ExecStart=/opt/wallant/current/venv/bin/uvicorn wallant.main:app --host 127.0.0.1 --port 8000 --workers 2
 Restart=on-failure
 RestartSec=5
 NoNewPrivileges=true

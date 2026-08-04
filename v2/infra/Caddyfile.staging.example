@@ -1,4 +1,4 @@
-app.wall-ant.com {
+http://127.0.0.1:18082 {
 	encode zstd gzip
 
 	@backend path /api/* /health

@@ -32,6 +32,9 @@ jobs:
             v2/infra/scripts/preflight_staging.sh \
             v2/infra/scripts/deploy_staging.sh
           docker compose -f v2/infra/compose.yaml config --quiet
+          grep -F \
+            'ExecStart=/opt/wallant/current/venv/bin/python -m uvicorn' \
+            v2/infra/systemd/wallant-v2-api.service
       - uses: actions/upload-artifact@v4
         with:
           name: wallant-v2-release-candidate

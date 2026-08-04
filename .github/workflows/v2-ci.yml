@@ -28,6 +28,13 @@ jobs:
             v2/infra/scripts/preflight_staging.sh \
             v2/infra/scripts/deploy_staging.sh
           docker compose -f v2/infra/compose.yaml config --quiet
+          grep -F \
+            'ExecStart=/opt/wallant/current/venv/bin/python -m uvicorn' \
+            v2/infra/systemd/wallant-v2-api.service
+          venv_test_root="$(mktemp -d)"
+          python3 -m venv "${venv_test_root}/release.incoming/venv"
+          mv "${venv_test_root}/release.incoming" "${venv_test_root}/release"
+          "${venv_test_root}/release/venv/bin/python" -c 'import sys; print(sys.prefix)'
 
   backend:
     runs-on: ubuntu-latest

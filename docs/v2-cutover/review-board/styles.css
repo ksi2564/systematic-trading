@@ -1062,6 +1062,16 @@ h3 {
     padding: 20px;
   }
 
+  .evidence-list li {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .evidence-list small {
+    text-align: left;
+  }
+
   .trace-table-wrap {
     overflow: visible;
     border: 0;

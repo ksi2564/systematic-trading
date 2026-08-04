@@ -203,7 +203,7 @@ const screens = [
     description: "누가 언제 무엇을 검증했는지",
     content: `
       <div class="mock-grid">
-        <article class="mock-card full"><span>증적 묶음</span><ul class="evidence-list"><li><strong>현재 구현 화면 가상 데이터 검증</strong><small>26 / 26 · 직전 실행 버전</small></li><li><strong>증적 파일 변경 확인</strong><small>78개 · 해시 검증 통과</small></li><li><strong>인증된 배포 화면 검증</strong><small>미실행 · 사용자 세션 대기</small></li></ul></article>
+        <article class="mock-card full"><span>검증 단계</span><ul class="evidence-list"><li><strong>로컬 가상 화면 검증</strong><small>기능 후보 1520166 · 26 / 26 통과</small></li><li><strong>내 작업 버전 자동 검사</strong><small>브랜치 CI 30959376884 · 5개 작업 통과</small></li><li><strong>기준 버전과 합친 상태 검사</strong><small>PR CI 30959379072 · 5개 작업 통과</small></li><li><strong>증적 참조 무결성</strong><small>78개 참조 · 모두 해시 검증 통과</small></li><li><strong>운영 배포·인증 화면 검증</strong><small>미실행 · 사용자 세션 대기</small></li></ul></article>
         <article class="mock-card wide"><span>민감정보 처리</span><strong>마스킹 뒤 보존</strong><p>원본 실행 기록과 로그인 상태는 저장소 밖, 소유자만 읽을 수 있는 경로를 사용해요.</p></article>
         <article class="mock-card"><span>실제 주문</span><strong>0건</strong><p>화면 조회 이외 요청은 차단해요.</p></article>
       </div>`,
@@ -226,13 +226,13 @@ const traceRows = [
   ["D-03", "V2-AUT-001 · V2-DAT-001", "S-01 · S-04 · S-06", "QA-SHD-001/002", "계획만 있음 · 실행·증적 파일 없음", "미구현", "C0-B"],
   ["D-04", "V2-DAT-001 · V2-SAF-001", "S-01 · S-07", "QA-SAF-001", "현재 UI 잠금만 통과 · 운영 입력 미검증", "부분", "C0-B"],
   ["D-05~06", "V2-STR-002 · V2-PER-001", "S-04 · S-05", "QA-PAR-001", "Python 후보 수량·저장만 통과 · Java/Python 수량 비교와 실제 주문 미리보기 없음", "부분", "C0-B"],
-  ["D-07", "V2-QA-001", "S-03 · S-08", "QA-NAV-001 · QA-OPS-001 · QA-RWD-001 · QA-SAF-001", "직전 범위 26/26·78개 · 새 반응형 검사는 재실행 대기 · QA-OPS-002와 QA-MAN-001~009 위험 작업 미실행", "부분", "검증 범위 승인"],
+  ["D-07", "V2-QA-001", "S-03 · S-08", "QA-NAV-001 · QA-OPS-001 · QA-RWD-001 · QA-SAF-001", "기능 후보 1520166 · 로컬 가상 화면 26/26·브랜치 CI 30959376884·PR 병합 CI 30959379072·증적 참조 78개 해시 검증 통과 · QA-OPS-002와 QA-MAN-001~009 위험 작업 미실행", "부분", "검증 범위 승인"],
   ["D-08", "V2-REL-001", "S-04 · S-09", "QA-SHD-001/002", "세 가지 비교 모두 0/20", "미구현", "C3 진입"],
   ["D-09", "V2-RBK-001", "S-07 · S-09", "QA-INF-001", "격리 장애 시험 통과 · 실제 공유 시험 서버 훈련 없음", "부분", "C4 실행 승인"],
   ["D-10", "V2-LIV-001 · V2-APR-001", "S-05 · S-09", "C5-A/B 계획", "실제 주문 0건 · 제한 시험 없음", "미구현", "단건→범위→전환 승인"],
   ["C1 접근", "V2-ACC-001", "S-00", "QA-ACC-001/002", "미인증 경계 통과 · 인증 화면 미실행", "부분", "로그인 검증"],
   ["C1 격리", "V2-CUT-001 · V2-CUT-002", "S-01 · S-09", "QA-CUT-001", "서비스·프로세스 번호 연속성 시험 통과 · 실제 운용 미확인", "부분", "C0-B"],
-  ["현재 UI", "V2-UI-001 · V2-OPS-001", "현재 콘솔(S-01 일부 · S-02 · S-03 · S-05 · S-06 · S-07)", "QA-NAV-001 · QA-OPS-001 · QA-SAF-001 · QA-RWD-001", "새 반응형 검사 포함 후보 · 커밋 후 26/26 재검증 대기", "부분", "배포 인증 검증"],
+  ["현재 UI", "V2-UI-001 · V2-OPS-001", "현재 콘솔(S-01 일부 · S-02 · S-03 · S-05 · S-06 · S-07)", "QA-NAV-001 · QA-OPS-001 · QA-SAF-001 · QA-RWD-001", "기능 후보 1520166 · 로컬 가상 화면 26/26·브랜치 CI 30959376884·PR 병합 CI 30959379072 통과 · 운영 배포·인증 화면 미실행", "부분", "배포 인증 검증"],
   ["C2 미래 화면", "V2-OPS-001 · V2-API-001", "S-01 · S-04 · S-08", "QA-SHD-001/002", "자동 병행 비교의 실행·조회 기능·화면 모두 미구현", "미구현", "C0-B"],
   ["공통 명세", "V2-DOC-001", "기획 미리보기 S-01 · S-04 · S-08 · S-09", "QA-PLN-001", "보드 탐색 2/2 · 기능 구현 증적 아님", "부분", "D-01~10"],
 ];

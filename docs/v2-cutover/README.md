@@ -27,12 +27,26 @@
 - v2 본체 배포: #54 커밋 `66e374c`, GitHub Actions run `30931862737` 성공
 - #56 접근 수정: 커밋 `8eb580b`, `access-configure` run `30937893445` 성공
 - `master@8eb580b` 기준 #55·#56에는 `v2/backend`, `v2/frontend` 변경이 없어
-  #54 배포본과 동일했음. 현재 작업 트리 변경은 미배포 상태임
+  #54 배포본과 동일했음. PR #57 기능 후보 `15201660c009cfbd57da0ff4637d0d33da46b20f`는
+  미배포 상태임
+- PR #57 기능 검증 기준 커밋 `15201660c009cfbd57da0ff4637d0d33da46b20f`는 로컬 clean-tree 가상
+  데이터 UI QA 26/26·증적 참조 78개 SHA-256 검증과 같은 SHA의 [push v2 CI run
+  `30959376884`](https://github.com/ksi2564/systematic-trading/actions/runs/30959376884)를 통과했음
+- GitHub가 base `8eb580b0bb21b90e9bb19dc26a7b79f8444149b2`와 위 기능 후보를 합친 당시 test-merge
+  `5fca72ec8ba5167bcbbf3bf99ffad1f4273a6cb7`도 [PR v2 CI run
+  `30959379072`](https://github.com/ksi2564/systematic-trading/actions/runs/30959379072)의
+  backend·frontend·infra·Java/Python 전략 패리티·`ui-qa` 5개 작업을 통과했음. 두 CI는
+  RC·운영 배포·인증 화면 통과를 뜻하지 않으며, 실제 staging이나 Java 전략 on/off·최근
+  성공·주문 모드도 확인하지 않음
+- 이 결과를 연결하는 후속 증적 문구·기획 QA 단언 변경은 위 두 실행 범위에 포함하지 않으며,
+  위 두 실행을 해당 변경의 통과 근거로 쓰지 않음. 이를 담은 후속 커밋의 check를 별도
+  증적으로 사용함
 - 현재 RC 워크플로 변경은 공통 Java golden·두 스케줄러·프런트엔드
   typecheck/단위 테스트/빌드·no-order Playwright·manifest 안전 검증을 같은
   SHA에서 강제하는 **배포 게이트 후보**임. 아직 실제 RC run 증적은 없음
-- 위 실행에서 v2 API, Cloudflare Tunnel, Java, Caddy 서비스 활성과
-  `execution_enabled=false`, `broker_adapter=disabled`, 무인증 API `401`을 확인
+- #56 `access-configure` run `30937893445`에서 당시 v2 API, Cloudflare Tunnel, Java,
+  Caddy 서비스 활성과 `execution_enabled=false`, `broker_adapter=disabled`, 무인증 API
+  `401`을 확인
 - #56 실행은 접근 원본 구성을 갱신한 것이며 v2 자동 섀도나 실주문 기능을 배포한
   것은 아님
 - 외부 URL의 미인증 UI/API는 Access 로그인으로 이동함을

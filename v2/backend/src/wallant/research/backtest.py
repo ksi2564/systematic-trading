@@ -108,6 +108,16 @@ class BacktestEngine:
         if fee_rate_pct < ZERO or fee_rate_pct > HUNDRED:
             raise ValueError("수수료율은 0 이상 100 이하이어야 합니다.")
         fee_rate = fee_rate_pct / HUNDRED
+        sell_priority = version.definition.parameters.get("sell_priority") or [
+            "TQQQ",
+            "QLD",
+            "QQQM",
+        ]
+        buy_priority = version.definition.parameters.get("buy_priority") or [
+            "QQQM",
+            "QLD",
+            "TQQQ",
+        ]
         warmup_skipped = 0
         missing_vix_days = 0
         missing_ma_guard_days = 0
@@ -146,6 +156,8 @@ class BacktestEngine:
                     fee_rate=fee_rate,
                     tolerance_pct=version.definition.tolerance_pct,
                     force_rebalance=force_rebalance,
+                    sell_priority=sell_priority,
+                    buy_priority=buy_priority,
                 )
                 trades.extend(generated)
                 pending_target = None
@@ -221,7 +233,8 @@ class BacktestEngine:
             )
             evaluations.append(evaluation)
             previous_state = evaluation.state
-            previous_target = evaluation.target_weights
+            # Match the Java state repository: the next VIX check sees the pre-circuit strategy target.
+            previous_target = evaluation.base_target_weights
             if bool(evaluation.state.get("strategy_on", True)):
                 force_rebalance = (
                     version.definition.engine == StrategyEngine.SIGNAL_TRADING_V1
@@ -313,26 +326,36 @@ class BacktestEngine:
         fee_rate: Decimal,
         tolerance_pct: Decimal,
         force_rebalance: bool,
+        sell_priority: list[str],
+        buy_priority: list[str],
     ) -> tuple[Decimal, list[BacktestTrade]]:
         symbols = [symbol for symbol in target if symbol in daily]
         total = cash + sum((holdings.get(symbol, ZERO) * daily[symbol].open for symbol in symbols), ZERO)
-        desired: dict[str, Decimal] = {}
-        for symbol in symbols:
-            current_weight = (
-                holdings.get(symbol, ZERO) * daily[symbol].open / total * HUNDRED
+        current_weights = {
+            symbol: (
+                pct(holdings.get(symbol, ZERO) * daily[symbol].open / total * HUNDRED)
                 if total > ZERO
                 else ZERO
             )
-            if not force_rebalance and abs(decimal(target[symbol]) - current_weight) < tolerance_pct:
-                desired[symbol] = holdings.get(symbol, ZERO)
-            else:
-                desired[symbol] = (
-                    total * decimal(target[symbol]) / HUNDRED / daily[symbol].open
-                ).quantize(Decimal("1"), rounding=ROUND_DOWN)
+            for symbol in symbols
+        }
+        should_rebalance = force_rebalance or any(
+            abs(decimal(target[symbol]) - current_weights[symbol]) >= tolerance_pct
+            for symbol in symbols
+        )
+        if not should_rebalance:
+            return cash, []
+
+        desired: dict[str, Decimal] = {}
+        for symbol in symbols:
+            desired[symbol] = (
+                total * decimal(target[symbol]) / HUNDRED / daily[symbol].open
+            ).quantize(Decimal("1"), rounding=ROUND_DOWN)
         trades: list[BacktestTrade] = []
 
         for symbol in sorted(
-            symbols, key=lambda item: holdings.get(item, ZERO) - desired[item], reverse=True
+            symbols,
+            key=lambda item: (self._priority(item, sell_priority), item),
         ):
             quantity = holdings.get(symbol, ZERO) - desired[symbol]
             if quantity <= ZERO:
@@ -358,7 +381,8 @@ class BacktestEngine:
             )
 
         for symbol in sorted(
-            symbols, key=lambda item: desired[item] - holdings.get(item, ZERO), reverse=True
+            symbols,
+            key=lambda item: (self._priority(item, buy_priority), item),
         ):
             quantity = desired[symbol] - holdings.get(symbol, ZERO)
             if quantity <= ZERO:
@@ -391,6 +415,13 @@ class BacktestEngine:
                 )
             )
         return cash, trades
+
+    @staticmethod
+    def _priority(symbol: str, priorities: list[str]) -> int:
+        try:
+            return priorities.index(symbol)
+        except ValueError:
+            return len(priorities)
 
     @staticmethod
     def _signal_warmup_observations(version: StrategyVersion) -> int:

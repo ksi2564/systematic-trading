@@ -1,0 +1,183 @@
+{
+  "drawdown_boundaries": [
+    {
+      "close": "85",
+      "expected_drawdown": "15.0000",
+      "expected_bucket": "FROM_15_TO_25",
+      "expected_target": {"QQQM": "60", "QLD": "30", "TQQQ": "10"}
+    },
+    {
+      "close": "75",
+      "expected_drawdown": "25.0000",
+      "expected_bucket": "FROM_25_TO_35",
+      "expected_target": {"QQQM": "40", "QLD": "40", "TQQQ": "20"}
+    },
+    {
+      "close": "65",
+      "expected_drawdown": "35.0000",
+      "expected_bucket": "FROM_35_TO_45",
+      "expected_target": {"QQQM": "30", "QLD": "30", "TQQQ": "40"}
+    },
+    {
+      "close": "55",
+      "expected_drawdown": "45.0000",
+      "expected_bucket": "MORE_THAN_45",
+      "expected_target": {"QQQM": "20", "QLD": "20", "TQQQ": "60"}
+    }
+  ],
+  "recovery_hysteresis": [
+    {
+      "close": "88",
+      "previous": {
+        "ath": "100",
+        "close": "82",
+        "drawdown": "18.0000",
+        "max_drawdown": "20.0000",
+        "bucket": "FROM_15_TO_25",
+        "phase": "DRAWDOWN",
+        "target": {"QQQM": "60", "QLD": "30", "TQQQ": "10"}
+      },
+      "expected_drawdown": "12.0000",
+      "expected_phase": "DRAWDOWN",
+      "expected_target": {"QQQM": "60", "QLD": "30", "TQQQ": "10"}
+    },
+    {
+      "close": "90",
+      "previous": {
+        "ath": "100",
+        "close": "82",
+        "drawdown": "18.0000",
+        "max_drawdown": "20.0000",
+        "bucket": "FROM_15_TO_25",
+        "phase": "DRAWDOWN",
+        "target": {"QQQM": "60", "QLD": "30", "TQQQ": "10"}
+      },
+      "expected_drawdown": "10.0000",
+      "expected_phase": "RECOVERY",
+      "expected_target": {"QQQM": "70", "QLD": "30", "TQQQ": "0"}
+    }
+  ],
+  "guard_boundaries": [
+    {
+      "close": "50",
+      "ma": "50",
+      "vix": "34.9999",
+      "expected_ma_triggered": false,
+      "expected_vix_triggered": false
+    },
+    {
+      "close": "50",
+      "ma": "50.0001",
+      "vix": "35",
+      "expected_ma_triggered": true,
+      "expected_vix_triggered": true
+    }
+  ],
+  "paper_sequence": [
+    {
+      "as_of": "2026-04-01",
+      "close": "50",
+      "ma": "60",
+      "vix": "35",
+      "expected_base": {"QQQM": "20", "QLD": "20", "TQQQ": "60"},
+      "expected_target": {"QQQM": "30", "QLD": "30", "TQQQ": "40"},
+      "expected_events": ["MA200_DEFENSIVE", "VIX_NO_LEVERAGE_INCREASE"]
+    },
+    {
+      "as_of": "2026-04-02",
+      "close": "50",
+      "ma": "50",
+      "vix": "40",
+      "expected_base": {"QQQM": "20", "QLD": "20", "TQQQ": "60"},
+      "expected_target": {"QQQM": "20", "QLD": "20", "TQQQ": "60"},
+      "expected_events": ["VIX_NO_LEVERAGE_INCREASE"]
+    }
+  ],
+  "ma_then_vix": {
+    "close": "50",
+    "ma": "60",
+    "vix": "40",
+    "original": {"QQQM": "20", "QLD": "20", "TQQQ": "60"},
+    "previous_base": {"QQQM": "30", "QLD": "30", "TQQQ": "40"},
+    "expected_target": {"QQQM": "30", "QLD": "30", "TQQQ": "40"},
+    "expected_events": ["MA200_DEFENSIVE", "VIX_NO_LEVERAGE_INCREASE"]
+  },
+  "backtest_sequence": [
+    {
+      "as_of": "2026-05-01",
+      "close": "100",
+      "vix": "20",
+      "expected_base": {"QQQM": "100", "QLD": "0", "TQQQ": "0"},
+      "expected_target": {"QQQM": "100", "QLD": "0", "TQQQ": "0"}
+    },
+    {
+      "as_of": "2026-05-02",
+      "close": "40",
+      "vix": "40",
+      "expected_base": {"QQQM": "20", "QLD": "20", "TQQQ": "60"},
+      "expected_target": {"QQQM": "100", "QLD": "0", "TQQQ": "0"}
+    },
+    {
+      "as_of": "2026-05-03",
+      "close": "50",
+      "vix": "40",
+      "expected_base": {"QQQM": "20", "QLD": "20", "TQQQ": "60"},
+      "expected_target": {"QQQM": "20", "QLD": "20", "TQQQ": "60"}
+    }
+  ],
+  "order_tolerance_and_priority": [
+    {
+      "id": "rounded_exact_tolerance_opens_full_rebalance",
+      "tolerance_pct": "5",
+      "target": {"QQQM": "60", "QLD": "30", "TQQQ": "10"},
+      "portfolio": {
+        "cash": "0",
+        "positions": [
+          {"symbol": "QQQM", "quantity": "5500004", "market_price": "1"},
+          {"symbol": "QLD", "quantity": "3100000", "market_price": "1"},
+          {"symbol": "TQQQ", "quantity": "1399996", "market_price": "1"}
+        ]
+      },
+      "expected_should_rebalance": true,
+      "expected_intents": [
+        {"symbol": "TQQQ", "side": "SELL"},
+        {"symbol": "QLD", "side": "SELL"},
+        {"symbol": "QQQM", "side": "BUY"}
+      ]
+    },
+    {
+      "id": "exact_tolerance_opens_full_rebalance",
+      "tolerance_pct": "5",
+      "target": {"QQQM": "60", "QLD": "30", "TQQQ": "10"},
+      "portfolio": {
+        "cash": "0",
+        "positions": [
+          {"symbol": "QQQM", "quantity": "550000", "market_price": "10"},
+          {"symbol": "QLD", "quantity": "310000", "market_price": "10"},
+          {"symbol": "TQQQ", "quantity": "140000", "market_price": "10"}
+        ]
+      },
+      "expected_should_rebalance": true,
+      "expected_intents": [
+        {"symbol": "TQQQ", "side": "SELL"},
+        {"symbol": "QLD", "side": "SELL"},
+        {"symbol": "QQQM", "side": "BUY"}
+      ]
+    },
+    {
+      "id": "all_differences_below_tolerance_do_nothing",
+      "tolerance_pct": "5",
+      "target": {"QQQM": "60", "QLD": "30", "TQQQ": "10"},
+      "portfolio": {
+        "cash": "0",
+        "positions": [
+          {"symbol": "QQQM", "quantity": "550010", "market_price": "10"},
+          {"symbol": "QLD", "quantity": "310000", "market_price": "10"},
+          {"symbol": "TQQQ", "quantity": "139990", "market_price": "10"}
+        ]
+      },
+      "expected_should_rebalance": false,
+      "expected_intents": []
+    }
+  ]
+}

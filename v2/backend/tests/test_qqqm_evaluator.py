@@ -106,6 +106,40 @@ def test_15퍼센트_낙폭에서_새_버킷과_비중을_계산한다() -> None
     assert result.target_weights["TQQQ"] == Decimal("10.00")
 
 
+@pytest.mark.parametrize(
+    ("close", "bucket", "expected_weights"),
+    [
+        ("75", "FROM_25_TO_35", {"QQQM": "40", "QLD": "40", "TQQQ": "20"}),
+        ("65", "FROM_35_TO_45", {"QQQM": "30", "QLD": "30", "TQQQ": "40"}),
+        ("55", "MORE_THAN_45", {"QQQM": "20", "QLD": "20", "TQQQ": "60"}),
+    ],
+)
+def test_drawdown_boundaries_select_the_complete_java_allocation(
+    close: str,
+    bucket: str,
+    expected_weights: dict[str, str],
+) -> None:
+    result = evaluate(
+        close,
+        previous_state=state(
+            ath="100",
+            close="95",
+            drawdown="5",
+            max_drawdown="5",
+            phase="NORMAL",
+            weights={"QQQM": "100", "QLD": "0", "TQQQ": "0"},
+        ),
+    )
+
+    assert result.state["phase"] == "DRAWDOWN"
+    assert result.state["drawdown_bucket"] == bucket
+    assert result.target_weights == {
+        symbol: Decimal(weight).quantize(Decimal("0.00"))
+        for symbol, weight in expected_weights.items()
+    }
+    assert sum(result.target_weights.values()) == Decimal("100.00")
+
+
 def test_회복_직전_구간에서는_이전_비중을_유지한다() -> None:
     previous_weights = {"QQQM": "60", "QLD": "30", "TQQQ": "10"}
     result = evaluate(
@@ -188,18 +222,103 @@ def test_vix는_tqqq_증가를_이전_비중으로_제한한다() -> None:
     assert "VIX_NO_LEVERAGE_INCREASE" in result.events
 
 
-def test_첫평가의_vix도_현재비중보다_tqqq를_늘리지_않는다() -> None:
+def test_first_vix_keeps_the_complete_ma_adjusted_target_without_previous_weights() -> None:
     result = evaluate(
-        "70",
+        "50",
         history=["100"],
-        vix="40",
+        vix="35",
         ma="60",
         portfolio={"TQQQ.weight_pct": Decimal("5")},
     )
 
-    assert result.base_target_weights["TQQQ"] == Decimal("20.00")
-    assert result.target_weights["TQQQ"] == Decimal("5")
-    assert "VIX_NO_LEVERAGE_INCREASE" in result.events
+    assert result.base_target_weights == {
+        "QQQM": Decimal("20.00"),
+        "QLD": Decimal("20.00"),
+        "TQQQ": Decimal("60.00"),
+    }
+    assert result.target_weights == {
+        "QQQM": Decimal("30.00"),
+        "QLD": Decimal("30.00"),
+        "TQQQ": Decimal("40.00"),
+    }
+    assert result.events == ["MA200_DEFENSIVE", "VIX_NO_LEVERAGE_INCREASE"]
+    assert sum(result.target_weights.values()) == Decimal("100.00")
+
+
+@pytest.mark.parametrize(
+    ("ma", "expected_tqqq", "defensive"),
+    [
+        ("50", "60.00", False),
+        ("50.0001", "40.00", True),
+    ],
+)
+def test_ma_triggers_only_when_close_is_strictly_below_the_boundary(
+    ma: str,
+    expected_tqqq: str,
+    defensive: bool,
+) -> None:
+    result = evaluate("50", history=["100"], ma=ma)
+
+    assert result.target_weights["TQQQ"] == Decimal(expected_tqqq)
+    assert ("MA200_DEFENSIVE" in result.events) is defensive
+    assert sum(result.target_weights.values()) == Decimal("100.00")
+
+
+def test_vix_triggers_at_the_threshold_boundary() -> None:
+    previous_weights = {"QQQM": Decimal("60"), "QLD": Decimal("30"), "TQQQ": Decimal("10")}
+    previous_state = state(
+        ath="100",
+        close="82",
+        drawdown="18",
+        max_drawdown="20",
+        phase="DRAWDOWN",
+        weights={"QQQM": "60", "QLD": "30", "TQQQ": "10"},
+    )
+
+    below = evaluate(
+        "70",
+        previous_state=previous_state,
+        previous_target=previous_weights,
+        vix="34.9999",
+    )
+    boundary = evaluate(
+        "70",
+        previous_state=previous_state,
+        previous_target=previous_weights,
+        vix="35",
+    )
+
+    assert below.target_weights == below.base_target_weights
+    assert "VIX_NO_LEVERAGE_INCREASE" not in below.events
+    assert boundary.target_weights == previous_weights
+    assert "VIX_NO_LEVERAGE_INCREASE" in boundary.events
+    assert sum(boundary.target_weights.values()) == Decimal("100")
+
+
+def test_ma_is_applied_before_vix_and_equal_tqqq_keeps_the_ma_result() -> None:
+    previous_weights = {"QQQM": Decimal("30"), "QLD": Decimal("30"), "TQQQ": Decimal("40")}
+    result = evaluate(
+        "50",
+        previous_state=state(
+            ath="100",
+            close="55",
+            drawdown="45",
+            max_drawdown="45",
+            phase="DRAWDOWN",
+            weights={"QQQM": "20", "QLD": "20", "TQQQ": "60"},
+        ),
+        previous_target=previous_weights,
+        vix="40",
+        ma="60",
+    )
+
+    assert result.target_weights == {
+        "QQQM": Decimal("30.00"),
+        "QLD": Decimal("30.00"),
+        "TQQQ": Decimal("40.00"),
+    }
+    assert result.events == ["MA200_DEFENSIVE", "VIX_NO_LEVERAGE_INCREASE"]
+    assert sum(result.target_weights.values()) == Decimal("100.00")
 
 
 def test_200일선_필터는_tqqq를_한_단계_낮춘다() -> None:

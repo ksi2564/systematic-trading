@@ -104,7 +104,8 @@ class PaperTradingService:
             raise
 
         session.previous_state = evaluation.state
-        session.previous_target_weights = evaluation.target_weights
+        # Java persists the strategy state's pre-circuit target; VIX compares against that base next day.
+        session.previous_target_weights = evaluation.base_target_weights
         session.evaluated_days += 1
         session.signal_count += len(plan.intents)
         return PaperStepResult(

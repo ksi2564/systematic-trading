@@ -2,8 +2,22 @@
 
 ## 현재 상태
 
-v2는 연구·모의투자 후보이며 실거래 시스템이 아니다. 이번 구현에서는 서버 설치,
-DNS, Cloudflare Access 정책, KIS 실계좌, 기존 운영 DB를 변경하지 않았다.
+v2는 비공개 서버에 배포된 연구·모의투자 후보이며 실거래 시스템이 아니다.
+
+- 앱 본체는 #54 커밋 `66e374c`의 deploy run `30931862737`에서 배포됐다.
+- `master@8eb580b` 기준 #55·#56에는 `v2/backend`, `v2/frontend` 변경이
+  없어 #54 배포본과 같았다. 현재 작업 트리는 미배포 변경을 포함하며,
+  실제 배포 SHA·run은 다음 배포 후 갱신한다.
+- #56 커밋 `8eb580b`의 access-configure run `30937893445`는 앱 바이너리를 다시
+  배포하지 않고 Access/Caddy 원본의 공개 Host 허용을 수정했다.
+- 해당 실행에서 v2 API·cloudflared·Java·Caddy가 active였고, 원본 API 무인증
+  `401`, v2 실행 설정 false/disabled를 확인했다.
+- 외부 브라우저의 Access 로그인·화면 흐름은 별도 QA 증적이 필요하다.
+- KIS 실계좌 주문, 기존 운영 DB, Java 프로세스에는 전환 작업을 하지 않았다.
+
+Java 저장소의 `application.yml`, `application-prod.yml` 기본값은 `PAPER`와 execution
+disabled지만 런타임 환경 변수·DB 운영 모드는 확인하지 않았다. Java 서비스가
+active라는 사실만으로 현재 운영 모드를 추정하지 않는다.
 
 ## 로컬 시작
 
@@ -72,6 +86,10 @@ v2 스테이징은 기존 Java 운영 앱과 같은 서버를 사용하되 다�
 배포는 GitHub Actions의 **v2 Staging Deploy** 워크플로만 사용한다. 기존
 **Deploy Production** 워크플로는 Java 앱 배포이므로 v2 작업에서 실행하지 않는다.
 
+현재 적용 기록과 재배포 절차를 구분한다. #54 앱 본체 배포와 #56 접근 구성은 이미
+성공했지만, 아래 절차는 새 앱 변경을 배포할 때 다시 수행하는 표준 절차다. #56만으로
+앱 본체가 다시 배포됐다고 기록하지 않는다.
+
 1. 배포 자동화 변경을 `master`에 머지한다.
 2. 최초 한 번 **v2 Staging Deploy**를 `mode=bootstrap`으로 실행해 Ubuntu 패키지의
    Docker·Compose·Python venv 지원과 2 GiB swap을 준비한다. 기존 swap이 있으면
@@ -80,7 +98,24 @@ v2 스테이징은 기존 Java 운영 앱과 같은 서버를 사용하되 다�
 4. **v2 Staging Deploy**에서 `mode=preflight`로 서버 요구 사항을 읽기 전용 점검한다.
 5. 점검이 통과하면 같은 워크플로를 `mode=deploy`로 실행하고 3번의 run ID를 입력한다.
 
-배포는 RC 성공 여부와 커밋 SHA를 확인한 뒤에만 진행한다. 최초 설치 시
+현재 작업 트리의 RC 워크플로 **후보**는 배포 대상 SHA에서 다음을 모두 강제한다.
+
+- Java 21의 공통 golden 패리티와 `StrategyEodSchedulerTest`,
+  `RebalanceExecutionSchedulerTest`
+- Python 백엔드 전체 테스트
+- 프런트엔드 typecheck·단위 테스트·배포 빌드와 Playwright mock-only no-order UI QA
+- `manifest.json`의 SHA, `execution=false`, `broker=disabled`, 실주문·외부 네트워크·
+  WebSocket 금지, 생성 리소스 0건, 자기 검증 `PASS`
+- 각 scenario 최종 attempt의 API 호출 1건 이상·전부 mock GET, 위험·미mock·오류 0건과
+  파싱 가능한 network JSON·PNG screenshot·ZIP trace 증적
+- 배포 스크립트와 Compose 구성 검증
+
+UI QA 증적은 별도 RC artifact로 30일 보존한다. 위 어느 하나라도 실패하거나
+flaky로 판정되면 RC가 실패하므로 릴리스 artifact를 배포할 수 없다. 다만 이 구성은
+아직 GitHub Actions 실행 증적이 없으므로 **검증 완료가 아닌 배포 게이트 후보**다.
+
+Staging Deploy는 `v2 Release Candidate` run이 성공했고, `master`에서 수동 실행됐으며,
+run의 SHA가 배포 SHA와 같은지 검증한 뒤에만 배포를 허용한다. 최초 설치 시
 `/etc/wallant/mysql.env`와 `/etc/wallant/v2.env`를 생성하고, 실행 차단 설정을
 다음 값으로 고정한다.
 
@@ -142,10 +177,13 @@ Caddy 원본은 loopback에만 바인딩하되 `127.0.0.1`과 `app.wall-ant.com`
 - KIS 공식 데이터 어댑터와 실주문 어댑터 구현·검증
 - 최소 수 주의 섀도 결과와 기존 Java 결과 대조
 - MySQL 백업·복구 훈련과 자격증명 마스터 키 보관 절차
-- Cloudflare Tunnel 또는 방화벽으로 원본 직접 접근 차단
-- `app.wall-ant.com` Access 정책, 허용 이메일, OTP·Google 로그인 확인
+- 원본 직접 접근 차단 재확인과 외부 브라우저 Access 리디렉션·허용 이메일 로그인 증적
 - 주문 불명 상태 확인, 계좌·전체 정지, Discord 허용 목록의 장애 훈련
 - 사용자 최종 승인 후 제한된 계좌·금액으로 단계적 전환
 
 이 조건이 끝나기 전에는 `WALLANT_EXECUTION_ENABLED=false`와
 `WALLANT_BROKER_ADAPTER=disabled`를 유지한다.
+
+화면 조회·안전한 스테이징 QA는 자동 진행할 수 있고, 섀도 계산 개발은 **C0 범위
+승인 이후 자동 진행 가능**하다. 실제 주문,
+Java 중단, DNS·트래픽 전환, Access 정책 변경, 롤백 확정은 사용자 승인 필수다.

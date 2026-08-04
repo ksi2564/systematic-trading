@@ -12,16 +12,182 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: gradle
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
+          cache: npm
+          cache-dependency-path: v2/frontend/package-lock.json
+      # v2 CI와 동일한 핵심 패리티를 배포 대상 SHA에서 다시 검증한다.
+      - name: Verify Java/Python QQQM strategy and scheduler parity
+        run: >-
+          bash gradlew test
+          --tests my.side.trading.core.application.strategy.QqqmJavaPythonGoldenParityTest
+          --tests my.side.trading.adapter.in.scheduler.StrategyEodSchedulerTest
+          --tests my.side.trading.adapter.in.scheduler.RebalanceExecutionSchedulerTest
       - run: python -m pip install -e 'v2/backend[dev]'
       - run: pytest v2/backend/tests
-      - working-directory: v2/frontend
-        run: npm ci && npm run build
+      - name: Install frontend dependencies
+        working-directory: v2/frontend
+        run: npm ci
+      - name: Typecheck frontend and UI QA harness
+        working-directory: v2/frontend
+        run: npm run typecheck
+      - name: Run frontend unit tests
+        working-directory: v2/frontend
+        run: npm test
+      - name: Build deployable frontend
+        working-directory: v2/frontend
+        run: npm run build
+      - name: Install deterministic browser runtime
+        working-directory: v2/frontend
+        run: npx playwright install --with-deps chromium
+      - name: Run zero-real-order UI QA
+        working-directory: v2/frontend
+        env:
+          QA_GIT_SHA: ${{ github.sha }}
+          QA_ENVIRONMENT: github-actions-release-candidate-local-mock
+        run: npx playwright test
+      - name: Verify no-order UI QA manifest
+        working-directory: v2/frontend
+        env:
+          QA_GIT_SHA: ${{ github.sha }}
+        run: |
+          node --input-type=module <<'NODE'
+          import { readFileSync } from 'node:fs';
+
+          const manifest = JSON.parse(
+            readFileSync('artifacts/playwright/manifest.json', 'utf8')
+          );
+          const scenariosSafe = Array.isArray(manifest.qa)
+            && manifest.qa.length > 0
+            && manifest.qa.every((scenario) => {
+              const observed = scenario.observed ?? {};
+              const finalAttempt = scenario.attempts?.at(-1);
+              const files = finalAttempt?.evidenceFiles ?? [];
+              const screenshots = (finalAttempt?.screenshots ?? []).filter((file) =>
+                file.contentType === 'image/png' && file.path?.endsWith('.png')
+              );
+              const traces = files.filter((file) =>
+                file.name === 'trace'
+                && file.contentType === 'application/zip'
+                && file.path?.endsWith('.zip')
+              );
+              const networkFiles = files.filter((file) =>
+                file.name?.startsWith('network-evidence-')
+                && file.contentType === 'application/json'
+                && file.path?.endsWith('.json')
+              );
+              const network = networkFiles.length === 1
+                ? JSON.parse(readFileSync(networkFiles[0].path, 'utf8'))
+                : null;
+              const apiCalls = network?.apiCalls;
+              const requestMethods = Array.isArray(apiCalls)
+                ? [...new Set(apiCalls.map((call) => call.method))].sort()
+                : [];
+              const networkValid = Array.isArray(apiCalls)
+                && apiCalls.length > 0
+                && apiCalls.every(
+                  (call) => call.method === 'GET' && call.mocked === true
+                )
+                && network.unmockedApiRequests?.length === 0
+                && network.forbiddenActionRequests?.length === 0
+                && network.blockedRequests?.length === 0
+                && network.webSocketRequests?.length === 0
+                && network.consoleErrors?.length === 0
+                && network.pageErrors?.length === 0;
+              const attachmentsValid = files.length >= 3
+                && screenshots.length >= 1
+                && traces.length >= 1
+                && networkFiles.length === 1
+                && finalAttempt?.screenshots?.length === screenshots.length
+                && screenshots.every((screenshot) =>
+                  files.some((file) =>
+                    file.path === screenshot.path
+                    && file.contentType === screenshot.contentType
+                    && file.sha256 === screenshot.sha256
+                  )
+                )
+                && [...screenshots, ...traces].every(
+                  (file) => readFileSync(file.path).length > 0
+                )
+                && networkValid;
+              return scenario.status === 'PASS'
+                && scenario.stabilityStatus === 'STABLE'
+                && finalAttempt?.status === 'PASS'
+                && observed.apiCallCount === apiCalls?.length
+                && observed.apiCallCount > 0
+                && observed.mockedApiCallCount === apiCalls?.filter(
+                  (call) => call.mocked === true
+                ).length
+                && Array.isArray(observed.requestMethods)
+                && observed.requestMethods.length === 1
+                && JSON.stringify(observed.requestMethods) === JSON.stringify(requestMethods)
+                && observed.requestMethods[0] === 'GET'
+                && observed.unmockedApiRequestCount === 0
+                && observed.forbiddenActionRequestCount === 0
+                && observed.externalBlockedRequestCount === 0
+                && observed.webSocketRequestCount === 0
+                && observed.consoleErrorCount === 0
+                && observed.pageErrorCount === 0
+                && observed.screenshotCount === screenshots.length
+                && observed.networkEvidenceCount === networkFiles.length
+                && observed.traceCount === traces.length
+                && observed.evidenceFileCount === files.length
+                && observed.screenshotCount >= 1
+                && observed.networkEvidenceCount === 1
+                && observed.traceCount >= 1
+                && observed.evidenceFileCount >= 3
+                && attachmentsValid;
+            });
+          const requiredSelfChecks = [
+            'final-attempt-attachments',
+            'observed-network-safety'
+          ];
+          const selfChecksComplete = requiredSelfChecks.every((name) =>
+            manifest.selfValidation?.checks?.some((check) =>
+              check.name === name
+              && check.status === 'PASS'
+              && check.checkedCount === manifest.qa.length
+            )
+          );
+          const valid = manifest.runStatus === 'PASS'
+            && manifest.git_sha === process.env.QA_GIT_SHA
+            && manifest.mockOnly === true
+            && manifest.deployedAccessQa === false
+            && manifest.execution_enabled === false
+            && manifest.broker_adapter === 'disabled'
+            && manifest.safety?.realOrderSubmissionAllowed === false
+            && manifest.safety?.externalNetworkAllowed === false
+            && manifest.safety?.webSocketAllowed === false
+            && manifest.safety?.apiResponses === 'mock-only'
+            && Array.isArray(manifest.generatedResourceIds)
+            && manifest.generatedResourceIds.length === 0
+            && manifest.summary?.failed === 0
+            && manifest.summary?.flaky === 0
+            && scenariosSafe
+            && manifest.selfValidation?.status === 'PASS'
+            && selfChecksComplete;
+
+          if (!valid) {
+            throw new Error('RC UI QA manifest failed the no-order safety gate.');
+          }
+          NODE
+      - name: Upload RC no-order UI QA evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wallant-v2-rc-ui-qa-${{ github.run_attempt }}
+          path: v2/frontend/artifacts/playwright
+          if-no-files-found: warn
+          retention-days: 30
       - name: Validate deployment scripts and Compose config
         env:
           WALLANT_MYSQL_PASSWORD: rc-placeholder
@@ -41,7 +207,9 @@ jobs:
           grep -F -- \
             '--token-file %d/tunnel-token' \
             v2/infra/systemd/wallant-v2-cloudflared.service
-      - uses: actions/upload-artifact@v4
+      - name: Upload deployable release candidate after every gate passes
+        if: success()
+        uses: actions/upload-artifact@v4
         with:
           name: wallant-v2-release-candidate
           path: |

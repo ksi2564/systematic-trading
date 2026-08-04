@@ -115,7 +115,6 @@ class QqqmDrawdownEvaluator(StrategyEvaluator):
             market=context.market,
             original=base_weights,
             previous=context.previous_target_weights,
-            portfolio=context.portfolio,
         )
         explanation = [
             f"{signal} ATH {state['ath']} 대비 낙폭 {state['drawdown_pct']}%",
@@ -242,7 +241,6 @@ class QqqmDrawdownEvaluator(StrategyEvaluator):
         market: dict[str, Decimal | str | bool | None],
         original: dict[str, Decimal],
         previous: dict[str, Decimal],
-        portfolio: dict[str, Decimal | str | bool],
     ) -> tuple[dict[str, Decimal], list[str]]:
         if not bool(definition.parameters.get("circuit_breaker_enabled", True)):
             return original, []
@@ -264,15 +262,8 @@ class QqqmDrawdownEvaluator(StrategyEvaluator):
             previous_weights = {
                 symbol.strip().upper(): decimal(weight) for symbol, weight in previous.items()
             }
-            if previous_weights:
-                if adjusted.get("TQQQ", ZERO) > previous_weights.get("TQQQ", ZERO):
-                    adjusted = previous_weights
-            else:
-                current_tqqq_weight = self._optional_decimal(
-                    portfolio.get("TQQQ.weight_pct")
-                ) or ZERO
-                if adjusted.get("TQQQ", ZERO) > current_tqqq_weight:
-                    adjusted["TQQQ"] = current_tqqq_weight
+            if previous_weights and adjusted.get("TQQQ", ZERO) > previous_weights.get("TQQQ", ZERO):
+                adjusted = previous_weights
             events.append("VIX_NO_LEVERAGE_INCREASE")
         return adjusted, events
 

@@ -137,13 +137,21 @@ class OrderPlanner:
         force_signal_rebalance = result.engine == StrategyEngine.SIGNAL_TRADING_V1 and (
             "SIGNAL_ENTRY" in result.events or bool(result.state.get("exit_pending", False))
         )
-        rebalance_targets: list[tuple[str, Decimal, Decimal]] = []
+        managed_targets: list[tuple[str, Decimal, Decimal]] = []
         for symbol, target_weight in result.target_weights.items():
             target_weight = decimal(target_weight)
             current_weight = portfolio.weight_of(symbol)
-            if not force_signal_rebalance and abs(target_weight - current_weight) < tolerance_pct:
-                continue
-            rebalance_targets.append((symbol, target_weight, current_weight))
+            managed_targets.append((symbol, target_weight, current_weight))
+
+        should_rebalance = force_signal_rebalance or any(
+            abs(target_weight - current_weight) >= tolerance_pct
+            for _symbol, target_weight, current_weight in managed_targets
+        )
+        rebalance_targets = [
+            (symbol, target_weight, current_weight)
+            for symbol, target_weight, current_weight in managed_targets
+            if should_rebalance and target_weight != current_weight
+        ]
 
         missing_quotes = [
             symbol

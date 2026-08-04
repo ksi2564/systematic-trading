@@ -8,6 +8,7 @@ readonly caddyfile="/etc/caddy/Caddyfile"
 readonly caddy_include_dir="/etc/caddy/conf.d"
 readonly caddy_site="${caddy_include_dir}/wallant-v2.caddy"
 readonly caddy_import='import /etc/caddy/conf.d/*.caddy'
+readonly public_host="app.wall-ant.com"
 
 backup_dir=""
 site_existed=false
@@ -50,6 +51,11 @@ trap 'rollback_on_error $?' ERR
 for command_name in caddy curl getent grep install python3 ss systemctl; do
   command -v "${command_name}" >/dev/null 2>&1 || fail "Missing required command: ${command_name}"
 done
+
+grep -F "http://${public_host}:18082" "${caddy_site_source}" >/dev/null \
+  || fail "Caddy v2 site must accept the public tunnel Host header."
+grep -F 'bind 127.0.0.1' "${caddy_site_source}" >/dev/null \
+  || fail "Caddy v2 site must remain bound to loopback."
 
 getent group wallant >/dev/null 2>&1 || fail "Required wallant group is missing."
 getent group caddy >/dev/null 2>&1 || fail "Required caddy group is missing."
@@ -160,23 +166,27 @@ for attempt in $(seq 1 30); do
 done
 
 unauthorized_status="$(curl -sS -o /dev/null -w '%{http_code}' \
+  -H "Host: ${public_host}" \
   http://127.0.0.1:18082/api/v2/operations/status)"
 [[ "${unauthorized_status}" == 401 ]] \
   || fail "Unauthenticated origin API must return 401; got ${unauthorized_status}."
 
 authorized_status="$(curl -sS -o /dev/null -w '%{http_code}' \
+  -H "Host: ${public_host}" \
   -H "Cf-Access-Authenticated-User-Email: ${allowed_email}" \
   http://127.0.0.1:18082/api/v2/operations/status)"
 [[ "${authorized_status}" == 200 ]] \
   || fail "Allowed Access user must receive 200; got ${authorized_status}."
 
 docs_status="$(curl -sS -o /dev/null -w '%{http_code}' \
+  -H "Host: ${public_host}" \
   -H "Cf-Access-Authenticated-User-Email: ${allowed_email}" \
   http://127.0.0.1:18082/api/v2/docs)"
 [[ "${docs_status}" == 404 ]] \
   || fail "Production API docs must remain disabled; got ${docs_status}."
 
-curl -fsS http://127.0.0.1:18082/ | grep -F '<div id="root"></div>' >/dev/null \
+curl -fsS -H "Host: ${public_host}" http://127.0.0.1:18082/ \
+  | grep -F '<div id="root"></div>' >/dev/null \
   || fail "v2 frontend was not served by the private Caddy origin."
 ss -lnt 2>/dev/null | awk '$4 == "127.0.0.1:18082" {found=1} END {exit(found ? 0 : 1)}' \
   || fail "Caddy must listen on loopback 127.0.0.1:18082."

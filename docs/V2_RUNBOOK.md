@@ -57,6 +57,53 @@ alembic upgrade head
 수정하거나 종료하지 않는다. 이관이 필요해지면 원본 DB 식별자와 계좌를 포함한 별도
 설계·검증을 거쳐 새 작업으로 구현한다.
 
+## 비공개 스테이징 배포
+
+v2 스테이징은 기존 Java 운영 앱과 같은 서버를 사용하되 다음 경계를 지킨다.
+
+| 항목 | 기존 Java 운영 | v2 스테이징 |
+| --- | --- | --- |
+| 설치 경로 | `/opt/trading` | `/opt/wallant` |
+| API | `127.0.0.1:8080` | `127.0.0.1:8000` |
+| 웹 | `:18081` | `127.0.0.1:18082` 후보 |
+| DB | 기존 운영 DB | Docker MySQL `127.0.0.1:3307` |
+| systemd | `trading.service` | `wallant-v2-api.service` |
+
+배포는 GitHub Actions의 **v2 Staging Deploy** 워크플로만 사용한다. 기존
+**Deploy Production** 워크플로는 Java 앱 배포이므로 v2 작업에서 실행하지 않는다.
+
+1. 배포 자동화 변경을 `master`에 머지한다.
+2. 머지된 정확한 커밋에서 **v2 Release Candidate**를 다시 실행한다.
+3. **v2 Staging Deploy**에서 `mode=preflight`로 서버 요구 사항을 읽기 전용 점검한다.
+4. 점검이 통과하면 같은 워크플로를 `mode=deploy`로 실행하고 2번의 run ID를 입력한다.
+
+배포는 RC 성공 여부와 커밋 SHA를 확인한 뒤에만 진행한다. 최초 설치 시
+`/etc/wallant/mysql.env`와 `/etc/wallant/v2.env`를 생성하고, 실행 차단 설정을
+다음 값으로 고정한다.
+
+```dotenv
+WALLANT_ENVIRONMENT=staging
+WALLANT_EXECUTION_ENABLED=false
+WALLANT_BROKER_ADAPTER=disabled
+```
+
+릴리스는 `/opt/wallant/releases/<commit-sha>`에 설치되고
+`/opt/wallant/current` 심볼릭 링크로 전환된다. API 시작에 실패하면 링크와
+서비스를 직전 릴리스로 되돌린다. DB 마이그레이션은 자동 다운그레이드하지 않으므로
+호환되지 않는 스키마 변경은 배포 전에 별도 백업·복구 계획이 필요하다.
+
+### 웹 접근 연결
+
+백엔드 배포는 Caddy나 Cloudflare 설정을 자동으로 바꾸지 않는다. API와 MySQL은
+loopback에만 바인딩된다. 서버 점검 후 `v2/infra/Caddyfile.staging.example`을 기존
+Caddy 설정에 import하고, Cloudflare Tunnel의 origin을
+`http://127.0.0.1:18082`로 연결한다.
+
+Tunnel을 활성화하기 전에는 `/etc/wallant/v2.env`에서 환경을 `production`으로
+바꾸고 `WALLANT_ALLOWED_ACCESS_EMAILS`에 실제 허용 이메일을 설정해야 한다. 변경 후
+`systemctl restart wallant-v2-api`를 실행하고 `/health`와 Access 차단을 모두
+확인한다. 원본 포트 8000, 3307, 18082는 외부 방화벽에 열지 않는다.
+
 ## 운영 전환 전 별도 승인 항목
 
 - KIS 공식 데이터 어댑터와 실주문 어댑터 구현·검증

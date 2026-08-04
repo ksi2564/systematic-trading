@@ -1,0 +1,202 @@
+name: v2 Staging Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Run a read-only preflight or deploy a verified release candidate
+        required: true
+        type: choice
+        default: preflight
+        options:
+          - preflight
+          - deploy
+      rc_run_id:
+        description: Successful v2 Release Candidate workflow run ID (required for deploy)
+        required: false
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: v2-staging-deploy
+  cancel-in-progress: false
+
+env:
+  STAGING_HOST: 100.66.226.12
+  STAGING_USER: ubuntu
+
+jobs:
+  staging:
+    name: ${{ inputs.mode == 'deploy' && 'Deploy v2 staging' || 'Preflight v2 staging' }}
+    runs-on: ubuntu-latest
+    environment: v2-staging
+
+    steps:
+      - name: Require master branch
+        if: github.ref_name != 'master'
+        run: |
+          echo "v2 staging can only run from master. Current ref: ${GITHUB_REF_NAME}"
+          exit 1
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate release candidate
+        if: inputs.mode == 'deploy'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RC_RUN_ID: ${{ inputs.rc_run_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ ! "${RC_RUN_ID}" =~ ^[0-9]+$ ]]; then
+            echo "A numeric rc_run_id is required for deploy."
+            exit 1
+          fi
+
+          run_json="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${RC_RUN_ID}")"
+          workflow_name="$(jq -r '.name' <<<"${run_json}")"
+          conclusion="$(jq -r '.conclusion' <<<"${run_json}")"
+          event_name="$(jq -r '.event' <<<"${run_json}")"
+          head_branch="$(jq -r '.head_branch' <<<"${run_json}")"
+          head_sha="$(jq -r '.head_sha' <<<"${run_json}")"
+
+          [[ "${workflow_name}" == "v2 Release Candidate" ]] \
+            || { echo "Unexpected workflow: ${workflow_name}"; exit 1; }
+          [[ "${conclusion}" == "success" ]] \
+            || { echo "Release candidate did not succeed: ${conclusion}"; exit 1; }
+          [[ "${event_name}" == "workflow_dispatch" && "${head_branch}" == "master" ]] \
+            || { echo "Release candidate must be manually run from master."; exit 1; }
+          [[ "${head_sha}" == "${GITHUB_SHA}" ]] \
+            || { echo "Release candidate SHA ${head_sha} does not match deploy SHA ${GITHUB_SHA}."; exit 1; }
+
+          echo "Validated release candidate run ${RC_RUN_ID} at ${head_sha}."
+
+      - name: Download release candidate
+        if: inputs.mode == 'deploy'
+        uses: actions/download-artifact@v4
+        with:
+          name: wallant-v2-release-candidate
+          path: release-candidate
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.rc_run_id }}
+
+      - name: Package release candidate
+        if: inputs.mode == 'deploy'
+        id: package
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f release-candidate/backend/pyproject.toml
+          test -f release-candidate/frontend/dist/index.html
+          test -f release-candidate/infra/compose.yaml
+          test -f release-candidate/infra/systemd/wallant-v2-api.service
+
+          package_root="$(mktemp -d)"
+          install -d "${package_root}/v2"
+          cp -a release-candidate/. "${package_root}/v2/"
+          archive_name="wallant-v2-${GITHUB_SHA}.tgz"
+          tar -C "${package_root}" -czf "${archive_name}" v2
+          archive_sha="$(sha256sum "${archive_name}" | awk '{print $1}')"
+          echo "archive_name=${archive_name}" >>"${GITHUB_OUTPUT}"
+          echo "archive_sha=${archive_sha}" >>"${GITHUB_OUTPUT}"
+          echo "Package SHA-256: ${archive_sha}"
+
+      - name: Connect to Tailscale
+        uses: tailscale/github-action@v4
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          tags: tag:github-actions
+          ping: ${{ env.STAGING_HOST }}
+
+      - name: Prepare SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "${{ secrets.PROD_SSH_PRIVATE_KEY }}" >~/.ssh/v2_staging_key
+          chmod 600 ~/.ssh/v2_staging_key
+          ssh-keyscan -T 10 -H "${STAGING_HOST}" >>~/.ssh/known_hosts
+
+      - name: Run read-only preflight
+        shell: bash
+        run: |
+          set -euo pipefail
+          remote_script="/tmp/wallant-v2-preflight-${GITHUB_RUN_ID}.sh"
+          scp -i ~/.ssh/v2_staging_key -o BatchMode=yes \
+            v2/infra/scripts/preflight_staging.sh \
+            "${STAGING_USER}@${STAGING_HOST}:${remote_script}"
+          ssh -i ~/.ssh/v2_staging_key -o BatchMode=yes \
+            "${STAGING_USER}@${STAGING_HOST}" \
+            "sudo bash '${remote_script}'"
+
+      - name: Upload and deploy v2
+        if: inputs.mode == 'deploy'
+        env:
+          ARCHIVE_NAME: ${{ steps.package.outputs.archive_name }}
+          ARCHIVE_SHA: ${{ steps.package.outputs.archive_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          remote_archive="/tmp/${ARCHIVE_NAME}"
+          remote_script="/tmp/wallant-v2-deploy-${GITHUB_RUN_ID}.sh"
+          scp -i ~/.ssh/v2_staging_key -o BatchMode=yes \
+            "${ARCHIVE_NAME}" \
+            "${STAGING_USER}@${STAGING_HOST}:${remote_archive}"
+          scp -i ~/.ssh/v2_staging_key -o BatchMode=yes \
+            v2/infra/scripts/deploy_staging.sh \
+            "${STAGING_USER}@${STAGING_HOST}:${remote_script}"
+
+          ssh -i ~/.ssh/v2_staging_key -o BatchMode=yes \
+            "${STAGING_USER}@${STAGING_HOST}" \
+            "sudo bash -s -- '${remote_script}' '${remote_archive}' '${GITHUB_SHA}' '${ARCHIVE_SHA}'" <<'REMOTE'
+          set -u
+          deploy_script="$1"
+          archive_path="$2"
+          release_sha="$3"
+          archive_sha="$4"
+          trading_before="$(systemctl is-active trading.service 2>/dev/null || true)"
+
+          set +e
+          bash "${deploy_script}" "${archive_path}" "${release_sha}" "${archive_sha}"
+          deploy_exit=$?
+          set -e
+
+          trading_after="$(systemctl is-active trading.service 2>/dev/null || true)"
+          if [[ "${trading_before}" != "${trading_after}" ]]; then
+            echo "Existing trading.service state changed unexpectedly: ${trading_before} -> ${trading_after}" >&2
+            exit 1
+          fi
+          exit "${deploy_exit}"
+          REMOTE
+
+      - name: Verify v2 isolation
+        if: inputs.mode == 'deploy'
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/v2_staging_key -o BatchMode=yes \
+            "${STAGING_USER}@${STAGING_HOST}" \
+            "sudo bash -s" <<'REMOTE'
+          set -euo pipefail
+          systemctl is-active wallant-v2-api.service
+          curl -fsS http://127.0.0.1:8000/health
+          echo
+          readlink -f /opt/wallant/current
+          ss -lntp | awk 'NR == 1 || $4 ~ /:(8000|8080|3307|18081|18082)$/'
+          REMOTE
+
+      - name: Remove uploaded temporary files
+        if: always()
+        shell: bash
+        run: |
+          if [[ -f ~/.ssh/v2_staging_key ]]; then
+            ssh -i ~/.ssh/v2_staging_key -o BatchMode=yes \
+              "${STAGING_USER}@${STAGING_HOST}" \
+              "sudo rm -f '/tmp/wallant-v2-preflight-${GITHUB_RUN_ID}.sh' '/tmp/wallant-v2-deploy-${GITHUB_RUN_ID}.sh' '/tmp/wallant-v2-${GITHUB_SHA}.tgz'" \
+              || true
+          fi

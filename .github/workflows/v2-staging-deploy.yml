@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: Bootstrap the host, run a read-only preflight, or deploy a verified release candidate
+        description: Bootstrap, preflight, deploy, or configure the private web access path
         required: true
         type: choice
         default: preflight
@@ -12,6 +12,8 @@ on:
           - bootstrap
           - preflight
           - deploy
+          - access-preflight
+          - access-configure
       rc_run_id:
         description: Successful v2 Release Candidate workflow run ID (required for deploy)
         required: false
@@ -171,6 +173,132 @@ jobs:
             "${STAGING_USER}@${STAGING_HOST}" \
             "sudo bash '${remote_script}'"
 
+      - name: Run private access preflight
+        if: inputs.mode == 'access-preflight' || inputs.mode == 'access-configure'
+        shell: bash
+        run: |
+          set -euo pipefail
+          remote_script="/tmp/wallant-v2-access-preflight-${GITHUB_RUN_ID}.sh"
+          scp -i ~/.ssh/v2_staging_key -o BatchMode=yes \
+            v2/infra/scripts/preflight_access_staging.sh \
+            "${STAGING_USER}@${STAGING_HOST}:${remote_script}"
+          ssh -i ~/.ssh/v2_staging_key -o BatchMode=yes \
+            "${STAGING_USER}@${STAGING_HOST}" \
+            "sudo bash '${remote_script}'"
+
+      - name: Configure private web access
+        if: inputs.mode == 'access-configure'
+        env:
+          V2_ALLOWED_ACCESS_EMAILS: ${{ secrets.V2_ALLOWED_ACCESS_EMAILS }}
+          CLOUDFLARE_TUNNEL_TOKEN: ${{ secrets.CLOUDFLARE_TUNNEL_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ -n "${V2_ALLOWED_ACCESS_EMAILS}" ]] \
+            || { echo "V2_ALLOWED_ACCESS_EMAILS environment secret is required."; exit 1; }
+          [[ -n "${CLOUDFLARE_TUNNEL_TOKEN}" ]] \
+            || { echo "CLOUDFLARE_TUNNEL_TOKEN environment secret is required."; exit 1; }
+
+          local_allowed_emails="${RUNNER_TEMP}/wallant-v2-allowed-emails-${GITHUB_RUN_ID}"
+          local_tunnel_token="${RUNNER_TEMP}/wallant-v2-tunnel-token-${GITHUB_RUN_ID}"
+          trap 'rm -f "${local_allowed_emails}" "${local_tunnel_token}"' EXIT
+          printf '%s\n' "${V2_ALLOWED_ACCESS_EMAILS}" >"${local_allowed_emails}"
+          printf '%s\n' "${CLOUDFLARE_TUNNEL_TOKEN}" >"${local_tunnel_token}"
+          chmod 600 "${local_allowed_emails}" "${local_tunnel_token}"
+
+          remote_access_script="/tmp/wallant-v2-access-configure-${GITHUB_RUN_ID}.sh"
+          remote_tunnel_script="/tmp/wallant-v2-tunnel-configure-${GITHUB_RUN_ID}.sh"
+          remote_caddy_site="/tmp/wallant-v2-caddy-${GITHUB_RUN_ID}.conf"
+          remote_tunnel_unit="/tmp/wallant-v2-cloudflared-${GITHUB_RUN_ID}.service"
+          remote_allowed_emails="/tmp/wallant-v2-allowed-emails-${GITHUB_RUN_ID}"
+          remote_tunnel_token="/tmp/wallant-v2-tunnel-token-${GITHUB_RUN_ID}"
+
+          scp -i ~/.ssh/v2_staging_key -o BatchMode=yes \
+            v2/infra/scripts/configure_access_staging.sh \
+            "${STAGING_USER}@${STAGING_HOST}:${remote_access_script}"
+          scp -i ~/.ssh/v2_staging_key -o BatchMode=yes \
+            v2/infra/scripts/configure_cloudflare_tunnel.sh \
+            "${STAGING_USER}@${STAGING_HOST}:${remote_tunnel_script}"
+          scp -i ~/.ssh/v2_staging_key -o BatchMode=yes \
+            v2/infra/Caddyfile.staging.example \
+            "${STAGING_USER}@${STAGING_HOST}:${remote_caddy_site}"
+          scp -i ~/.ssh/v2_staging_key -o BatchMode=yes \
+            v2/infra/systemd/wallant-v2-cloudflared.service \
+            "${STAGING_USER}@${STAGING_HOST}:${remote_tunnel_unit}"
+          scp -i ~/.ssh/v2_staging_key -o BatchMode=yes \
+            "${local_allowed_emails}" \
+            "${STAGING_USER}@${STAGING_HOST}:${remote_allowed_emails}"
+          scp -i ~/.ssh/v2_staging_key -o BatchMode=yes \
+            "${local_tunnel_token}" \
+            "${STAGING_USER}@${STAGING_HOST}:${remote_tunnel_token}"
+          rm -f "${local_allowed_emails}" "${local_tunnel_token}"
+
+          ssh -i ~/.ssh/v2_staging_key -o BatchMode=yes \
+            "${STAGING_USER}@${STAGING_HOST}" \
+            "sudo bash -s -- '${remote_tunnel_script}' '${remote_tunnel_token}' '${remote_tunnel_unit}' '${remote_access_script}' '${remote_allowed_emails}' '${remote_caddy_site}'" <<'REMOTE'
+          set -u
+          tunnel_script="$1"
+          tunnel_token="$2"
+          tunnel_unit="$3"
+          access_script="$4"
+          allowed_emails="$5"
+          caddy_site="$6"
+          trading_before="$(systemctl show trading.service -p ActiveState -p MainPID --value | tr '\n' ':')"
+          caddy_before="$(systemctl show caddy.service -p ActiveState -p MainPID --value | tr '\n' ':')"
+
+          set +e
+          bash "${tunnel_script}" "${tunnel_token}" "${tunnel_unit}"
+          tunnel_exit=$?
+          if [[ "${tunnel_exit}" -eq 0 ]]; then
+            bash "${access_script}" "${allowed_emails}" "${caddy_site}"
+            access_exit=$?
+          else
+            access_exit=0
+          fi
+          set -e
+
+          trading_after="$(systemctl show trading.service -p ActiveState -p MainPID --value | tr '\n' ':')"
+          caddy_after="$(systemctl show caddy.service -p ActiveState -p MainPID --value | tr '\n' ':')"
+          if [[ "${trading_before}" != "${trading_after}" ]]; then
+            echo "Existing trading.service changed unexpectedly: ${trading_before} -> ${trading_after}" >&2
+            exit 1
+          fi
+          if [[ "${caddy_before}" != "${caddy_after}" ]]; then
+            echo "Existing caddy.service changed unexpectedly: ${caddy_before} -> ${caddy_after}" >&2
+            exit 1
+          fi
+          [[ "${tunnel_exit}" -eq 0 ]] || exit "${tunnel_exit}"
+          exit "${access_exit}"
+          REMOTE
+
+      - name: Verify private web access origin
+        if: inputs.mode == 'access-configure'
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/v2_staging_key -o BatchMode=yes \
+            "${STAGING_USER}@${STAGING_HOST}" \
+            "sudo bash -s" <<'REMOTE'
+          set -euo pipefail
+          systemctl is-active wallant-v2-api.service
+          systemctl is-active wallant-v2-cloudflared.service
+          systemctl is-active trading.service
+          systemctl is-active caddy.service
+          curl -fsS http://127.0.0.1:8000/health
+          echo
+          unauthorized_status="$(curl -sS -o /dev/null -w '%{http_code}' \
+            http://127.0.0.1:18082/api/v2/operations/status)"
+          [[ "${unauthorized_status}" == 401 ]]
+          curl -fsS http://127.0.0.1:18082/ | grep -F '<div id="root"></div>' >/dev/null
+          grep -Fx 'WALLANT_ENVIRONMENT=production' /etc/wallant/v2.env >/dev/null
+          grep -Fx 'WALLANT_EXECUTION_ENABLED=false' /etc/wallant/v2.env >/dev/null
+          grep -Fx 'WALLANT_BROKER_ADAPTER=disabled' /etc/wallant/v2.env >/dev/null
+          ss -lntp | awk 'NR == 1 || $4 ~ /:(8000|8080|3307|18081|18082)$/'
+          printf 'PRIVATE_ACCESS_ORIGIN=ready\n'
+          printf 'UNAUTHENTICATED_API_STATUS=%s\n' "${unauthorized_status}"
+          printf 'EXECUTION_SAFETY=disabled\n'
+          REMOTE
+
       - name: Upload and deploy v2
         if: inputs.mode == 'deploy'
         env:
@@ -234,6 +362,6 @@ jobs:
           if [[ -f ~/.ssh/v2_staging_key ]]; then
             ssh -i ~/.ssh/v2_staging_key -o BatchMode=yes \
               "${STAGING_USER}@${STAGING_HOST}" \
-              "sudo rm -f '/tmp/wallant-v2-bootstrap-${GITHUB_RUN_ID}.sh' '/tmp/wallant-v2-preflight-${GITHUB_RUN_ID}.sh' '/tmp/wallant-v2-deploy-${GITHUB_RUN_ID}.sh' '/tmp/wallant-v2-${GITHUB_SHA}.tgz'" \
+              "sudo rm -f '/tmp/wallant-v2-bootstrap-${GITHUB_RUN_ID}.sh' '/tmp/wallant-v2-preflight-${GITHUB_RUN_ID}.sh' '/tmp/wallant-v2-deploy-${GITHUB_RUN_ID}.sh' '/tmp/wallant-v2-access-preflight-${GITHUB_RUN_ID}.sh' '/tmp/wallant-v2-access-configure-${GITHUB_RUN_ID}.sh' '/tmp/wallant-v2-tunnel-configure-${GITHUB_RUN_ID}.sh' '/tmp/wallant-v2-caddy-${GITHUB_RUN_ID}.conf' '/tmp/wallant-v2-cloudflared-${GITHUB_RUN_ID}.service' '/tmp/wallant-v2-allowed-emails-${GITHUB_RUN_ID}' '/tmp/wallant-v2-tunnel-token-${GITHUB_RUN_ID}' '/tmp/wallant-v2-${GITHUB_SHA}.tgz'" \
               || true
           fi

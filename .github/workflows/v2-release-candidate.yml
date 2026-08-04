@@ -29,12 +29,18 @@ jobs:
         run: |
           bash -n \
             v2/infra/scripts/bootstrap_staging.sh \
+            v2/infra/scripts/configure_access_staging.sh \
+            v2/infra/scripts/configure_cloudflare_tunnel.sh \
             v2/infra/scripts/preflight_staging.sh \
+            v2/infra/scripts/preflight_access_staging.sh \
             v2/infra/scripts/deploy_staging.sh
           docker compose -f v2/infra/compose.yaml config --quiet
           grep -F \
             'ExecStart=/opt/wallant/current/venv/bin/python -m uvicorn' \
             v2/infra/systemd/wallant-v2-api.service
+          grep -F -- \
+            '--token-file %d/tunnel-token' \
+            v2/infra/systemd/wallant-v2-cloudflared.service
       - uses: actions/upload-artifact@v4
         with:
           name: wallant-v2-release-candidate

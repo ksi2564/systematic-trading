@@ -292,6 +292,41 @@ def test_개별종목_손절은_매입가_기준으로_백테스트에_반영한
     assert any(trade.side == "SELL" for trade in result.trades)
 
 
+def test_개별종목의_새_신호는_목표비중이_허용오차보다_작아도_체결한다() -> None:
+    version = StrategyVersion(
+        definition=StrategyDefinition(
+            name="소규모 신호 진입",
+            engine=StrategyEngine.SIGNAL_TRADING_V1,
+            market=Market.US,
+            universe=UniverseDefinition(symbols=["AAPL"]),
+            signal_symbol="AAPL",
+            tolerance_pct=5,
+            signal_rules=SignalTradingRules(
+                kind=SignalKind.PRICE_MA_CROSS,
+                ma_period=2,
+                target_weight_pct=1,
+            ),
+        )
+    )
+    closes = (100, 100, 110, 110)
+    market_bars = [
+        MarketBar(
+            trading_date=date(2025, 3, 1) + timedelta(days=index),
+            symbol="AAPL",
+            open=close,
+            high=close,
+            low=close,
+            close=close,
+            volume=1000,
+        )
+        for index, close in enumerate(closes)
+    ]
+
+    result = BacktestEngine().run(version, market_bars, initial_cash=Decimal("100000"))
+
+    assert any(trade.side == "BUY" for trade in result.trades)
+
+
 def test_목표비중과_현재비중_차이가_허용오차_미만이면_재거래하지_않는다() -> None:
     balanced = AllocationRule(
         name="균형",

@@ -7,11 +7,13 @@ from uuid import UUID, uuid4
 from wallant.domain.evaluator import EvaluatorRegistry
 from wallant.domain.execution import (
     DailyRiskUsage,
+    IntentStatus,
     OrderPlan,
     OrderPlanner,
+    OrderSide,
     RiskPolicy,
 )
-from wallant.domain.money import ZERO
+from wallant.domain.money import ZERO, money
 from wallant.domain.portfolio import Portfolio
 from wallant.domain.strategy import EvaluationContext, EvaluationResult, StrategyVersion
 
@@ -30,6 +32,7 @@ class PaperSession:
 class PaperStepResult:
     evaluation: EvaluationResult
     order_plan: OrderPlan
+    realized_loss: Decimal
     evidence: dict[str, int]
 
 
@@ -89,6 +92,7 @@ class PaperTradingService:
                 sell_priority=version.definition.parameters.get("sell_priority"),
                 buy_priority=version.definition.parameters.get("buy_priority"),
             )
+            realized_loss = self._realized_loss(plan, portfolio)
         except Exception:
             session.error_count += 1
             raise
@@ -100,9 +104,32 @@ class PaperTradingService:
         return PaperStepResult(
             evaluation=evaluation,
             order_plan=plan,
+            realized_loss=realized_loss,
             evidence={
                 "evaluated_days": session.evaluated_days,
                 "signal_count": session.signal_count,
                 "error_count": session.error_count,
             },
         )
+
+    @staticmethod
+    def _realized_loss(plan: OrderPlan, portfolio: Portfolio) -> Decimal:
+        loss = ZERO
+        for intent in plan.intents:
+            if intent.status == IntentStatus.BLOCKED or intent.side != OrderSide.SELL:
+                continue
+            positions = [
+                position for position in portfolio.positions if position.symbol == intent.symbol
+            ]
+            quantity = sum((position.quantity for position in positions), ZERO)
+            if quantity <= ZERO:
+                continue
+            average_price = (
+                sum(
+                    (position.average_price * position.quantity for position in positions),
+                    ZERO,
+                )
+                / quantity
+            )
+            loss += max(average_price - intent.reference_price, ZERO) * intent.quantity
+        return money(loss)

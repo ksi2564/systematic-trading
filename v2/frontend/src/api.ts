@@ -241,6 +241,8 @@ export function evaluateStrategy(
     vix: string;
     ma: string;
     history: string[];
+    highHistory: string[];
+    lowHistory: string[];
   }
 ): Promise<Evaluation> {
   return request('/research/evaluate', {
@@ -256,7 +258,9 @@ export function evaluateStrategy(
           vix: values.vix || null,
           signal_ma_200: values.ma || null
         },
-        history: { [values.signal]: values.history }
+        history: { [values.signal]: values.history },
+        high_history: { [values.signal]: values.highHistory },
+        low_history: { [values.signal]: values.lowHistory }
       }
     })
   });

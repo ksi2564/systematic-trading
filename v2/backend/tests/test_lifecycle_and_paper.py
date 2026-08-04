@@ -1,12 +1,16 @@
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date, timedelta
 from pathlib import Path
+from threading import Event, Lock
 
 from fastapi.testclient import TestClient
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from wallant.api import research as research_api
 from wallant.config import Settings
 from wallant.main import create_app
-from wallant.persistence.models import DailyRiskUsageRecord
+from wallant.persistence.models import DailyRiskUsageRecord, StrategyVersionRecord
 
 
 def app_settings(tmp_path: Path) -> Settings:
@@ -125,6 +129,16 @@ def test_전략승격은_각단계의_완료증거를_요구하고_모의입력�
             "/api/v2/accounts",
             json=account_payload("미국 계좌", "US", "USD"),
         ).json()
+        krx_account = client.post(
+            "/api/v2/accounts",
+            json=account_payload("한국 계좌", "KRX", "KRW"),
+        ).json()
+        mismatched_paper = client.post(
+            "/api/v2/research/paper/sessions",
+            json={"version_id": version_id, "account_id": krx_account["id"]},
+        )
+        assert mismatched_paper.status_code == 409
+        assert "시장 전략" in mismatched_paper.json()["detail"]
 
         paper = client.post(
             "/api/v2/research/paper/sessions",
@@ -239,16 +253,118 @@ def test_전략승격은_각단계의_완료증거를_요구하고_모의입력�
         )
         assert assigned.status_code == 200
 
-        krx_account = client.post(
-            "/api/v2/accounts",
-            json=account_payload("한국 계좌", "KRX", "KRW"),
-        ).json()
         mismatched = client.post(
             f"/api/v2/accounts/{krx_account['id']}/strategy",
             json={"strategy_version_id": version_id},
         )
         assert mismatched.status_code == 409
         assert "시장 전략" in mismatched.json()["detail"]
+
+
+def test_동일_모의입력의_동시요청은_한번만_저장하고_매도손실을_누적한다(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    app = create_app(app_settings(tmp_path))
+    with TestClient(app, raise_server_exceptions=False) as client:
+        created = client.post(
+            "/api/v2/strategies",
+            json={
+                "definition": {
+                    "name": "동시 모의 청산",
+                    "engine": "SIGNAL_TRADING_V1",
+                    "market": "US",
+                    "universe": {"market": "US", "symbols": ["AAPL"]},
+                    "signal_symbol": "AAPL",
+                    "signal_rules": {"kind": "PRICE_MA_CROSS", "ma_period": 2},
+                }
+            },
+        ).json()
+        with Session(app.state.engine) as database:
+            version = database.get(StrategyVersionRecord, created["id"])
+            assert version is not None
+            version.lifecycle = "PAPER"
+            database.commit()
+
+        account = client.post(
+            "/api/v2/accounts",
+            json=account_payload("동시 요청 계좌", "US", "USD"),
+        ).json()
+        paper_id = client.post(
+            "/api/v2/research/paper/sessions",
+            json={"version_id": created["id"], "account_id": account["id"]},
+        ).json()["id"]
+        payload = {
+            "context": {
+                "as_of": "2026-02-01",
+                "market": {"AAPL.close": "80"},
+                "history": {"AAPL": ["100", "110"]},
+            },
+            "portfolio": {
+                "cash": "0",
+                "positions": [
+                    {
+                        "symbol": "AAPL",
+                        "quantity": "10",
+                        "average_price": "100",
+                        "market_price": "80",
+                    }
+                ],
+                "currency": "USD",
+            },
+            "quotes": {"AAPL": "80"},
+        }
+
+        original_step = research_api.PaperTradingService.step
+        first_entered = Event()
+        release_first = Event()
+        call_guard = Lock()
+        first_call = True
+
+        def slow_first_step(self, *args, **kwargs):
+            nonlocal first_call
+            with call_guard:
+                should_wait = first_call
+                first_call = False
+            if should_wait:
+                first_entered.set()
+                assert release_first.wait(timeout=5)
+            return original_step(self, *args, **kwargs)
+
+        monkeypatch.setattr(research_api.PaperTradingService, "step", slow_first_step)
+
+        def post_step():
+            return client.post(
+                f"/api/v2/research/paper/sessions/{paper_id}/steps",
+                json=payload,
+            )
+
+        second_started = Event()
+
+        def post_second_step():
+            second_started.set()
+            return post_step()
+
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            first = executor.submit(post_step)
+            assert first_entered.wait(timeout=5)
+            second = executor.submit(post_second_step)
+            assert second_started.wait(timeout=5)
+            release_first.set()
+            responses = [first.result(timeout=5), second.result(timeout=5)]
+
+        assert [response.status_code for response in responses] == [200, 200]
+        assert responses[0].json() == responses[1].json()
+        with Session(app.state.engine) as database:
+            usage = database.scalar(
+                select(DailyRiskUsageRecord).where(
+                    DailyRiskUsageRecord.account_id == account["id"],
+                    DailyRiskUsageRecord.usage_date == date(2026, 2, 1),
+                )
+            )
+            assert usage is not None
+            assert usage.realized_loss == 200
+            assert usage.order_count == 1
 
 
 def test_실행플래그는_설정객체를_직접_주입해도_거부한다(tmp_path) -> None:

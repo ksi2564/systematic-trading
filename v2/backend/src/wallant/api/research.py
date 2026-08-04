@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Iterator
+from contextlib import contextmanager
 from datetime import UTC, datetime
 from hashlib import sha256
+from threading import Lock, RLock
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -37,6 +40,17 @@ from wallant.research.paper import PaperSession, PaperTradingService
 from wallant.research.rolling import RollingValidationService
 
 router = APIRouter(prefix="/research", tags=["research"])
+_paper_lock_guard = Lock()
+_paper_session_locks: dict[str, RLock] = {}
+
+
+@contextmanager
+def _paper_session_lock(paper_session_id: UUID) -> Iterator[None]:
+    key = str(paper_session_id)
+    with _paper_lock_guard:
+        lock = _paper_session_locks.setdefault(key, RLock())
+    with lock:
+        yield
 
 
 def _risk_policy(account: AccountRecord) -> RiskPolicy:
@@ -182,6 +196,14 @@ def create_paper_session(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="모의투자에 연결할 계좌를 찾을 수 없습니다.",
         )
+    if account.market != version.definition.market.value:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                f"{account.market} 계좌에 {version.definition.market.value} 시장 전략의 "
+                "모의투자 세션을 연결할 수 없습니다."
+            ),
+        )
     _risk_policy(account)
     run = StrategyRunRecord(
         id=str(uuid4()),
@@ -221,7 +243,20 @@ def paper_step(
     session: Session = Depends(get_session),
     _actor: str = Depends(get_actor),
 ) -> dict:
-    run = session.get(StrategyRunRecord, str(paper_session_id))
+    with _paper_session_lock(paper_session_id):
+        return _paper_step_locked(paper_session_id, payload, session)
+
+
+def _paper_step_locked(
+    paper_session_id: UUID,
+    payload: PaperStepRequest,
+    session: Session,
+) -> dict:
+    run = session.scalar(
+        select(StrategyRunRecord)
+        .where(StrategyRunRecord.id == str(paper_session_id))
+        .with_for_update()
+    )
     if run is None or run.run_type != "PAPER":
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="모의투자 세션을 찾을 수 없습니다.")
     if run.status != "RUNNING":
@@ -366,6 +401,7 @@ def paper_step(
         session.add(usage_record)
     usage_record.order_notional += sum((intent.notional for intent in planned), ZERO)
     usage_record.order_count += len(planned)
+    usage_record.realized_loss += result.realized_loss
     try:
         session.commit()
     except Exception:

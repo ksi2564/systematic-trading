@@ -106,3 +106,51 @@ def test_일일손실이_한도에_도달하면_새주문을_차단한다() -> N
     )
     assert plan.pause_required
     assert "MAX_DAILY_LOSS" in plan.reasons
+
+
+def test_개별종목의_새_신호와_미체결청산은_허용오차를_적용하지_않는다() -> None:
+    account_id = uuid4()
+    version_id = uuid4()
+    entry_result = EvaluationResult(
+        as_of=date(2026, 4, 1),
+        strategy_version_id=version_id,
+        engine=StrategyEngine.SIGNAL_TRADING_V1,
+        state={"exit_pending": False},
+        target_weights={"AAPL": 1},
+        base_target_weights={"AAPL": 1},
+        events=["SIGNAL_ENTRY"],
+    )
+    entry = OrderPlanner().plan(
+        account_id=account_id,
+        strategy_version_id=version_id,
+        result=entry_result,
+        portfolio=Portfolio(cash=Decimal("100000")),
+        quotes={"AAPL": 100},
+        tolerance_pct=Decimal("5"),
+        risk_policy=policy(),
+    )
+    exit_result = entry_result.model_copy(
+        update={
+            "state": {"exit_pending": True},
+            "target_weights": {"AAPL": 0},
+            "base_target_weights": {"AAPL": 0},
+            "events": ["EXIT_PENDING"],
+        }
+    )
+    exit_plan = OrderPlanner().plan(
+        account_id=account_id,
+        strategy_version_id=version_id,
+        result=exit_result,
+        portfolio=Portfolio(
+            cash=Decimal("99000"),
+            positions=(Position("AAPL", 10, 100, 100),),
+        ),
+        quotes={"AAPL": 100},
+        tolerance_pct=Decimal("5"),
+        risk_policy=policy(),
+    )
+
+    assert len(entry.intents) == 1
+    assert entry.intents[0].side == OrderSide.BUY
+    assert len(exit_plan.intents) == 1
+    assert exit_plan.intents[0].side == OrderSide.SELL

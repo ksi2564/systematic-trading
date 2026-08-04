@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field, model_validator
 
 from wallant.domain.money import HUNDRED, ZERO, decimal, money, whole_shares
 from wallant.domain.portfolio import Portfolio
-from wallant.domain.strategy import EvaluationResult
+from wallant.domain.strategy import EvaluationResult, StrategyEngine
 
 
 class AccountStatus(StrEnum):
@@ -106,11 +106,14 @@ class OrderPlanner:
         planned_daily_notional = daily_usage.order_notional
         planned_daily_count = daily_usage.order_count
         pause_reasons: list[str] = []
+        force_signal_rebalance = result.engine == StrategyEngine.SIGNAL_TRADING_V1 and (
+            "SIGNAL_ENTRY" in result.events or bool(result.state.get("exit_pending", False))
+        )
 
         for symbol, target_weight in result.target_weights.items():
             target_weight = decimal(target_weight)
             current_weight = portfolio.weight_of(symbol)
-            if abs(target_weight - current_weight) < tolerance_pct:
+            if not force_signal_rebalance and abs(target_weight - current_weight) < tolerance_pct:
                 continue
             quote = decimal(quotes.get(symbol))
             if quote <= ZERO:

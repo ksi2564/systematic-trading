@@ -252,6 +252,8 @@ class EvaluationContext(BaseModel):
     as_of: date
     market: dict[str, Decimal | str | bool | None]
     history: dict[str, list[Decimal]] = Field(default_factory=dict)
+    high_history: dict[str, list[Decimal]] = Field(default_factory=dict)
+    low_history: dict[str, list[Decimal]] = Field(default_factory=dict)
     previous_state: dict[str, Any] = Field(default_factory=dict)
     previous_target_weights: dict[str, Decimal] = Field(default_factory=dict)
     portfolio: dict[str, Decimal | str | bool] = Field(default_factory=dict)

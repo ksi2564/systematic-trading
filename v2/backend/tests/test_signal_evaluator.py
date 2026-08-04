@@ -111,12 +111,45 @@ def test_지원하는_개별종목_신호가_새_진입을_만든다(
             as_of=date(2026, 1, 1),
             market={"AAPL.close": close},
             history={"AAPL": [Decimal(value) for value in history]},
+            high_history={"AAPL": [Decimal(value) for value in history]},
+            low_history={"AAPL": [Decimal(value) for value in history]},
             portfolio={"position_open": False},
         ),
     )
 
     assert result.target_weights == {"AAPL": Decimal("100")}
     assert "SIGNAL_ENTRY" in result.events
+
+
+def test_고점돌파는_이전_장중고가와_저가를_사용한다() -> None:
+    version = StrategyVersion(
+        definition=StrategyDefinition(
+            name="실제 고점 돌파",
+            engine=StrategyEngine.SIGNAL_TRADING_V1,
+            market=Market.US,
+            universe=UniverseDefinition(symbols=["AAPL"]),
+            signal_symbol="AAPL",
+            signal_rules=SignalTradingRules(
+                kind=SignalKind.HIGH_BREAKOUT,
+                breakout_period=2,
+            ),
+        )
+    )
+
+    result = EvaluatorRegistry().evaluate(
+        version,
+        EvaluationContext(
+            as_of=date(2026, 1, 3),
+            market={"AAPL.close": 110},
+            history={"AAPL": [Decimal("100"), Decimal("100")]},
+            high_history={"AAPL": [Decimal("120"), Decimal("115")]},
+            low_history={"AAPL": [Decimal("90"), Decimal("95")]},
+            portfolio={"position_open": False},
+        ),
+    )
+
+    assert result.target_weights == {"AAPL": Decimal("0")}
+    assert "SIGNAL_ENTRY" not in result.events
 
 
 def test_손절_익절_트레일링은_실제_매입가와_최고가로_평가한다() -> None:
@@ -145,6 +178,37 @@ def test_손절_익절_트레일링은_실제_매입가와_최고가로_평가�
         assert result.target_weights == {"AAPL": Decimal("0")}
         assert result.base_target_weights == {"AAPL": Decimal("100")}
         assert event in result.events
+
+
+def test_미체결_청산은_보유가_확인되는_동안_목표와_최고가를_유지한다() -> None:
+    version = signal_version(protections=ProtectionRules(trailing_stop_pct=10))
+    registry = EvaluatorRegistry()
+    first = registry.evaluate(
+        version,
+        EvaluationContext(
+            as_of=date(2026, 1, 2),
+            market={"AAPL.close": Decimal("115")},
+            history={"AAPL": [Decimal("100"), Decimal("100"), Decimal("100")]},
+            previous_state={"entry_condition": False, "peak_price": "130"},
+            portfolio={"position_open": True, "average_price": Decimal("100")},
+        ),
+    )
+    still_open = registry.evaluate(
+        version,
+        EvaluationContext(
+            as_of=date(2026, 1, 3),
+            market={"AAPL.close": Decimal("116")},
+            history={"AAPL": [Decimal("100"), Decimal("115"), Decimal("115")]},
+            previous_state=first.state,
+            portfolio={"position_open": True, "average_price": Decimal("100")},
+        ),
+    )
+
+    assert first.state["exit_pending"] is True
+    assert first.state["peak_price"] == "130"
+    assert still_open.target_weights == {"AAPL": Decimal("0")}
+    assert still_open.state["exit_pending"] is True
+    assert still_open.state["peak_price"] == "130"
 
 
 def test_전략_체크섬은_json_키_순서와_무관하다() -> None:

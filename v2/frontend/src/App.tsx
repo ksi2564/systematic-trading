@@ -550,6 +550,8 @@ function Research({ snapshot }: { snapshot: Snapshot }) {
   const [vix, setVix] = useState('20');
   const [ma, setMa] = useState('90');
   const [history, setHistory] = useState('90, 100, 95');
+  const [highHistory, setHighHistory] = useState('92, 102, 97');
+  const [lowHistory, setLowHistory] = useState('88, 98, 93');
   const [result, setResult] = useState<Evaluation | null>(null);
   const [bars, setBars] = useState<MarketBarInput[]>([]);
   const [csvName, setCsvName] = useState('');
@@ -576,7 +578,9 @@ function Research({ snapshot }: { snapshot: Snapshot }) {
         date: new Date().toISOString().slice(0, 10),
         signal: signalSymbol,
         close, vix, ma,
-        history: history.split(',').map((value) => value.trim()).filter(Boolean)
+        history: history.split(',').map((value) => value.trim()).filter(Boolean),
+        highHistory: highHistory.split(',').map((value) => value.trim()).filter(Boolean),
+        lowHistory: lowHistory.split(',').map((value) => value.trim()).filter(Boolean)
       }));
     } catch (cause) {
       setError(message(cause));
@@ -649,6 +653,12 @@ function Research({ snapshot }: { snapshot: Snapshot }) {
               <Field label="200일선"><input type="number" step="0.01" value={ma} onChange={(e) => setMa(e.target.value)} /></Field>
             </div>
             <Field label="과거 종가 (쉼표 구분)"><input value={history} onChange={(e) => setHistory(e.target.value)} /></Field>
+            {selected?.version.definition.signal_rules?.kind === 'HIGH_BREAKOUT' ? (
+              <>
+                <Field label="과거 고가 (쉼표 구분)"><input value={highHistory} onChange={(e) => setHighHistory(e.target.value)} /></Field>
+                <Field label="과거 저가 (쉼표 구분)"><input value={lowHistory} onChange={(e) => setLowHistory(e.target.value)} /></Field>
+              </>
+            ) : null}
             <button className="primary-button" type="submit" disabled={!versionId}><FlaskConical size={16} /> 평가 실행</button>
             {error ? <p className="inline-error">{error}</p> : null}
           </form>

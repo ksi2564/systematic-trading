@@ -13,6 +13,7 @@ from wallant.domain.strategy import (
     EvaluationResult,
     Operand,
     SignalKind,
+    SignalTradingRules,
     StrategyDefinition,
     StrategyEngine,
     StrategyVersion,
@@ -482,18 +483,33 @@ class SignalTradingEvaluator(StrategyEvaluator):
         symbol = definition.signal_symbol
         close = QqqmDrawdownEvaluator._required_decimal(context.market, f"{symbol}.close")
         history = [decimal(value) for value in context.history.get(symbol, [])]
-        entry_condition, exit_condition, indicator = self._conditions(rules.kind, rules, history, close)
+        high_history = [decimal(value) for value in context.high_history.get(symbol, [])]
+        low_history = [decimal(value) for value in context.low_history.get(symbol, [])]
+        entry_condition, exit_condition, indicator = self._conditions(
+            rules.kind,
+            rules,
+            history,
+            high_history,
+            low_history,
+            close,
+        )
         previous_entry_condition = bool(context.previous_state.get("entry_condition", False))
         fresh_entry = entry_condition and not previous_entry_condition
         position_open = bool(context.portfolio.get("position_open", False))
-        target_weight = rules.target_weight_pct if position_open else ZERO
+        exit_pending = position_open and bool(context.previous_state.get("exit_pending", False))
+        target_weight = rules.target_weight_pct if position_open and not exit_pending else ZERO
         events: list[str] = []
         explanation = [indicator]
 
         if position_open and exit_condition:
             target_weight = ZERO
-            events.append("SIGNAL_EXIT")
-            explanation.append("자연 청산 신호가 발생했습니다.")
+            if not exit_pending:
+                events.append("SIGNAL_EXIT")
+                explanation.append("자연 청산 신호가 발생했습니다.")
+            exit_pending = True
+        elif exit_pending:
+            events.append("EXIT_PENDING")
+            explanation.append("보유 수량의 청산이 확인될 때까지 0% 목표를 유지합니다.")
         elif not position_open and fresh_entry:
             target_weight = rules.target_weight_pct
             events.append("SIGNAL_ENTRY")
@@ -525,6 +541,7 @@ class SignalTradingEvaluator(StrategyEvaluator):
             target_weight = protected[symbol]
             events.extend(protection_events)
             if protection_events:
+                exit_pending = True
                 explanation.append(f"보호 청산 규칙 적용: {', '.join(protection_events)}")
 
         state = {
@@ -532,7 +549,8 @@ class SignalTradingEvaluator(StrategyEvaluator):
             "signal_kind": rules.kind.value,
             "entry_condition": entry_condition,
             "position_open": position_open,
-            "peak_price": str(peak_price) if peak_price is not None and target_weight > ZERO else None,
+            "exit_pending": exit_pending,
+            "peak_price": str(peak_price) if peak_price is not None and position_open else None,
             "strategy_on": True,
         }
         target = {symbol: target_weight}
@@ -547,7 +565,15 @@ class SignalTradingEvaluator(StrategyEvaluator):
             explanation=explanation,
         )
 
-    def _conditions(self, kind, rules, history, close):
+    def _conditions(
+        self,
+        kind: SignalKind,
+        rules: SignalTradingRules,
+        history: list[Decimal],
+        high_history: list[Decimal],
+        low_history: list[Decimal],
+        close: Decimal,
+    ) -> tuple[bool, bool, str]:
         if kind == SignalKind.PRICE_MA_CROSS:
             period = rules.ma_period
             self._require_history(history, period, f"MA{period}")
@@ -571,12 +597,22 @@ class SignalTradingEvaluator(StrategyEvaluator):
                 f"단기선 {current_fast}, 장기선 {current_slow}",
             )
         if kind == SignalKind.HIGH_BREAKOUT:
-            self._require_history(history, rules.breakout_period, f"{rules.breakout_period}일 돌파")
-            prior = history[-rules.breakout_period :]
+            self._require_history(
+                high_history,
+                rules.breakout_period,
+                f"{rules.breakout_period}일 고가 돌파",
+            )
+            self._require_history(
+                low_history,
+                rules.breakout_period,
+                f"{rules.breakout_period}일 저가 이탈",
+            )
+            prior_highs = high_history[-rules.breakout_period :]
+            prior_lows = low_history[-rules.breakout_period :]
             return (
-                close > max(prior),
-                close < min(prior),
-                f"종가 {close}, 이전 고가 {max(prior)}, 이전 저가 {min(prior)}",
+                close > max(prior_highs),
+                close < min(prior_lows),
+                f"종가 {close}, 이전 고가 {max(prior_highs)}, 이전 저가 {min(prior_lows)}",
             )
 
         period = rules.rsi_period

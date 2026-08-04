@@ -92,9 +92,11 @@ class BacktestEngine:
         holdings: dict[str, Decimal] = {symbol: ZERO for symbol in symbols}
         average_prices: dict[str, Decimal] = {symbol: ZERO for symbol in symbols}
         histories: dict[str, list[Decimal]] = defaultdict(list)
+        high_histories: dict[str, list[Decimal]] = defaultdict(list)
+        low_histories: dict[str, list[Decimal]] = defaultdict(list)
         previous_state: dict = {}
         previous_target: dict[str, Decimal] = {}
-        pending_target: tuple[date, dict[str, Decimal]] | None = None
+        pending_target: tuple[date, dict[str, Decimal], bool] | None = None
         evaluations = []
         trades: list[BacktestTrade] = []
         equity_curve: list[EquityPoint] = []
@@ -114,10 +116,10 @@ class BacktestEngine:
                     f"{trading_date}: 필수 가격이 누락되어 주문과 평가를 보류합니다: {', '.join(missing)}"
                 )
                 deferred_actions.extend(action_by_date[trading_date])
-                self._append_available_history(histories, daily)
+                self._append_available_history(histories, high_histories, low_histories, daily)
                 continue
             if evaluation_start_date is not None and trading_date < evaluation_start_date:
-                self._append_available_history(histories, daily)
+                self._append_available_history(histories, high_histories, low_histories, daily)
                 continue
 
             actions = [*deferred_actions, *action_by_date[trading_date]]
@@ -126,7 +128,7 @@ class BacktestEngine:
             cash = cash_holder[0]
 
             if pending_target is not None:
-                signal_date, target = pending_target
+                signal_date, target, force_rebalance = pending_target
                 cash, generated = self._rebalance_at_open(
                     trading_date=trading_date,
                     signal_date=signal_date,
@@ -137,6 +139,7 @@ class BacktestEngine:
                     average_prices=average_prices,
                     fee_rate=fee_rate,
                     tolerance_pct=version.definition.tolerance_pct,
+                    force_rebalance=force_rebalance,
                 )
                 trades.extend(generated)
                 pending_target = None
@@ -150,12 +153,12 @@ class BacktestEngine:
             )
             if requires_moving_average and moving_average is None:
                 warmup_skipped += 1
-                self._append_available_history(histories, daily)
+                self._append_available_history(histories, high_histories, low_histories, daily)
                 continue
             signal_warmup = self._signal_warmup_observations(version)
             if signal_warmup and len(signal_history) < signal_warmup:
                 warmup_skipped += 1
-                self._append_available_history(histories, daily)
+                self._append_available_history(histories, high_histories, low_histories, daily)
                 continue
             if version.definition.engine == StrategyEngine.QQQM_DRAWDOWN_V2:
                 if (
@@ -195,6 +198,8 @@ class BacktestEngine:
                     as_of=trading_date,
                     market=market,
                     history={key: list(values) for key, values in histories.items()},
+                    high_history={key: list(values) for key, values in high_histories.items()},
+                    low_history={key: list(values) for key, values in low_histories.items()},
                     previous_state=previous_state,
                     previous_target_weights=previous_target,
                     portfolio=portfolio_payload,
@@ -204,7 +209,14 @@ class BacktestEngine:
             previous_state = evaluation.state
             previous_target = evaluation.target_weights
             if bool(evaluation.state.get("strategy_on", True)):
-                pending_target = (trading_date, evaluation.target_weights)
+                force_rebalance = (
+                    version.definition.engine == StrategyEngine.SIGNAL_TRADING_V1
+                    and (
+                        "SIGNAL_ENTRY" in evaluation.events
+                        or bool(evaluation.state.get("exit_pending", False))
+                    )
+                )
+                pending_target = (trading_date, evaluation.target_weights, force_rebalance)
 
             high_watermark = max(high_watermark, portfolio_value)
             drawdown = (
@@ -221,7 +233,7 @@ class BacktestEngine:
                     target_weights=evaluation.target_weights,
                 )
             )
-            self._append_available_history(histories, daily)
+            self._append_available_history(histories, high_histories, low_histories, daily)
 
         if warmup_skipped:
             warmup_label = (
@@ -286,6 +298,7 @@ class BacktestEngine:
         average_prices: dict[str, Decimal],
         fee_rate: Decimal,
         tolerance_pct: Decimal,
+        force_rebalance: bool,
     ) -> tuple[Decimal, list[BacktestTrade]]:
         symbols = [symbol for symbol in target if symbol in daily]
         total = cash + sum((holdings.get(symbol, ZERO) * daily[symbol].open for symbol in symbols), ZERO)
@@ -296,7 +309,7 @@ class BacktestEngine:
                 if total > ZERO
                 else ZERO
             )
-            if abs(decimal(target[symbol]) - current_weight) < tolerance_pct:
+            if not force_rebalance and abs(decimal(target[symbol]) - current_weight) < tolerance_pct:
                 desired[symbol] = holdings.get(symbol, ZERO)
             else:
                 desired[symbol] = (
@@ -400,7 +413,11 @@ class BacktestEngine:
     @staticmethod
     def _append_available_history(
         histories: dict[str, list[Decimal]],
+        high_histories: dict[str, list[Decimal]],
+        low_histories: dict[str, list[Decimal]],
         daily: dict[str, MarketBar],
     ) -> None:
         for symbol, bar in daily.items():
             histories[symbol].append(bar.close)
+            high_histories[symbol].append(bar.high)
+            low_histories[symbol].append(bar.low)

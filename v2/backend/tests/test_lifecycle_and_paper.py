@@ -64,8 +64,8 @@ def account_payload(name: str, market: str, currency: str) -> dict:
         "market": market,
         "currency": currency,
         "risk_policy": {
-            "max_order_notional": "10000",
-            "max_daily_notional": "30000",
+            "max_buy_order_notional": "10000",
+            "max_daily_buy_notional": "30000",
             "max_daily_order_count": 10,
             "max_symbol_weight_pct": "100",
             "max_daily_loss": "1000",
@@ -154,8 +154,8 @@ def test_전략승격은_각단계의_완료증거를_요구하고_모의입력�
 
         override_payload = paper_payload(as_of="2026-01-08")
         override_payload["risk_policy"] = {
-            "max_order_notional": "1000000",
-            "max_daily_notional": "1000000",
+            "max_buy_order_notional": "1000000",
+            "max_daily_buy_notional": "1000000",
             "max_daily_order_count": 100,
             "max_symbol_weight_pct": "100",
             "max_daily_loss": "1000000",
@@ -185,7 +185,7 @@ def test_전략승격은_각단계의_완료증거를_요구하고_모의입력�
                 DailyRiskUsageRecord(
                     account_id=us_account["id"],
                     usage_date=date(2026, 1, 10),
-                    order_notional=0,
+                    buy_notional=0,
                     order_count=0,
                     realized_loss=1000,
                 )
@@ -202,7 +202,7 @@ def test_전략승격은_각단계의_완료증거를_요구하고_모의입력�
             for intent in first_step.json()["order_plan"]["intents"]
         )
         assert any(
-            "MAX_ORDER_NOTIONAL" in intent["violations"]
+            "MAX_BUY_ORDER_NOTIONAL" in intent["violations"]
             for intent in first_step.json()["order_plan"]["intents"]
         )
         intent_count = client.get("/api/v2/operations/status").json()["counts"]["order_intents"]
@@ -269,6 +269,58 @@ def test_전략승격은_각단계의_완료증거를_요구하고_모의입력�
             json={"strategy_version_id": version_id},
         )
         assert assigned.status_code == 200
+
+        resumed = client.post(
+            f"/api/v2/accounts/{us_account['id']}/resume",
+            json={"confirmed": True},
+        )
+        assert resumed.status_code == 200
+
+        repeated_assignment = client.post(
+            f"/api/v2/accounts/{us_account['id']}/strategy",
+            json={"strategy_version_id": version_id},
+        )
+        assert repeated_assignment.status_code == 200
+
+        replacement = client.post(
+            "/api/v2/strategies",
+            json={
+                "definition": {
+                    "name": "교체 대상 전략",
+                    "engine": "SIGNAL_TRADING_V1",
+                    "market": "US",
+                    "universe": {"market": "US", "symbols": ["AAPL"]},
+                    "signal_symbol": "AAPL",
+                    "signal_rules": {"kind": "PRICE_MA_CROSS", "ma_period": 2},
+                }
+            },
+        )
+        assert replacement.status_code == 201
+        replacement_id = replacement.json()["id"]
+        with Session(app.state.engine) as database:
+            replacement_record = database.get(StrategyVersionRecord, replacement_id)
+            assert replacement_record is not None
+            replacement_record.lifecycle = "LIVE_APPROVED"
+            database.commit()
+
+        active_switch = client.post(
+            f"/api/v2/accounts/{us_account['id']}/strategy",
+            json={"strategy_version_id": replacement_id},
+        )
+        assert active_switch.status_code == 409
+        assert "정지" in active_switch.json()["detail"]
+
+        paused = client.post(
+            f"/api/v2/accounts/{us_account['id']}/pause",
+            json={"reason": "전략 교체"},
+        )
+        assert paused.status_code == 200
+        paused_switch = client.post(
+            f"/api/v2/accounts/{us_account['id']}/strategy",
+            json={"strategy_version_id": replacement_id},
+        )
+        assert paused_switch.status_code == 200
+        assert paused_switch.json()["active_strategy_version_id"] == replacement_id
 
         mismatched = client.post(
             f"/api/v2/accounts/{krx_account['id']}/strategy",
@@ -381,6 +433,7 @@ def test_동일_모의입력의_동시요청은_한번만_저장하고_매도손
             )
             assert usage is not None
             assert usage.realized_loss == 200
+            assert usage.buy_notional == 0
             assert usage.order_count == 1
 
 

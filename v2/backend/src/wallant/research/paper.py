@@ -122,7 +122,7 @@ class PaperTradingService:
     def _realized_loss(plan: OrderPlan, portfolio: Portfolio) -> Decimal:
         loss = ZERO
         for intent in plan.intents:
-            if intent.status == IntentStatus.BLOCKED or intent.side != OrderSide.SELL:
+            if intent.status != IntentStatus.PLANNED or intent.side != OrderSide.SELL:
                 continue
             positions = [
                 position for position in portfolio.positions if position.symbol == intent.symbol

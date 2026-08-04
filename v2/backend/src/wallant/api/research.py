@@ -23,7 +23,7 @@ from wallant.api.schemas import (
 )
 from wallant.api.serializers import json_value
 from wallant.domain.evaluator import EvaluatorRegistry, StrategyEvaluationError
-from wallant.domain.execution import DailyRiskUsage, IntentStatus, RiskPolicy
+from wallant.domain.execution import DailyRiskUsage, IntentStatus, OrderSide, RiskPolicy
 from wallant.domain.money import ZERO
 from wallant.domain.strategy import StrategyLifecycle
 from wallant.persistence.models import (
@@ -61,8 +61,8 @@ def _risk_policy(account: AccountRecord) -> RiskPolicy:
             detail="저장된 위험 한도가 없는 계좌는 모의투자에 사용할 수 없습니다.",
         )
     return RiskPolicy(
-        max_order_notional=risk.max_order_notional,
-        max_daily_notional=risk.max_daily_notional,
+        max_buy_order_notional=risk.max_buy_order_notional,
+        max_daily_buy_notional=risk.max_daily_buy_notional,
         max_daily_order_count=risk.max_daily_order_count,
         max_symbol_weight_pct=risk.max_symbol_weight_pct,
         max_daily_loss=risk.max_daily_loss,
@@ -324,7 +324,7 @@ def _paper_step_locked(
         .with_for_update()
     )
     daily_usage = DailyRiskUsage(
-        order_notional=usage_record.order_notional if usage_record else ZERO,
+        buy_notional=usage_record.buy_notional if usage_record else ZERO,
         order_count=usage_record.order_count if usage_record else 0,
         realized_loss=usage_record.realized_loss if usage_record else ZERO,
     )
@@ -392,17 +392,22 @@ def _paper_step_locked(
                 payload={"violations": list(intent.violations)},
             )
         )
-    planned = [intent for intent in result.order_plan.intents if intent.status != IntentStatus.BLOCKED]
+    planned = [
+        intent for intent in result.order_plan.intents if intent.status == IntentStatus.PLANNED
+    ]
     if usage_record is None:
         usage_record = DailyRiskUsageRecord(
             account_id=account.id,
             usage_date=payload.context.as_of,
-            order_notional=ZERO,
+            buy_notional=ZERO,
             order_count=0,
             realized_loss=ZERO,
         )
         session.add(usage_record)
-    usage_record.order_notional += sum((intent.notional for intent in planned), ZERO)
+    usage_record.buy_notional += sum(
+        (intent.notional for intent in planned if intent.side == OrderSide.BUY),
+        ZERO,
+    )
     usage_record.order_count += len(planned)
     usage_record.realized_loss += result.realized_loss
     try:

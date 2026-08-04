@@ -101,7 +101,13 @@ class BacktestEngine:
         trades: list[BacktestTrade] = []
         equity_curve: list[EquityPoint] = []
         high_watermark = cash
-        fee_rate = decimal(version.definition.parameters.get("fee_rate_pct"), Decimal("0.25")) / HUNDRED
+        fee_rate_pct = decimal(
+            version.definition.parameters.get("fee_rate_pct"),
+            Decimal("0.25"),
+        )
+        if fee_rate_pct < ZERO or fee_rate_pct > HUNDRED:
+            raise ValueError("수수료율은 0 이상 100 이하이어야 합니다.")
+        fee_rate = fee_rate_pct / HUNDRED
         warmup_skipped = 0
         missing_vix_days = 0
         missing_ma_guard_days = 0

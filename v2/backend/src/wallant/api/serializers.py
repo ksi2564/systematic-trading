@@ -75,8 +75,8 @@ def account_record(record: AccountRecord) -> dict[str, Any]:
         "active_strategy_version_id": record.active_strategy_version_id,
         "risk_policy": (
             {
-                "max_order_notional": str(risk.max_order_notional),
-                "max_daily_notional": str(risk.max_daily_notional),
+                "max_buy_order_notional": str(risk.max_buy_order_notional),
+                "max_daily_buy_notional": str(risk.max_daily_buy_notional),
                 "max_daily_order_count": risk.max_daily_order_count,
                 "max_symbol_weight_pct": str(risk.max_symbol_weight_pct),
                 "max_daily_loss": str(risk.max_daily_loss),

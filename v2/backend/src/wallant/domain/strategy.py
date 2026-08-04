@@ -9,7 +9,7 @@ from hashlib import sha256
 from typing import Any, Literal
 from uuid import UUID, uuid4
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator, model_validator
 
 from wallant.domain.money import HUNDRED, ZERO
 
@@ -161,8 +161,71 @@ class ProtectionRules(BaseModel):
     trailing_stop_pct: Decimal | None = Field(default=None, gt=0, le=100)
 
 
+class ExecutionParameters(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    fee_rate_pct: Decimal = Field(default=Decimal("0.25"), ge=0, le=100)
+    sell_priority: list[str] = Field(default_factory=list)
+    buy_priority: list[str] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def normalize_priorities(self) -> ExecutionParameters:
+        for field_name in ("sell_priority", "buy_priority"):
+            priorities = [symbol.strip().upper() for symbol in getattr(self, field_name)]
+            invalid = [symbol for symbol in priorities if not valid_symbol(symbol)]
+            if invalid:
+                raise ValueError(f"지원하지 않는 주문 우선순위 종목 코드입니다: {', '.join(invalid)}")
+            if len(set(priorities)) != len(priorities):
+                raise ValueError("주문 우선순위에는 같은 종목을 두 번 넣을 수 없습니다.")
+            setattr(self, field_name, priorities)
+        return self
+
+
+class QqqmDrawdownParameters(ExecutionParameters):
+    drawdown_thresholds: tuple[Decimal, Decimal, Decimal, Decimal] = (
+        Decimal("15"),
+        Decimal("25"),
+        Decimal("35"),
+        Decimal("45"),
+    )
+    recovery_activation_max_drawdown_pct: Decimal = Field(default=Decimal("15"), gt=0, le=100)
+    recovery_drawdown_pct: Decimal = Field(default=Decimal("10"), ge=0, le=100)
+    ath_lookup_days: int = Field(default=365, ge=1, le=10_000)
+    circuit_breaker_enabled: bool = True
+    vix_enabled: bool = True
+    vix_threshold: Decimal = Field(default=Decimal("35"), gt=0)
+    ma_period: int = Field(default=200, ge=2, le=500)
+    sell_priority: list[str] = Field(default_factory=lambda: ["TQQQ", "QLD", "QQQM"])
+    buy_priority: list[str] = Field(default_factory=lambda: ["QQQM", "QLD", "TQQQ"])
+
+    @model_validator(mode="after")
+    def validate_drawdown_parameters(self) -> QqqmDrawdownParameters:
+        if any(value <= ZERO or value > HUNDRED for value in self.drawdown_thresholds):
+            raise ValueError("낙폭 임계값 네 개는 0보다 크고 100 이하여야 합니다.")
+        if any(
+            left >= right
+            for left, right in zip(
+                self.drawdown_thresholds,
+                self.drawdown_thresholds[1:],
+                strict=False,
+            )
+        ):
+            raise ValueError("낙폭 임계값 네 개는 중복 없이 오름차순이어야 합니다.")
+        if self.recovery_drawdown_pct >= self.recovery_activation_max_drawdown_pct:
+            raise ValueError("회복 낙폭은 회복 모드 진입 낙폭보다 작아야 합니다.")
+        return self
+
+
+class RuleAllocationParameters(ExecutionParameters):
+    ma_period: int = Field(default=200, ge=2, le=500)
+
+
+class SignalTradingParameters(ExecutionParameters):
+    pass
+
+
 class StrategyDefinition(BaseModel):
-    model_config = ConfigDict(use_enum_values=False)
+    model_config = ConfigDict(extra="forbid", use_enum_values=False, validate_default=True)
 
     name: str = Field(min_length=1, max_length=120)
     description: str = Field(default="", max_length=1000)
@@ -177,6 +240,25 @@ class StrategyDefinition(BaseModel):
     rules: list[AllocationRule] = Field(default_factory=list)
     signal_rules: SignalTradingRules | None = None
     protections: ProtectionRules = Field(default_factory=ProtectionRules)
+
+    @field_validator("parameters")
+    @classmethod
+    def validate_engine_parameters(
+        cls,
+        parameters: dict[str, Any],
+        info: ValidationInfo,
+    ) -> dict[str, Any]:
+        parameter_models: dict[StrategyEngine, type[ExecutionParameters]] = {
+            StrategyEngine.QQQM_DRAWDOWN_V2: QqqmDrawdownParameters,
+            StrategyEngine.RULE_ALLOCATION_V1: RuleAllocationParameters,
+            StrategyEngine.SIGNAL_TRADING_V1: SignalTradingParameters,
+        }
+        engine = info.data.get("engine")
+        parameter_model = parameter_models.get(engine)
+        if parameter_model is None:
+            return parameters
+        validated = parameter_model.model_validate(parameters)
+        return validated.model_dump(mode="json")
 
     @model_validator(mode="after")
     def validate_definition(self) -> StrategyDefinition:

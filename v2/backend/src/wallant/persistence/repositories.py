@@ -251,7 +251,7 @@ class AccountRepository:
         return account
 
     def assign_strategy(self, account_id: UUID, strategy_version_id: UUID, *, actor: str) -> AccountRecord:
-        account = self._get(account_id)
+        account = self._get(account_id, for_update=True)
         version = self.session.get(StrategyVersionRecord, str(strategy_version_id))
         if version is None:
             raise KeyError("전략 버전을 찾을 수 없습니다.")
@@ -262,13 +262,17 @@ class AccountRepository:
             raise ValueError(
                 f"{account.market} 계좌에 {strategy_market or '미지정'} 시장 전략을 할당할 수 없습니다."
             )
+        if account.status == "ACTIVE":
+            if account.active_strategy_version_id == version.id:
+                return account
+            raise ValueError("활성 계좌의 전략을 바꾸기 전에 계좌를 정지해야 합니다.")
         account.active_strategy_version_id = version.id
         self._audit(actor, "ACCOUNT_STRATEGY_ASSIGNED", account.id, {"strategy_version_id": version.id})
         self.session.commit()
         return account
 
     def pause(self, account_id: UUID, reason: str, *, actor: str) -> AccountRecord:
-        account = self._get(account_id)
+        account = self._get(account_id, for_update=True)
         account.status = "PAUSED"
         account.status_reason = reason.strip()
         self._audit(actor, "ACCOUNT_PAUSED", account.id, {"reason": account.status_reason})
@@ -278,7 +282,7 @@ class AccountRepository:
     def resume(self, account_id: UUID, *, actor: str, confirmed: bool) -> AccountRecord:
         if not confirmed:
             raise ValueError("계좌 재개에는 명시적인 확인이 필요합니다.")
-        account = self._get(account_id)
+        account = self._get(account_id, for_update=True)
         if account.active_strategy_version_id is None:
             raise ValueError("활성 전략이 없는 계좌는 재개할 수 없습니다.")
         version = self.session.get(StrategyVersionRecord, account.active_strategy_version_id)
@@ -292,7 +296,7 @@ class AccountRepository:
         self.session.commit()
         return account
 
-    def _get(self, account_id: UUID) -> AccountRecord:
+    def _get(self, account_id: UUID, *, for_update: bool = False) -> AccountRecord:
         statement = (
             select(AccountRecord)
             .where(AccountRecord.id == str(account_id))
@@ -300,6 +304,8 @@ class AccountRepository:
                 selectinload(AccountRecord.risk_policy),
             )
         )
+        if for_update:
+            statement = statement.with_for_update()
         account = self.session.scalar(statement)
         if account is None:
             raise KeyError("계좌를 찾을 수 없습니다.")

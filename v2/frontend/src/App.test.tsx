@@ -90,6 +90,28 @@ describe('Wall-Ant 콘솔', () => {
     });
   });
 
+  it('매수 금액 한도와 전체 주문 횟수를 분리해 계좌를 생성한다', async () => {
+    render(<App />);
+    fireEvent.click(await screen.findByRole('button', { name: /계좌·위험/ }));
+    fireEvent.click(screen.getByRole('button', { name: /계좌 등록/ }));
+    fireEvent.submit(screen.getByRole('button', { name: /정지 상태로 생성/ }).closest('form')!);
+
+    await waitFor(() => {
+      const call = vi.mocked(fetch).mock.calls.find(
+        ([path, init]) => String(path).endsWith('/accounts') && init?.method === 'POST'
+      );
+      expect(call).toBeDefined();
+      const payload = JSON.parse(String(call?.[1]?.body));
+      expect(payload.risk_policy).toEqual(
+        expect.objectContaining({
+          max_buy_order_notional: '10000',
+          max_daily_buy_notional: '30000',
+          max_daily_order_count: 10
+        })
+      );
+    });
+  });
+
   it('OHLCV CSV를 연구 API 입력으로 정규화한다', () => {
     const bars = parseMarketBarsCsv(
       [

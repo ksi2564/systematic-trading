@@ -110,8 +110,12 @@ class RiskPolicyRecord(Base):
         ForeignKey("v2_account.id", ondelete="CASCADE"),
         primary_key=True,
     )
-    max_order_notional: Mapped[Decimal] = mapped_column(Numeric(20, 4), nullable=False)
-    max_daily_notional: Mapped[Decimal] = mapped_column(Numeric(20, 4), nullable=False)
+    max_buy_order_notional: Mapped[Decimal] = mapped_column(
+        "max_order_notional", Numeric(20, 4), nullable=False
+    )
+    max_daily_buy_notional: Mapped[Decimal] = mapped_column(
+        "max_daily_notional", Numeric(20, 4), nullable=False
+    )
     max_daily_order_count: Mapped[int] = mapped_column(nullable=False)
     max_symbol_weight_pct: Mapped[Decimal] = mapped_column(Numeric(10, 4), nullable=False)
     max_daily_loss: Mapped[Decimal] = mapped_column(Numeric(20, 4), nullable=False)
@@ -126,7 +130,9 @@ class DailyRiskUsageRecord(Base):
         primary_key=True,
     )
     usage_date: Mapped[date] = mapped_column(Date, primary_key=True)
-    order_notional: Mapped[Decimal] = mapped_column(Numeric(20, 4), nullable=False, default=Decimal("0"))
+    buy_notional: Mapped[Decimal] = mapped_column(
+        "order_notional", Numeric(20, 4), nullable=False, default=Decimal("0")
+    )
     order_count: Mapped[int] = mapped_column(nullable=False, default=0)
     realized_loss: Mapped[Decimal] = mapped_column(Numeric(20, 4), nullable=False, default=Decimal("0"))
     updated_at: Mapped[datetime] = mapped_column(

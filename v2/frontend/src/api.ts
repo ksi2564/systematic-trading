@@ -68,8 +68,8 @@ export type Account = {
   status_reason: string | null;
   active_strategy_version_id: string | null;
   risk_policy: {
-    max_order_notional: string;
-    max_daily_notional: string;
+    max_buy_order_notional: string;
+    max_daily_buy_notional: string;
     max_daily_order_count: number;
     max_symbol_weight_pct: string;
     max_daily_loss: string;

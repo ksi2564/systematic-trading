@@ -19,8 +19,8 @@ def account_payload() -> dict:
         "market": "US",
         "currency": "USD",
         "risk_policy": {
-            "max_order_notional": "10000",
-            "max_daily_notional": "30000",
+            "max_buy_order_notional": "10000",
+            "max_daily_buy_notional": "30000",
             "max_daily_order_count": 10,
             "max_symbol_weight_pct": "100",
             "max_daily_loss": "1000",

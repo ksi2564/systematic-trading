@@ -48,8 +48,8 @@ def test_계좌는_위험한도_없이_만들_수_없고_신규상태는_정지�
                 "market": "US",
                 "currency": "USD",
                 "risk_policy": {
-                    "max_order_notional": "10000",
-                    "max_daily_notional": "20000",
+                    "max_buy_order_notional": "10000",
+                    "max_daily_buy_notional": "20000",
                     "max_daily_order_count": 10,
                     "max_symbol_weight_pct": "100",
                     "max_daily_loss": "1000",
@@ -59,6 +59,41 @@ def test_계좌는_위험한도_없이_만들_수_없고_신규상태는_정지�
         assert response.status_code == 201, response.text
         assert response.json()["status"] == "PAUSED"
         assert response.json()["risk_policy"]["max_daily_order_count"] == 10
+
+
+def test_전략별_파라미터는_저장전에_타입과_범위를_검증한다(tmp_path) -> None:
+    base_definition = {
+        "name": "파라미터 검증 전략",
+        "engine": "SIGNAL_TRADING_V1",
+        "market": "US",
+        "universe": {"market": "US", "symbols": ["AAPL"]},
+        "signal_symbol": "AAPL",
+        "signal_rules": {"kind": "PRICE_MA_CROSS", "ma_period": 2},
+    }
+    with TestClient(create_app(app_settings(tmp_path))) as client:
+        negative_fee = client.post(
+            "/api/v2/strategies",
+            json={
+                "definition": {
+                    **base_definition,
+                    "parameters": {"fee_rate_pct": "-0.1"},
+                }
+            },
+        )
+        unknown_parameter = client.post(
+            "/api/v2/strategies",
+            json={
+                "definition": {
+                    **base_definition,
+                    "parameters": {"typo_fee_rate_pct": "0.1"},
+                }
+            },
+        )
+
+    assert negative_fee.status_code == 422
+    assert "fee_rate_pct" in negative_fee.text
+    assert unknown_parameter.status_code == 422
+    assert "typo_fee_rate_pct" in unknown_parameter.text
 
 
 def test_제거한_실행프로필과_screen_종목군은_api가_받지_않는다(tmp_path) -> None:
@@ -71,8 +106,8 @@ def test_제거한_실행프로필과_screen_종목군은_api가_받지_않는�
                 "currency": "USD",
                 "execution_profile": {"order_type": "LIMIT"},
                 "risk_policy": {
-                    "max_order_notional": "10000",
-                    "max_daily_notional": "20000",
+                    "max_buy_order_notional": "10000",
+                    "max_daily_buy_notional": "20000",
                     "max_daily_order_count": 10,
                     "max_symbol_weight_pct": "100",
                     "max_daily_loss": "1000",

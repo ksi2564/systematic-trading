@@ -850,7 +850,7 @@ function Accounts({
     onCreate({
       name, market: 'US', currency: 'USD',
       risk_policy: {
-        max_order_notional: maxOrder, max_daily_notional: maxDaily,
+        max_buy_order_notional: maxOrder, max_daily_buy_notional: maxDaily,
         max_daily_order_count: Number(maxCount), max_symbol_weight_pct: maxWeight,
         max_daily_loss: maxLoss
       }
@@ -880,9 +880,9 @@ function Accounts({
         <Card title="KIS 계좌 프로필" subtitle="자격증명은 계좌 생성 후 별도 암호화 등록합니다.">
           <form className="form-grid" onSubmit={submit}>
             <Field label="계좌 별칭"><input value={name} onChange={(e) => setName(e.target.value)} /></Field>
-            <Field label="단일 주문 한도 (USD)"><input type="number" value={maxOrder} onChange={(e) => setMaxOrder(e.target.value)} /></Field>
-            <Field label="일일 주문 합계 (USD)"><input type="number" value={maxDaily} onChange={(e) => setMaxDaily(e.target.value)} /></Field>
-            <Field label="일일 주문 횟수"><input type="number" value={maxCount} onChange={(e) => setMaxCount(e.target.value)} /></Field>
+            <Field label="단일 매수 한도 (USD)"><input type="number" value={maxOrder} onChange={(e) => setMaxOrder(e.target.value)} /></Field>
+            <Field label="일일 매수 합계 (USD)"><input type="number" value={maxDaily} onChange={(e) => setMaxDaily(e.target.value)} /></Field>
+            <Field label="전체 주문 횟수"><input type="number" value={maxCount} onChange={(e) => setMaxCount(e.target.value)} /></Field>
             <Field label="종목 최대 비중 (%)"><input type="number" value={maxWeight} onChange={(e) => setMaxWeight(e.target.value)} /></Field>
             <Field label="일일 손실 한도 (USD)"><input type="number" value={maxLoss} onChange={(e) => setMaxLoss(e.target.value)} /></Field>
             <div className="form-actions"><button className="primary-button" type="submit"><Save size={16} /> 정지 상태로 생성</button></div>
@@ -918,16 +918,18 @@ function Accounts({
             <h3>{account.name}</h3>
             <p>{account.status_reason ?? '자동 판단 준비 완료'}</p>
             <dl>
-              <div><dt>단일 주문</dt><dd>{formatCurrency(account.risk_policy.max_order_notional)}</dd></div>
-              <div><dt>일일 합계</dt><dd>{formatCurrency(account.risk_policy.max_daily_notional)}</dd></div>
+              <div><dt>단일 매수</dt><dd>{formatCurrency(account.risk_policy.max_buy_order_notional)}</dd></div>
+              <div><dt>일일 매수 합계</dt><dd>{formatCurrency(account.risk_policy.max_daily_buy_notional)}</dd></div>
               <div><dt>최대 비중</dt><dd>{formatNumber(account.risk_policy.max_symbol_weight_pct)}%</dd></div>
-              <div><dt>일일 주문 수</dt><dd>{account.risk_policy.max_daily_order_count}회</dd></div>
+              <div><dt>전체 주문 수</dt><dd>{account.risk_policy.max_daily_order_count}회</dd></div>
               <div><dt>일일 손실</dt><dd>{formatCurrency(account.risk_policy.max_daily_loss)}</dd></div>
             </dl>
             <div className="account-assignment">
               <select
                 aria-label={`${account.name} 승인 전략`}
                 value={assignment[account.id] ?? account.active_strategy_version_id ?? ''}
+                disabled={account.status === 'ACTIVE'}
+                title={account.status === 'ACTIVE' ? '전략을 바꾸려면 먼저 계좌를 정지하세요.' : undefined}
                 onChange={(event) => setAssignment((current) => ({ ...current, [account.id]: event.target.value }))}
               >
                 <option value="">승인 전략 선택</option>
@@ -940,7 +942,7 @@ function Accounts({
               <button
                 className="secondary-button"
                 type="button"
-                disabled={!assignment[account.id] || assignment[account.id] === account.active_strategy_version_id}
+                disabled={account.status === 'ACTIVE' || !assignment[account.id] || assignment[account.id] === account.active_strategy_version_id}
                 onClick={() => void onAssign(account, assignment[account.id])}
               >
                 전략 할당

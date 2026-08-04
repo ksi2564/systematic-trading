@@ -14,7 +14,7 @@
 
 | 요구사항 | 현재 구현 근거 | 자동 검증 근거 | 남은 증적·개발 | 판정 |
 | --- | --- | --- | --- | --- |
-| `V2-ACC-001` | Access workflow, `Caddyfile.staging.example`, 운영 API Access 이메일 검사 | `test_api_security.py`; #56 run `30937893445`의 원본 `401`·서비스 확인 | 외부 Access 리디렉션, 허용 이메일 로그인, 동일 출처 UI/API 스크린샷 | 증적 대기 |
+| `V2-ACC-001` | Access workflow, `Caddyfile.staging.example`, 운영 API Access 이메일 검사 | `test_api_security.py`; #56 run `30937893445`의 원본 `401`·서비스 확인; 외부 UI/API 미인증 리디렉션 [`QA-ACC-001`](evidence/2026-08-05-QA-ACC-001.md) | 허용 이메일 로그인, 비허용 계정 거부, 동일 출처 UI/API 화면 증적 | 부분 |
 | `V2-CUT-001` | `/opt/trading`과 `/opt/wallant`, 8080과 8000, 별도 systemd/DB | deploy/access workflow의 Java PID·서비스 보호; #56 run에서 Java/v2 모두 active | 섀도 기간 연속성 지표, Java 종료 없는 장애 훈련 | 부분 |
 | `V2-CUT-002` | v2 실행 차단 문구와 별도 staging workflow | 이 문서 묶음의 단계 표 | 기존 화면의 과도한 “재현” 문구 수정, 상태 카드 추가 | 부분 |
 | `V2-STR-001` | `domain/defaults.py`, `domain/evaluator.py`, 고정 종목군 검증 | `test_qqqm_evaluator.py`, `test_order_planner.py` | 사용자 규칙 승인, Java 실결과 fixture | 부분 |
@@ -77,6 +77,15 @@
 | `QA-RWD-001` | 1440px·360px에서 핵심 흐름 | 가로 잘림 없이 안전 상태·메뉴·결과 확인 | 없음 | 자동 진행 가능 |
 | `QA-SHD-001` | fake clock으로 16:15 EOD 섀도 실행 | 기준 비중만 저장하고 09:45 입력·주문 의도는 만들지 않음 | 섀도 fixture | C0 범위 승인 이후 자동 진행 가능 |
 | `QA-SHD-002` | 다음 거래일 09:45 리밸런싱 섀도 실행 | 당시 계좌·호가·VIX·200MA로 최종 비중과 의도를 만들고 브로커 호출 0건 | 섀도 fixture | C0 범위 승인 이후 자동 진행 가능 |
+
+실행 상태:
+
+- `QA-ACC-001`: 2026-08-05 KST 읽기 전용 외부 검증 `PASS`. `/`와
+  `/api/v2/operations/status` 모두 앱 본문을 직접 반환하지 않고 Cloudflare Access
+  로그인으로 `302` 이동했다. 상세 근거는
+  [`evidence/2026-08-05-QA-ACC-001.md`](evidence/2026-08-05-QA-ACC-001.md)에 있다.
+- `QA-ACC-002`: 인증 세션·OTP를 사용하지 않았으므로 `BLOCKED`. 사용자가 로그인할
+  때까지 실제 v2 UI와 동일 출처 API를 통과로 판정하지 않는다.
 
 현재 UI에는 자동 paper 세션 시작·일별 step·완료 흐름이 없다. API 테스트가 있더라도
 사용자가 화면에서 검증할 수 없으므로 `V2-UI-001` 완료로 판정하지 않는다.

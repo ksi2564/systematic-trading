@@ -1,9 +1,14 @@
 import { expect, test as base, type Page, type TestInfo } from '@playwright/test';
 import { writeFile } from 'node:fs/promises';
 import type { Snapshot } from '../../src/api';
-import { emptySnapshot, emergencyPausedSnapshot, populatedSnapshot } from '../fixtures/snapshots';
+import {
+  emptySnapshot,
+  emergencyPausedSnapshot,
+  populatedSnapshot,
+  unsafeSnapshot
+} from '../fixtures/snapshots';
 
-export type ApiScenario = 'populated' | 'empty' | 'emergency-paused';
+export type ApiScenario = 'populated' | 'empty' | 'emergency-paused' | 'unsafe';
 
 type ApiCall = {
   method: string;
@@ -30,7 +35,8 @@ type QaFixtures = {
 const snapshots: Record<ApiScenario, Snapshot> = {
   populated: populatedSnapshot,
   empty: emptySnapshot,
-  'emergency-paused': emergencyPausedSnapshot
+  'emergency-paused': emergencyPausedSnapshot,
+  unsafe: unsafeSnapshot
 };
 
 function apiResponse(snapshot: Snapshot, method: string, pathname: string): unknown | undefined {

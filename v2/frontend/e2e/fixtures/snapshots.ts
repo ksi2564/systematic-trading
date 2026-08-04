@@ -64,6 +64,7 @@ const signalDefinition: StrategyDefinition = {
 const safeStatus: Snapshot['status'] = {
   service: 'UP',
   environment: 'qa',
+  build_sha: '1111111111111111111111111111111111111111',
   execution_enabled: false,
   broker_adapter: 'disabled',
   global_emergency_paused: false,
@@ -222,5 +223,14 @@ export const emergencyPausedSnapshot: Snapshot = {
     ...populatedSnapshot.status,
     global_emergency_paused: true,
     global_reason: '운영자 QA 안전 점검'
+  }
+};
+
+export const unsafeSnapshot: Snapshot = {
+  ...populatedSnapshot,
+  status: {
+    ...populatedSnapshot.status,
+    execution_enabled: true,
+    broker_adapter: 'kis-live'
   }
 };

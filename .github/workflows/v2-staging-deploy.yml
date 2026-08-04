@@ -101,7 +101,7 @@ jobs:
           package_root="$(mktemp -d)"
           install -d "${package_root}/v2"
           cp -a release-candidate/. "${package_root}/v2/"
-          archive_name="wallant-v2-${GITHUB_SHA}.tgz"
+          archive_name="wallant-v2-${GITHUB_SHA}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.tgz"
           tar -C "${package_root}" -czf "${archive_name}" v2
           archive_sha="$(sha256sum "${archive_name}" | awk '{print $1}')"
           echo "archive_name=${archive_name}" >>"${GITHUB_OUTPUT}"
@@ -130,7 +130,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          remote_script="/tmp/wallant-v2-bootstrap-${GITHUB_RUN_ID}.sh"
+          remote_script="/tmp/wallant-v2-bootstrap-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.sh"
           scp -i ~/.ssh/v2_staging_key -o BatchMode=yes \
             v2/infra/scripts/bootstrap_staging.sh \
             "${STAGING_USER}@${STAGING_HOST}:${remote_script}"
@@ -165,7 +165,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          remote_script="/tmp/wallant-v2-preflight-${GITHUB_RUN_ID}.sh"
+          remote_script="/tmp/wallant-v2-preflight-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.sh"
           scp -i ~/.ssh/v2_staging_key -o BatchMode=yes \
             v2/infra/scripts/preflight_staging.sh \
             "${STAGING_USER}@${STAGING_HOST}:${remote_script}"
@@ -178,7 +178,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          remote_script="/tmp/wallant-v2-access-preflight-${GITHUB_RUN_ID}.sh"
+          remote_script="/tmp/wallant-v2-access-preflight-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.sh"
           scp -i ~/.ssh/v2_staging_key -o BatchMode=yes \
             v2/infra/scripts/preflight_access_staging.sh \
             "${STAGING_USER}@${STAGING_HOST}:${remote_script}"
@@ -199,19 +199,19 @@ jobs:
           [[ -n "${CLOUDFLARE_TUNNEL_TOKEN}" ]] \
             || { echo "CLOUDFLARE_TUNNEL_TOKEN environment secret is required."; exit 1; }
 
-          local_allowed_emails="${RUNNER_TEMP}/wallant-v2-allowed-emails-${GITHUB_RUN_ID}"
-          local_tunnel_token="${RUNNER_TEMP}/wallant-v2-tunnel-token-${GITHUB_RUN_ID}"
+          local_allowed_emails="${RUNNER_TEMP}/wallant-v2-allowed-emails-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          local_tunnel_token="${RUNNER_TEMP}/wallant-v2-tunnel-token-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           trap 'rm -f "${local_allowed_emails}" "${local_tunnel_token}"' EXIT
           printf '%s\n' "${V2_ALLOWED_ACCESS_EMAILS}" >"${local_allowed_emails}"
           printf '%s\n' "${CLOUDFLARE_TUNNEL_TOKEN}" >"${local_tunnel_token}"
           chmod 600 "${local_allowed_emails}" "${local_tunnel_token}"
 
-          remote_access_script="/tmp/wallant-v2-access-configure-${GITHUB_RUN_ID}.sh"
-          remote_tunnel_script="/tmp/wallant-v2-tunnel-configure-${GITHUB_RUN_ID}.sh"
-          remote_caddy_site="/tmp/wallant-v2-caddy-${GITHUB_RUN_ID}.conf"
-          remote_tunnel_unit="/tmp/wallant-v2-cloudflared-${GITHUB_RUN_ID}.service"
-          remote_allowed_emails="/tmp/wallant-v2-allowed-emails-${GITHUB_RUN_ID}"
-          remote_tunnel_token="/tmp/wallant-v2-tunnel-token-${GITHUB_RUN_ID}"
+          remote_access_script="/tmp/wallant-v2-access-configure-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.sh"
+          remote_tunnel_script="/tmp/wallant-v2-tunnel-configure-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.sh"
+          remote_caddy_site="/tmp/wallant-v2-caddy-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.conf"
+          remote_tunnel_unit="/tmp/wallant-v2-cloudflared-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.service"
+          remote_allowed_emails="/tmp/wallant-v2-allowed-emails-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          remote_tunnel_token="/tmp/wallant-v2-tunnel-token-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
 
           scp -i ~/.ssh/v2_staging_key -o BatchMode=yes \
             v2/infra/scripts/configure_access_staging.sh \
@@ -311,7 +311,7 @@ jobs:
         run: |
           set -euo pipefail
           remote_archive="/tmp/${ARCHIVE_NAME}"
-          remote_script="/tmp/wallant-v2-deploy-${GITHUB_RUN_ID}.sh"
+          remote_script="/tmp/wallant-v2-deploy-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.sh"
           scp -i ~/.ssh/v2_staging_key -o BatchMode=yes \
             "${ARCHIVE_NAME}" \
             "${STAGING_USER}@${STAGING_HOST}:${remote_archive}"
@@ -322,21 +322,25 @@ jobs:
           ssh -i ~/.ssh/v2_staging_key -o BatchMode=yes \
             "${STAGING_USER}@${STAGING_HOST}" \
             "sudo bash -s -- '${remote_script}' '${remote_archive}' '${GITHUB_SHA}' '${ARCHIVE_SHA}'" <<'REMOTE'
-          set -u
+          set -euo pipefail
           deploy_script="$1"
           archive_path="$2"
           release_sha="$3"
           archive_sha="$4"
-          trading_before="$(systemctl is-active trading.service 2>/dev/null || true)"
+          trading_before_state="$(systemctl is-active trading.service 2>/dev/null || true)"
+          trading_before_pid="$(systemctl show trading.service -p MainPID --value 2>/dev/null || true)"
+          [[ "${trading_before_state}" == active ]]
+          [[ "${trading_before_pid}" =~ ^[0-9]+$ && "${trading_before_pid}" -gt 0 ]]
 
           set +e
           bash "${deploy_script}" "${archive_path}" "${release_sha}" "${archive_sha}"
           deploy_exit=$?
           set -e
 
-          trading_after="$(systemctl is-active trading.service 2>/dev/null || true)"
-          if [[ "${trading_before}" != "${trading_after}" ]]; then
-            echo "Existing trading.service state changed unexpectedly: ${trading_before} -> ${trading_after}" >&2
+          trading_after_state="$(systemctl is-active trading.service 2>/dev/null || true)"
+          trading_after_pid="$(systemctl show trading.service -p MainPID --value 2>/dev/null || true)"
+          if [[ "${trading_after_state}" != active || "${trading_after_pid}" != "${trading_before_pid}" ]]; then
+            echo "Existing trading.service continuity changed unexpectedly: state ${trading_before_state} -> ${trading_after_state}, pid ${trading_before_pid} -> ${trading_after_pid}" >&2
             exit 1
           fi
           exit "${deploy_exit}"
@@ -349,12 +353,32 @@ jobs:
           set -euo pipefail
           ssh -i ~/.ssh/v2_staging_key -o BatchMode=yes \
             "${STAGING_USER}@${STAGING_HOST}" \
-            "sudo bash -s" <<'REMOTE'
+            "sudo bash -s -- '${GITHUB_SHA}'" <<'REMOTE'
           set -euo pipefail
+          expected_sha="$1"
           systemctl is-active wallant-v2-api.service
-          curl -fsS http://127.0.0.1:8000/health
-          echo
-          readlink -f /opt/wallant/current
+          systemctl is-active trading.service
+          trading_pid="$(systemctl show trading.service -p MainPID --value)"
+          [[ "${trading_pid}" =~ ^[0-9]+$ && "${trading_pid}" -gt 0 ]]
+          health_payload="$(curl -fsS --connect-timeout 2 --max-time 5 http://127.0.0.1:8000/health)"
+          current_target="$(readlink -f /opt/wallant/current)"
+          [[ "${current_target}" == /opt/wallant/releases/${expected_sha}.* ]]
+          grep -Fx "WALLANT_BUILD_SHA=${expected_sha}" "${current_target}/release.env" >/dev/null
+          printf '%s' "${health_payload}" | python3 -c '
+          import json
+          import sys
+          payload = json.load(sys.stdin)
+          if payload.get("status") != "UP":
+              raise SystemExit("health status is not UP")
+          if payload.get("execution_enabled") is not False:
+              raise SystemExit("execution is not disabled")
+          if payload.get("broker_adapter") != "disabled":
+              raise SystemExit("broker adapter is not disabled")
+          if payload.get("build_sha") != sys.argv[1]:
+              raise SystemExit("health build SHA does not match workflow SHA")
+          ' "${expected_sha}"
+          printf '%s\n' "${health_payload}"
+          printf 'CURRENT_RELEASE=%s\n' "${current_target}"
           ss -lntp | awk 'NR == 1 || $4 ~ /:(8000|8080|3307|18081|18082)$/'
           REMOTE
 
@@ -365,6 +389,6 @@ jobs:
           if [[ -f ~/.ssh/v2_staging_key ]]; then
             ssh -i ~/.ssh/v2_staging_key -o BatchMode=yes \
               "${STAGING_USER}@${STAGING_HOST}" \
-              "sudo rm -f '/tmp/wallant-v2-bootstrap-${GITHUB_RUN_ID}.sh' '/tmp/wallant-v2-preflight-${GITHUB_RUN_ID}.sh' '/tmp/wallant-v2-deploy-${GITHUB_RUN_ID}.sh' '/tmp/wallant-v2-access-preflight-${GITHUB_RUN_ID}.sh' '/tmp/wallant-v2-access-configure-${GITHUB_RUN_ID}.sh' '/tmp/wallant-v2-tunnel-configure-${GITHUB_RUN_ID}.sh' '/tmp/wallant-v2-caddy-${GITHUB_RUN_ID}.conf' '/tmp/wallant-v2-cloudflared-${GITHUB_RUN_ID}.service' '/tmp/wallant-v2-allowed-emails-${GITHUB_RUN_ID}' '/tmp/wallant-v2-tunnel-token-${GITHUB_RUN_ID}' '/tmp/wallant-v2-${GITHUB_SHA}.tgz'" \
+              "sudo rm -f '/tmp/wallant-v2-bootstrap-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.sh' '/tmp/wallant-v2-preflight-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.sh' '/tmp/wallant-v2-deploy-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.sh' '/tmp/wallant-v2-access-preflight-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.sh' '/tmp/wallant-v2-access-configure-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.sh' '/tmp/wallant-v2-tunnel-configure-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.sh' '/tmp/wallant-v2-caddy-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.conf' '/tmp/wallant-v2-cloudflared-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.service' '/tmp/wallant-v2-allowed-emails-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}' '/tmp/wallant-v2-tunnel-token-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}' '/tmp/wallant-v2-${GITHUB_SHA}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.tgz'" \
               || true
           fi

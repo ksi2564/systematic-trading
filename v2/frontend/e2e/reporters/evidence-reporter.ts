@@ -1,7 +1,17 @@
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { dirname, relative, resolve } from 'node:path';
+import {
+  copyFileSync,
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  realpathSync,
+  rmSync,
+  writeFileSync
+} from 'node:fs';
+import { dirname, isAbsolute, relative, resolve } from 'node:path';
 import type {
   FullConfig,
   FullResult,
@@ -46,6 +56,10 @@ type ScenarioResult = {
     baseUrlHost: string;
     apiMode: 'mock-only';
     apiScenario: string;
+    expectedOperationsStatus: {
+      execution_enabled: boolean;
+      broker_adapter: string;
+    };
     viewport: { width: number; height: number } | null;
   };
   assertions: string[];
@@ -77,6 +91,7 @@ type NetworkEvidence = {
 type ValidationCheck = {
   name:
     | 'qa-id-mapping'
+    | 'scenario-matrix'
     | 'attempt-history'
     | 'final-attempt-attachments'
     | 'observed-network-safety'
@@ -87,7 +102,9 @@ type ValidationCheck = {
   errors: string[];
 };
 
-const manifestPath = resolve('artifacts/playwright/manifest.json');
+const evidenceRoot = resolve('artifacts/playwright');
+const manifestPath = resolve(evidenceRoot, 'manifest.json');
+const verifiedBundleRoot = resolve(evidenceRoot, 'verified');
 const qaIdPattern = /^QA-[A-Z]+-\d{3}$/;
 const registeredAutomatedQaIds = [
   'QA-NAV-001',
@@ -96,6 +113,34 @@ const registeredAutomatedQaIds = [
   'QA-SAF-001'
 ] as const;
 const registeredAutomatedQaIdSet = new Set<string>(registeredAutomatedQaIds);
+const expectedScenarioMatrix = {
+  total: 26,
+  byQaId: {
+    'QA-NAV-001': 16,
+    'QA-OPS-001': 2,
+    'QA-RWD-001': 2,
+    'QA-SAF-001': 6
+  },
+  byProject: {
+    'desktop-chromium': 13,
+    'mobile-chromium': 13
+  }
+} as const;
+const expectedScenarioDefinitions = [
+  ['QA-RWD-001', 'populated', 'interaction.spec.ts › [QA-RWD-001] 키보드 포커스로 주요 메뉴를 이동하고 화면을 연다'],
+  ['QA-NAV-001', 'populated', 'interaction.spec.ts › [QA-NAV-001] UI 새로고침과 브라우저 reload 뒤에도 mock 안전 상태를 유지한다'],
+  ['QA-NAV-001', 'populated', 'navigation.spec.ts › [QA-NAV-001] 채워진 상태의 오늘의 운영 화면을 보여준다'],
+  ['QA-NAV-001', 'populated', 'navigation.spec.ts › [QA-NAV-001] 채워진 상태의 전략 빌더 화면을 보여준다'],
+  ['QA-NAV-001', 'populated', 'navigation.spec.ts › [QA-NAV-001] 채워진 상태의 연구·검증 화면을 보여준다'],
+  ['QA-NAV-001', 'populated', 'navigation.spec.ts › [QA-NAV-001] 채워진 상태의 계좌·위험 화면을 보여준다'],
+  ['QA-NAV-001', 'populated', 'navigation.spec.ts › [QA-NAV-001] 채워진 상태의 데이터 화면을 보여준다'],
+  ['QA-NAV-001', 'populated', 'navigation.spec.ts › [QA-NAV-001] 채워진 상태의 안전·감사 화면을 보여준다'],
+  ['QA-SAF-001', 'populated', 'safety-policy.spec.ts › [QA-SAF-001] 주문·계좌 재개·LIVE 승인 API를 금지 요청으로 분류한다'],
+  ['QA-SAF-001', 'populated', 'safety-policy.spec.ts › [QA-SAF-001] 6개 화면 읽기 전용 QA에서 위험 요청이 0건이다'],
+  ['QA-NAV-001', 'empty', 'states.spec.ts › 빈 상태 › [QA-NAV-001] 6개 화면이 처음 사용자에게 다음 행동을 안내한다'],
+  ['QA-OPS-001', 'emergency-paused', 'states.spec.ts › 전체 긴급 정지 상태 › [QA-OPS-001] 정지 상태를 명확히 표시하고 확인 없이 해제하지 않는다'],
+  ['QA-SAF-001', 'unsafe', 'states.spec.ts › 안전 설정 불일치 › [QA-SAF-001] 서버 차단 설정이 예상과 다르면 변경 기능을 잠근다']
+] as const;
 
 function isRegisteredAutomatedQaId(qaId: string) {
   return registeredAutomatedQaIdSet.has(qaId);
@@ -108,14 +153,118 @@ function sha256(path: string) {
 function evidenceFile(name: string, path: string, contentType: string): EvidenceFile | null {
   try {
     const absolutePath = resolve(path);
+    if (!lstatSync(absolutePath).isFile()) return null;
+    const canonicalRoot = realpathSync(evidenceRoot);
+    const canonicalPath = realpathSync(absolutePath);
+    const pathFromRoot = relative(canonicalRoot, canonicalPath);
+    if (pathFromRoot === '' || pathFromRoot.startsWith('..') || isAbsolute(pathFromRoot)) {
+      return null;
+    }
     return {
       name,
-      path: relative(process.cwd(), absolutePath).replaceAll('\\', '/'),
+      path: relative(process.cwd(), canonicalPath).replaceAll('\\', '/'),
       contentType,
-      sha256: sha256(absolutePath)
+      sha256: sha256(canonicalPath)
     };
   } catch {
     return null;
+  }
+}
+
+function evidenceExtension(contentType: string) {
+  return {
+    'image/png': 'png',
+    'application/json': 'json',
+    'application/zip': 'zip'
+  }[contentType] ?? null;
+}
+
+function buildVerifiedBundle<T extends { qa: ScenarioResult[] }>(manifest: T) {
+  const canonicalEvidenceRoot = realpathSync(evidenceRoot);
+  const bundleFromEvidenceRoot = relative(canonicalEvidenceRoot, verifiedBundleRoot);
+  if (bundleFromEvidenceRoot !== 'verified') {
+    throw new Error('verified evidence bundle path escaped the evidence root');
+  }
+
+  rmSync(verifiedBundleRoot, { recursive: true, force: true });
+  const bundleFilesRoot = resolve(verifiedBundleRoot, 'files');
+  mkdirSync(bundleFilesRoot, { recursive: true, mode: 0o700 });
+  const bundleManifest = JSON.parse(JSON.stringify(manifest)) as T & {
+    artifactBundle?: Record<string, unknown>;
+  };
+  const rewrittenBySource = new Map<string, string>();
+  const expectedBundleFiles = new Map<string, string>();
+  let evidenceReferenceCount = 0;
+
+  const rewriteReference = (file: EvidenceFile, countReference: boolean) => {
+    const extension = evidenceExtension(file.contentType);
+    if (!extension || !/^[0-9a-f]{64}$/.test(file.sha256)) {
+      throw new Error('unsupported or invalid evidence file metadata');
+    }
+    const sourcePath = resolve(file.path);
+    if (!lstatSync(sourcePath).isFile()) throw new Error('evidence source is not a regular file');
+    const canonicalSource = realpathSync(sourcePath);
+    const sourceFromRoot = relative(canonicalEvidenceRoot, canonicalSource);
+    if (sourceFromRoot === '' || sourceFromRoot.startsWith('..') || isAbsolute(sourceFromRoot)) {
+      throw new Error('evidence source escaped the evidence root');
+    }
+    if (sha256(canonicalSource) !== file.sha256) throw new Error('evidence source hash mismatch');
+
+    const sourceKey = canonicalSource;
+    let bundlePath = rewrittenBySource.get(sourceKey);
+    if (!bundlePath) {
+      bundlePath = `files/${file.sha256}.${extension}`;
+      const destination = resolve(verifiedBundleRoot, bundlePath);
+      if (existsSync(destination)) {
+        if (sha256(destination) !== file.sha256) {
+          throw new Error('verified bundle hash collision');
+        }
+      } else {
+        copyFileSync(canonicalSource, destination);
+      }
+      rewrittenBySource.set(sourceKey, bundlePath);
+      expectedBundleFiles.set(bundlePath, file.sha256);
+    }
+    file.path = bundlePath;
+    if (countReference) evidenceReferenceCount += 1;
+  };
+
+  for (const scenario of bundleManifest.qa) {
+    for (const attempt of scenario.attempts) {
+      for (const file of attempt.evidenceFiles) rewriteReference(file, true);
+      for (const screenshot of attempt.screenshots) rewriteReference(screenshot, false);
+    }
+  }
+
+  bundleManifest.artifactBundle = {
+    schemaVersion: '1.0',
+    kind: 'VERIFIED_MANIFEST_REFERENCES_ONLY',
+    sourceManifestSha256: sha256(manifestPath),
+    evidenceReferenceCount,
+    uniqueEvidenceFileCount: expectedBundleFiles.size,
+    unreferencedRunnerArtifactsIncluded: false,
+    validation: 'PASS'
+  };
+  const bundleManifestPath = resolve(verifiedBundleRoot, 'manifest.json');
+  writeFileSync(bundleManifestPath, `${JSON.stringify(bundleManifest, null, 2)}\n`, 'utf8');
+
+  const retainedFiles = readdirSync(bundleFilesRoot, { withFileTypes: true });
+  const topLevelEntries = readdirSync(verifiedBundleRoot, { withFileTypes: true });
+  const exactTree = topLevelEntries.length === 2
+    && topLevelEntries.some((entry) => entry.name === 'manifest.json' && entry.isFile())
+    && topLevelEntries.some((entry) => entry.name === 'files' && entry.isDirectory())
+    && retainedFiles.length === expectedBundleFiles.size
+    && retainedFiles.every((entry) => {
+      const path = `files/${entry.name}`;
+      const expectedHash = expectedBundleFiles.get(path);
+      return entry.isFile()
+        && !entry.isSymbolicLink()
+        && typeof expectedHash === 'string'
+        && sha256(resolve(verifiedBundleRoot, path)) === expectedHash;
+    });
+  if (!exactTree) {
+    rmSync(verifiedBundleRoot, { recursive: true, force: true });
+    throw new Error('verified evidence bundle exact-tree validation failed');
   }
 }
 
@@ -262,10 +411,14 @@ function scenarioInputs(
     : title.includes('긴급 정지') || title.includes('정지 상태')
       ? 'emergency-paused'
       : 'populated';
+  const apiScenario = network?.scenario ?? inferredScenario;
   return {
     baseUrlHost,
     apiMode: 'mock-only' as const,
-    apiScenario: network?.scenario ?? inferredScenario,
+    apiScenario,
+    expectedOperationsStatus: apiScenario === 'unsafe'
+      ? { execution_enabled: true, broker_adapter: 'kis-live' }
+      : { execution_enabled: false, broker_adapter: 'disabled' },
     viewport
   };
 }
@@ -304,9 +457,13 @@ function manualAndBlockedScope() {
   return [
     {
       qaId: 'QA-ACC-001',
-      status: 'BLOCKED',
+      status: 'OUT_OF_SCOPE_FOR_THIS_ARTIFACT',
       scope: '배포 app.wall-ant.com의 Access 리다이렉트·원본 경계 확인',
-      reason: '로컬 mock 실행은 배포 호스트에 접속하지 않는다.'
+      reason: '로컬 mock 실행은 배포 호스트에 접속하지 않으며 외부 PASS 증적을 재판정하지 않는다.',
+      externalEvidence: {
+        status: 'PASS',
+        path: 'docs/v2-cutover/evidence/2026-08-05-QA-ACC-001.md'
+      }
     },
     {
       qaId: 'QA-ACC-002',
@@ -355,6 +512,18 @@ function manualAndBlockedScope() {
       status: 'MANUAL',
       scope: 'Access 허용 목록·로그인 정책 변경',
       reason: '접근 권한과 복구 정책을 변경한다.'
+    },
+    {
+      qaId: 'QA-MAN-008',
+      status: 'MANUAL',
+      scope: 'C5-B 예약 자동운용 5주기와 자동 제출 대조',
+      reason: '자동 실주문과 승인 기간에 영향을 준다.'
+    },
+    {
+      qaId: 'QA-MAN-009',
+      status: 'MANUAL',
+      scope: 'C6 전체 전환과 20거래일 안정화',
+      reason: '전체 주문 소유권과 운영 범위를 변경한다.'
     }
   ] as const;
 }
@@ -370,7 +539,14 @@ function validationCheck(
 function validateManifestDraft(draft: {
   baseUrlHost: string;
   generatedResourceIds: string[];
-  safety: { executionEnabled: boolean; realOrderSubmissionAllowed: boolean; externalNetworkAllowed: boolean };
+  resourceMutations: unknown[];
+  harnessSafety: {
+    realOrderSubmissionAllowed: boolean;
+    externalNetworkAllowed: boolean;
+    webSocketAllowed: boolean;
+    apiResponses: string;
+    orderSubmissionCapability: string;
+  };
   qa: ScenarioResult[];
   manualAndBlocked: ReturnType<typeof manualAndBlockedScope>;
 }) {
@@ -390,6 +566,46 @@ function validateManifestDraft(draft: {
     }
   }
 
+  const matrixErrors: string[] = [];
+  if (draft.qa.length !== expectedScenarioMatrix.total) {
+    matrixErrors.push(`전체 scenario ${draft.qa.length}개 != ${expectedScenarioMatrix.total}개`);
+  }
+  for (const [qaId, expectedCount] of Object.entries(expectedScenarioMatrix.byQaId)) {
+    const actualCount = draft.qa.filter((scenario) => scenario.qaId === qaId).length;
+    if (actualCount !== expectedCount) {
+      matrixErrors.push(`${qaId} ${actualCount}개 != ${expectedCount}개`);
+    }
+  }
+  for (const [project, expectedCount] of Object.entries(expectedScenarioMatrix.byProject)) {
+    const actualCount = draft.qa.filter((scenario) => scenario.project === project).length;
+    if (actualCount !== expectedCount) {
+      matrixErrors.push(`${project} ${actualCount}개 != ${expectedCount}개`);
+    }
+  }
+  const unexpectedProjects = [...new Set(draft.qa.map((scenario) => scenario.project))]
+    .filter((project) => !(project in expectedScenarioMatrix.byProject));
+  if (unexpectedProjects.length > 0) {
+    matrixErrors.push(`예상하지 않은 project: ${unexpectedProjects.join(', ')}`);
+  }
+  for (const project of Object.keys(expectedScenarioMatrix.byProject)) {
+    const expectedInventory = expectedScenarioDefinitions.map(([qaId, apiScenario, title]) =>
+      `${qaId}|${apiScenario}|${title}`
+    ).sort();
+    const actualInventory = draft.qa
+      .filter((scenario) => scenario.project === project)
+      .map((scenario) => {
+        const titlePrefix = `${project} › `;
+        const title = scenario.title.startsWith(titlePrefix)
+          ? scenario.title.slice(titlePrefix.length)
+          : scenario.title;
+        return `${scenario.qaId}|${scenario.inputs.apiScenario}|${title}`;
+      })
+      .sort();
+    if (JSON.stringify(actualInventory) !== JSON.stringify(expectedInventory)) {
+      matrixErrors.push(`${project}: exact scenario inventory 불일치`);
+    }
+  }
+
   const attemptErrors = draft.qa.flatMap((scenario) => {
     if (scenario.attempts.length === 0) return [`${scenario.id}: attempt가 없음`];
     const retries = scenario.attempts.map((attempt) => attempt.retry);
@@ -401,6 +617,12 @@ function validateManifestDraft(draft: {
     for (const attempt of scenario.attempts) {
       if (attempt.attemptNumber !== attempt.retry + 1) {
         errors.push(`${scenario.id}: attemptNumber/retry 불일치`);
+      }
+      if (attempt.expectedStatus !== 'passed') {
+        errors.push(`${scenario.id}: expected-failure/skip은 QA PASS 근거로 허용하지 않음`);
+      }
+      if (attempt.status === 'PASS' && attempt.playwrightStatus !== 'passed') {
+        errors.push(`${scenario.id}: 실제 passed가 아닌 attempt를 PASS로 기록함`);
       }
     }
     const priorFailure = scenario.attempts.slice(0, -1).some((attempt) => attempt.status === 'FAIL');
@@ -538,15 +760,26 @@ function validateManifestDraft(draft: {
   const scopeErrors: string[] = [];
   if (draft.baseUrlHost !== '127.0.0.1') scopeErrors.push('baseUrlHost가 127.0.0.1이 아님');
   if (draft.generatedResourceIds.length !== 0) scopeErrors.push('생성 리소스 ID가 발생함');
+  if (draft.resourceMutations.length !== 0) scopeErrors.push('리소스 변경이 발생함');
   if (
-    draft.safety.executionEnabled
-    || draft.safety.realOrderSubmissionAllowed
-    || draft.safety.externalNetworkAllowed
+    draft.harnessSafety.realOrderSubmissionAllowed
+    || draft.harnessSafety.externalNetworkAllowed
+    || draft.harnessSafety.webSocketAllowed
+    || draft.harnessSafety.apiResponses !== 'mock-only'
+    || draft.harnessSafety.orderSubmissionCapability !== 'absent'
   ) {
     scopeErrors.push('안전 설정이 mock-only 조건을 위반함');
   }
-  if (!draft.manualAndBlocked.some((item) => item.status === 'BLOCKED')) {
-    scopeErrors.push('배포 Access BLOCKED 범위가 없음');
+  if (!draft.manualAndBlocked.some((item) => item.qaId === 'QA-ACC-002' && item.status === 'BLOCKED')) {
+    scopeErrors.push('인증된 배포 Access QA-ACC-002 BLOCKED 범위가 없음');
+  }
+  if (!draft.manualAndBlocked.some((item) =>
+    item.qaId === 'QA-ACC-001'
+    && item.status === 'OUT_OF_SCOPE_FOR_THIS_ARTIFACT'
+    && 'externalEvidence' in item
+    && item.externalEvidence.status === 'PASS'
+  )) {
+    scopeErrors.push('외부 QA-ACC-001 PASS와 로컬 OUT_OF_SCOPE 연결이 없음');
   }
   if (!draft.manualAndBlocked.some((item) => item.status === 'MANUAL')) {
     scopeErrors.push('위험 시나리오 MANUAL 범위가 없음');
@@ -558,6 +791,7 @@ function validateManifestDraft(draft: {
       draft.qa.length + draft.manualAndBlocked.length,
       qaIdErrors
     ),
+    validationCheck('scenario-matrix', draft.qa.length, matrixErrors),
     validationCheck(
       'attempt-history',
       draft.qa.reduce((total, scenario) => total + scenario.attempts.length, 0),
@@ -645,7 +879,7 @@ export default class EvidenceReporter implements Reporter {
     const attempt: AttemptResult = {
       attemptNumber: result.retry + 1,
       retry: result.retry,
-      status: mapped && result.status === test.expectedStatus ? 'PASS' : 'FAIL',
+      status: mapped && result.status === 'passed' && test.expectedStatus === 'passed' ? 'PASS' : 'FAIL',
       playwrightStatus: result.status,
       expectedStatus: test.expectedStatus,
       startedAt: result.startTime.toISOString(),
@@ -716,13 +950,12 @@ export default class EvidenceReporter implements Reporter {
     const totalAttempts = qa.reduce((total, item) => total + item.attempts.length, 0);
     const endedAt = new Date(result.startTime.getTime() + result.duration);
     const manualAndBlocked = manualAndBlockedScope();
-    const safety = {
-      executionEnabled: false,
-      brokerAdapter: 'disabled',
+    const harnessSafety = {
       realOrderSubmissionAllowed: false,
       externalNetworkAllowed: false,
       webSocketAllowed: false,
-      apiResponses: 'mock-only'
+      apiResponses: 'mock-only',
+      orderSubmissionCapability: 'absent'
     } as const;
     const qaIdSummary = [...new Set(qa.map((scenario) => scenario.qaId))]
       .sort()
@@ -740,7 +973,7 @@ export default class EvidenceReporter implements Reporter {
       });
 
     const draft = {
-      schemaVersion: '2.0',
+      schemaVersion: '2.1',
       evidenceType: 'LOCAL_MOCK_UI_QA',
       mockOnly: true,
       deployedAccessQa: false,
@@ -766,10 +999,13 @@ export default class EvidenceReporter implements Reporter {
       qa_finished_at: endedAt.toISOString(),
       durationMs: result.duration,
       browsers: [...this.projects.entries()].map(([project, settings]) => ({ project, ...settings })),
-      execution_enabled: false,
-      broker_adapter: 'disabled',
-      safety,
+      baselineExpectedOperationsStatus: {
+        execution_enabled: false,
+        broker_adapter: 'disabled'
+      },
+      harnessSafety,
       generatedResourceIds: [] as string[],
+      resourceMutations: [] as unknown[],
       summary: {
         totalScenarios: qa.length,
         passed,
@@ -777,7 +1013,8 @@ export default class EvidenceReporter implements Reporter {
         flaky,
         totalAttempts,
         manual: manualAndBlocked.filter((item) => item.status === 'MANUAL').length,
-        blocked: manualAndBlocked.filter((item) => item.status === 'BLOCKED').length
+        blocked: manualAndBlocked.filter((item) => item.status === 'BLOCKED').length,
+        outOfScope: manualAndBlocked.filter((item) => item.status === 'OUT_OF_SCOPE_FOR_THIS_ARTIFACT').length
       },
       qaIdSummary,
       qa,
@@ -796,7 +1033,15 @@ export default class EvidenceReporter implements Reporter {
     mkdirSync(dirname(manifestPath), { recursive: true });
     writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
 
-    if (runStatus === 'FAIL') return { status: 'failed' as const };
+    let verifiedBundleCreated = false;
+    try {
+      buildVerifiedBundle(manifest);
+      verifiedBundleCreated = true;
+    } catch {
+      rmSync(verifiedBundleRoot, { recursive: true, force: true });
+    }
+
+    if (runStatus === 'FAIL' || !verifiedBundleCreated) return { status: 'failed' as const };
     return undefined;
   }
 }

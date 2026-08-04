@@ -83,6 +83,34 @@ def test_운영환경은_이메일_허용목록을_필수로_요구한다() -> N
         settings.validate_execution_safety()
 
 
+@pytest.mark.parametrize(
+    "build_sha",
+    [
+        "development",
+        "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+        "gggggggggggggggggggggggggggggggggggggggg",
+    ],
+)
+def test_운영환경은_정확한_배포_sha를_필수로_요구한다(build_sha: str) -> None:
+    settings = Settings(
+        environment="production",
+        build_sha=build_sha,
+        database_url="mysql+pymysql://wallant:password@127.0.0.1/wallant",
+        allowed_access_emails=("owner@wall-ant.com",),
+    )
+    with pytest.raises(RuntimeError, match="40자 Git build SHA"):
+        settings.validate_execution_safety()
+
+
+def test_운영환경은_정확한_배포_sha를_허용한다() -> None:
+    Settings(
+        environment="production",
+        build_sha="1111111111111111111111111111111111111111",
+        database_url="mysql+pymysql://wallant:password@127.0.0.1/wallant",
+        allowed_access_emails=("owner@wall-ant.com",),
+    ).validate_execution_safety()
+
+
 def test_운영요청은_cloudflare_access_사용자를_허용목록으로_검증한다() -> None:
     settings = Settings(
         environment="production",

@@ -10,6 +10,7 @@ from wallant.main import create_app
 def app_settings(tmp_path: Path) -> Settings:
     return Settings(
         environment="test",
+        build_sha="1111111111111111111111111111111111111111",
         database_url=f"sqlite+pysqlite:///{tmp_path / 'test.db'}",
         parquet_root=tmp_path / "market",
         credential_master_key=None,
@@ -36,7 +37,13 @@ def test_기준전략_생성_평가와_운영상태_조회(tmp_path) -> None:
         assert response.json()["state"]["phase"] == "DRAWDOWN"
         status = client.get("/api/v2/operations/status")
         assert status.status_code == 200
+        assert status.headers["cache-control"] == "no-store"
         assert status.json()["execution_enabled"] is False
+        assert status.json()["build_sha"] == "1111111111111111111111111111111111111111"
+        health = client.get("/health")
+        assert health.status_code == 200
+        assert health.headers["cache-control"] == "no-store"
+        assert health.json()["build_sha"] == "1111111111111111111111111111111111111111"
 
 
 def test_계좌는_위험한도_없이_만들_수_없고_신규상태는_정지다(tmp_path) -> None:

@@ -40,6 +40,8 @@ jobs:
       - name: Typecheck frontend and UI QA harness
         working-directory: v2/frontend
         run: npm run typecheck
+      - name: Install ACL inspection dependency
+        run: sudo apt-get update && sudo apt-get install -y acl
       - name: Run frontend unit tests
         working-directory: v2/frontend
         run: npm test
@@ -49,6 +51,9 @@ jobs:
       - name: Install deterministic browser runtime
         working-directory: v2/frontend
         run: npx playwright install --with-deps chromium
+      - name: Verify deployed screenshot confidentiality mask
+        working-directory: v2/frontend
+        run: npm run test:e2e:masking
       - name: Run zero-real-order UI QA
         working-directory: v2/frontend
         env:
@@ -61,120 +66,309 @@ jobs:
           QA_GIT_SHA: ${{ github.sha }}
         run: |
           node --input-type=module <<'NODE'
-          import { readFileSync } from 'node:fs';
+          import { createHash } from 'node:crypto';
+          import { lstatSync, readFileSync, readdirSync, realpathSync } from 'node:fs';
+          import { isAbsolute, relative, resolve } from 'node:path';
 
-          const manifest = JSON.parse(
-            readFileSync('artifacts/playwright/manifest.json', 'utf8')
-          );
-          const scenariosSafe = Array.isArray(manifest.qa)
-            && manifest.qa.length > 0
-            && manifest.qa.every((scenario) => {
-              const observed = scenario.observed ?? {};
-              const finalAttempt = scenario.attempts?.at(-1);
-              const files = finalAttempt?.evidenceFiles ?? [];
-              const screenshots = (finalAttempt?.screenshots ?? []).filter((file) =>
-                file.contentType === 'image/png' && file.path?.endsWith('.png')
-              );
-              const traces = files.filter((file) =>
-                file.name === 'trace'
-                && file.contentType === 'application/zip'
-                && file.path?.endsWith('.zip')
-              );
-              const networkFiles = files.filter((file) =>
-                file.name?.startsWith('network-evidence-')
-                && file.contentType === 'application/json'
-                && file.path?.endsWith('.json')
-              );
-              const network = networkFiles.length === 1
-                ? JSON.parse(readFileSync(networkFiles[0].path, 'utf8'))
-                : null;
-              const apiCalls = network?.apiCalls;
-              const requestMethods = Array.isArray(apiCalls)
-                ? [...new Set(apiCalls.map((call) => call.method))].sort()
-                : [];
-              const networkValid = Array.isArray(apiCalls)
-                && apiCalls.length > 0
-                && apiCalls.every(
-                  (call) => call.method === 'GET' && call.mocked === true
-                )
-                && network.unmockedApiRequests?.length === 0
-                && network.forbiddenActionRequests?.length === 0
-                && network.blockedRequests?.length === 0
-                && network.webSocketRequests?.length === 0
-                && network.consoleErrors?.length === 0
-                && network.pageErrors?.length === 0;
-              const attachmentsValid = files.length >= 3
-                && screenshots.length >= 1
-                && traces.length >= 1
-                && networkFiles.length === 1
-                && finalAttempt?.screenshots?.length === screenshots.length
-                && screenshots.every((screenshot) =>
-                  files.some((file) =>
-                    file.path === screenshot.path
-                    && file.contentType === screenshot.contentType
-                    && file.sha256 === screenshot.sha256
-                  )
-                )
-                && [...screenshots, ...traces].every(
-                  (file) => readFileSync(file.path).length > 0
-                )
-                && networkValid;
-              return scenario.status === 'PASS'
-                && scenario.stabilityStatus === 'STABLE'
-                && finalAttempt?.status === 'PASS'
-                && observed.apiCallCount === apiCalls?.length
-                && observed.apiCallCount > 0
-                && observed.mockedApiCallCount === apiCalls?.filter(
-                  (call) => call.mocked === true
-                ).length
-                && Array.isArray(observed.requestMethods)
-                && observed.requestMethods.length === 1
-                && JSON.stringify(observed.requestMethods) === JSON.stringify(requestMethods)
-                && observed.requestMethods[0] === 'GET'
-                && observed.unmockedApiRequestCount === 0
-                && observed.forbiddenActionRequestCount === 0
-                && observed.externalBlockedRequestCount === 0
-                && observed.webSocketRequestCount === 0
-                && observed.consoleErrorCount === 0
-                && observed.pageErrorCount === 0
-                && observed.screenshotCount === screenshots.length
-                && observed.networkEvidenceCount === networkFiles.length
-                && observed.traceCount === traces.length
-                && observed.evidenceFileCount === files.length
-                && observed.screenshotCount >= 1
-                && observed.networkEvidenceCount === 1
-                && observed.traceCount >= 1
-                && observed.evidenceFileCount >= 3
-                && attachmentsValid;
-            });
-          const requiredSelfChecks = [
-            'final-attempt-attachments',
-            'observed-network-safety'
+          const evidenceRoot = realpathSync('artifacts/playwright');
+          const manifest = JSON.parse(readFileSync(
+            'artifacts/playwright/manifest.json',
+            'utf8'
+          ));
+          const projects = ['desktop-chromium', 'mobile-chromium'];
+          const definitions = [
+            ['QA-RWD-001', 'populated', 'interaction.spec.ts › [QA-RWD-001] 키보드 포커스로 주요 메뉴를 이동하고 화면을 연다'],
+            ['QA-NAV-001', 'populated', 'interaction.spec.ts › [QA-NAV-001] UI 새로고침과 브라우저 reload 뒤에도 mock 안전 상태를 유지한다'],
+            ['QA-NAV-001', 'populated', 'navigation.spec.ts › [QA-NAV-001] 채워진 상태의 오늘의 운영 화면을 보여준다'],
+            ['QA-NAV-001', 'populated', 'navigation.spec.ts › [QA-NAV-001] 채워진 상태의 전략 빌더 화면을 보여준다'],
+            ['QA-NAV-001', 'populated', 'navigation.spec.ts › [QA-NAV-001] 채워진 상태의 연구·검증 화면을 보여준다'],
+            ['QA-NAV-001', 'populated', 'navigation.spec.ts › [QA-NAV-001] 채워진 상태의 계좌·위험 화면을 보여준다'],
+            ['QA-NAV-001', 'populated', 'navigation.spec.ts › [QA-NAV-001] 채워진 상태의 데이터 화면을 보여준다'],
+            ['QA-NAV-001', 'populated', 'navigation.spec.ts › [QA-NAV-001] 채워진 상태의 안전·감사 화면을 보여준다'],
+            ['QA-SAF-001', 'populated', 'safety-policy.spec.ts › [QA-SAF-001] 주문·계좌 재개·LIVE 승인 API를 금지 요청으로 분류한다'],
+            ['QA-SAF-001', 'populated', 'safety-policy.spec.ts › [QA-SAF-001] 6개 화면 읽기 전용 QA에서 위험 요청이 0건이다'],
+            ['QA-NAV-001', 'empty', 'states.spec.ts › 빈 상태 › [QA-NAV-001] 6개 화면이 처음 사용자에게 다음 행동을 안내한다'],
+            ['QA-OPS-001', 'emergency-paused', 'states.spec.ts › 전체 긴급 정지 상태 › [QA-OPS-001] 정지 상태를 명확히 표시하고 확인 없이 해제하지 않는다'],
+            ['QA-SAF-001', 'unsafe', 'states.spec.ts › 안전 설정 불일치 › [QA-SAF-001] 서버 차단 설정이 예상과 다르면 변경 기능을 잠근다']
           ];
-          const selfChecksComplete = requiredSelfChecks.every((name) =>
-            manifest.selfValidation?.checks?.some((check) =>
-              check.name === name
+          const expectedInventory = definitions
+            .map(([qaId, apiScenario, title]) => `${qaId}|${apiScenario}|${title}`)
+            .sort();
+
+          function evidenceFileValid(file) {
+            try {
+              if (!file || typeof file.path !== 'string' || isAbsolute(file.path)
+                || typeof file.sha256 !== 'string' || !/^[0-9a-f]{64}$/.test(file.sha256)) {
+                return false;
+              }
+              const declaredPath = resolve(file.path);
+              if (!lstatSync(declaredPath).isFile()) return false;
+              const canonicalPath = realpathSync(declaredPath);
+              const pathFromRoot = relative(evidenceRoot, canonicalPath);
+              if (pathFromRoot === '' || pathFromRoot.startsWith('..') || isAbsolute(pathFromRoot)) {
+                return false;
+              }
+              const body = readFileSync(canonicalPath);
+              const digest = createHash('sha256').update(body).digest('hex');
+              return body.length > 0 && digest === file.sha256;
+            } catch {
+              return false;
+            }
+          }
+
+          const scenarioMatrixValid = Array.isArray(manifest.qa)
+            && manifest.qa.length === 26
+            && new Set(manifest.qa.map((scenario) => scenario.id)).size === 26
+            && projects.every((project) => {
+              const actual = manifest.qa
+                .filter((scenario) => scenario.project === project)
+                .map((scenario) => {
+                  const prefix = `${project} › `;
+                  const title = scenario.title?.startsWith(prefix)
+                    ? scenario.title.slice(prefix.length)
+                    : scenario.title;
+                  return `${scenario.qaId}|${scenario.inputs?.apiScenario}|${title}`;
+                })
+                .sort();
+              return JSON.stringify(actual) === JSON.stringify(expectedInventory);
+            })
+            && manifest.qa.every((scenario) => projects.includes(scenario.project));
+
+          const scenariosSafe = scenarioMatrixValid && manifest.qa.every((scenario) => {
+            const observed = scenario.observed ?? {};
+            const attempts = scenario.attempts ?? [];
+            const finalAttempt = attempts[0];
+            const files = finalAttempt?.evidenceFiles ?? [];
+            const screenshots = finalAttempt?.screenshots ?? [];
+            const traces = files.filter((file) =>
+              file.name === 'trace'
+              && file.contentType === 'application/zip'
+              && file.path?.endsWith('.zip')
+            );
+            const networkFiles = files.filter((file) =>
+              file.name?.startsWith('network-evidence-')
+              && file.contentType === 'application/json'
+              && file.path?.endsWith('.json')
+            );
+            const attachmentsValid = files.length === 3
+              && new Set(files.map((file) => file.path)).size === files.length
+              && files.every(evidenceFileValid)
+              && screenshots.length === 1
+              && screenshots[0].contentType === 'image/png'
+              && screenshots[0].path?.endsWith('.png')
+              && evidenceFileValid(screenshots[0])
+              && files.some((file) =>
+                file.path === screenshots[0].path
+                && file.sha256 === screenshots[0].sha256
+                && file.contentType === screenshots[0].contentType
+              )
+              && traces.length === 1
+              && networkFiles.length === 1;
+            if (!attachmentsValid) return false;
+
+            const network = JSON.parse(readFileSync(networkFiles[0].path, 'utf8'));
+            const apiCalls = network?.apiCalls;
+            const requestMethods = Array.isArray(apiCalls)
+              ? [...new Set(apiCalls.map((call) => call.method))].sort()
+              : [];
+            const networkValid = Array.isArray(apiCalls)
+              && apiCalls.length > 0
+              && apiCalls.every((call) =>
+                call.method === 'GET'
+                && call.mocked === true
+                && typeof call.path === 'string'
+                && call.path.startsWith('/api/v2/')
+              )
+              && [
+                network.unmockedApiRequests,
+                network.forbiddenActionRequests,
+                network.blockedRequests,
+                network.webSocketRequests,
+                network.consoleErrors,
+                network.pageErrors
+              ].every((items) => Array.isArray(items) && items.length === 0);
+            const expectedOperationsStatus = scenario.inputs?.apiScenario === 'unsafe'
+              ? { execution_enabled: true, broker_adapter: 'kis-live' }
+              : { execution_enabled: false, broker_adapter: 'disabled' };
+            const expectedViewport = scenario.project === 'desktop-chromium'
+              ? { width: 1440, height: 1000 }
+              : { width: 360, height: 800 };
+
+            return attempts.length === 1
+              && scenario.status === 'PASS'
+              && scenario.stabilityStatus === 'STABLE'
+              && scenario.browser === 'chromium'
+              && JSON.stringify(scenario.viewport) === JSON.stringify(expectedViewport)
+              && finalAttempt.attemptNumber === 1
+              && finalAttempt.retry === 0
+              && finalAttempt.status === 'PASS'
+              && finalAttempt.playwrightStatus === 'passed'
+              && finalAttempt.expectedStatus === 'passed'
+              && finalAttempt.errors?.length === 0
+              && networkValid
+              && observed.apiCallCount === apiCalls.length
+              && observed.mockedApiCallCount === apiCalls.length
+              && JSON.stringify(observed.requestMethods) === JSON.stringify(requestMethods)
+              && JSON.stringify(requestMethods) === JSON.stringify(['GET'])
+              && observed.unmockedApiRequestCount === 0
+              && observed.forbiddenActionRequestCount === 0
+              && observed.externalBlockedRequestCount === 0
+              && observed.webSocketRequestCount === 0
+              && observed.consoleErrorCount === 0
+              && observed.pageErrorCount === 0
+              && observed.screenshotCount === 1
+              && observed.networkEvidenceCount === 1
+              && observed.traceCount === 1
+              && observed.evidenceFileCount === 3
+              && scenario.inputs?.baseUrlHost === '127.0.0.1'
+              && scenario.inputs?.apiMode === 'mock-only'
+              && JSON.stringify(scenario.inputs?.viewport) === JSON.stringify(expectedViewport)
+              && JSON.stringify(scenario.inputs?.expectedOperationsStatus)
+                === JSON.stringify(expectedOperationsStatus);
+          });
+
+          const expectedManualScopes = {
+            'QA-ACC-001': 'OUT_OF_SCOPE_FOR_THIS_ARTIFACT',
+            'QA-ACC-002': 'BLOCKED',
+            'QA-MAN-001': 'MANUAL',
+            'QA-MAN-002': 'MANUAL',
+            'QA-MAN-003': 'MANUAL',
+            'QA-MAN-004': 'MANUAL',
+            'QA-MAN-005': 'MANUAL',
+            'QA-MAN-006': 'MANUAL',
+            'QA-MAN-007': 'MANUAL',
+            'QA-MAN-008': 'MANUAL',
+            'QA-MAN-009': 'MANUAL'
+          };
+          const manualScopeValid = Array.isArray(manifest.manualAndBlocked)
+            && manifest.manualAndBlocked.length === Object.keys(expectedManualScopes).length
+            && new Set(manifest.manualAndBlocked.map((item) => item.qaId)).size
+              === manifest.manualAndBlocked.length
+            && manifest.manualAndBlocked.every((item) =>
+              expectedManualScopes[item.qaId] === item.status
+            );
+          const selfCheckCounts = {
+            'qa-id-mapping': 37,
+            'scenario-matrix': 26,
+            'attempt-history': 26,
+            'final-attempt-attachments': 26,
+            'observed-network-safety': 26,
+            'evidence-sha256': 78,
+            'safety-scope': 11
+          };
+          const selfChecks = manifest.selfValidation?.checks;
+          const selfChecksComplete = Array.isArray(selfChecks)
+            && selfChecks.length === Object.keys(selfCheckCounts).length
+            && new Set(selfChecks.map((check) => check.name)).size === selfChecks.length
+            && selfChecks.every((check) =>
+              selfCheckCounts[check.name] === check.checkedCount
               && check.status === 'PASS'
-              && check.checkedCount === manifest.qa.length
-            )
-          );
+              && Array.isArray(check.errors)
+              && check.errors.length === 0
+            );
+          const summaryValid = JSON.stringify(manifest.summary) === JSON.stringify({
+            totalScenarios: 26,
+            passed: 26,
+            failed: 0,
+            flaky: 0,
+            totalAttempts: 26,
+            manual: 9,
+            blocked: 1,
+            outOfScope: 1
+          });
+          const bundleRoot = realpathSync('artifacts/playwright/verified');
+          const bundleManifestPath = resolve(bundleRoot, 'manifest.json');
+          const bundleManifest = JSON.parse(readFileSync(bundleManifestPath, 'utf8'));
+          const bundleEvidence = bundleManifest.qa?.flatMap((scenario) =>
+            scenario.attempts?.flatMap((attempt) => attempt.evidenceFiles ?? []) ?? []
+          ) ?? [];
+          const bundlePaths = new Map();
+          const extensionByContentType = {
+            'image/png': 'png',
+            'application/json': 'json',
+            'application/zip': 'zip'
+          };
+          const bundleEvidenceValid = bundleEvidence.length === 78
+            && bundleEvidence.every((file) => {
+              const extension = extensionByContentType[file.contentType];
+              if (!extension
+                || file.path !== `files/${file.sha256}.${extension}`
+                || !/^[0-9a-f]{64}$/.test(file.sha256)) {
+                return false;
+              }
+              const absolutePath = resolve(bundleRoot, file.path);
+              if (!lstatSync(absolutePath).isFile()) return false;
+              const canonicalPath = realpathSync(absolutePath);
+              const pathFromBundle = relative(bundleRoot, canonicalPath);
+              if (pathFromBundle !== file.path) return false;
+              if (createHash('sha256').update(readFileSync(canonicalPath)).digest('hex') !== file.sha256) {
+                return false;
+              }
+              bundlePaths.set(file.path, file.sha256);
+              return true;
+            });
+          const bundleScreenshots = bundleManifest.qa?.flatMap((scenario) =>
+            scenario.attempts?.flatMap((attempt) => attempt.screenshots ?? []) ?? []
+          ) ?? [];
+          const bundleScreenshotsValid = bundleScreenshots.length === 26
+            && bundleScreenshots.every((file) =>
+              file.contentType === 'image/png'
+              && bundlePaths.get(file.path) === file.sha256
+            );
+          const bundleTopLevel = readdirSync(bundleRoot, { withFileTypes: true });
+          const bundleFileEntries = readdirSync(resolve(bundleRoot, 'files'), { withFileTypes: true });
+          const sourceManifestSha256 = createHash('sha256')
+            .update(readFileSync('artifacts/playwright/manifest.json'))
+            .digest('hex');
+          const bundleValid = bundleEvidenceValid
+            && bundleScreenshotsValid
+            && bundleManifest.runStatus === manifest.runStatus
+            && bundleManifest.git_sha === manifest.git_sha
+            && bundleManifest.artifactBundle?.schemaVersion === '1.0'
+            && bundleManifest.artifactBundle?.kind === 'VERIFIED_MANIFEST_REFERENCES_ONLY'
+            && bundleManifest.artifactBundle?.sourceManifestSha256 === sourceManifestSha256
+            && bundleManifest.artifactBundle?.evidenceReferenceCount === 78
+            && bundleManifest.artifactBundle?.uniqueEvidenceFileCount === bundlePaths.size
+            && bundleManifest.artifactBundle?.unreferencedRunnerArtifactsIncluded === false
+            && bundleManifest.artifactBundle?.validation === 'PASS'
+            && bundleTopLevel.length === 2
+            && bundleTopLevel.some((entry) => entry.name === 'manifest.json' && entry.isFile())
+            && bundleTopLevel.some((entry) => entry.name === 'files' && entry.isDirectory())
+            && bundleFileEntries.length === bundlePaths.size
+            && bundleFileEntries.every((entry) =>
+              entry.isFile()
+              && !entry.isSymbolicLink()
+              && bundlePaths.has(`files/${entry.name}`)
+            );
           const valid = manifest.runStatus === 'PASS'
+            && manifest.schemaVersion === '2.1'
             && manifest.git_sha === process.env.QA_GIT_SHA
+            && manifest.git?.sha === process.env.QA_GIT_SHA
+            && manifest.git?.source === 'environment'
+            && manifest.git?.workingTreeDirty === false
+            && manifest.baseUrlHost === '127.0.0.1'
+            && manifest.base_url_host === '127.0.0.1'
             && manifest.mockOnly === true
             && manifest.deployedAccessQa === false
-            && manifest.execution_enabled === false
-            && manifest.broker_adapter === 'disabled'
-            && manifest.safety?.realOrderSubmissionAllowed === false
-            && manifest.safety?.externalNetworkAllowed === false
-            && manifest.safety?.webSocketAllowed === false
-            && manifest.safety?.apiResponses === 'mock-only'
+            && manifest.baselineExpectedOperationsStatus?.execution_enabled === false
+            && manifest.baselineExpectedOperationsStatus?.broker_adapter === 'disabled'
+            && manifest.harnessSafety?.realOrderSubmissionAllowed === false
+            && manifest.harnessSafety?.externalNetworkAllowed === false
+            && manifest.harnessSafety?.webSocketAllowed === false
+            && manifest.harnessSafety?.apiResponses === 'mock-only'
+            && manifest.harnessSafety?.orderSubmissionCapability === 'absent'
             && Array.isArray(manifest.generatedResourceIds)
             && manifest.generatedResourceIds.length === 0
-            && manifest.summary?.failed === 0
-            && manifest.summary?.flaky === 0
+            && Array.isArray(manifest.resourceMutations)
+            && manifest.resourceMutations.length === 0
+            && summaryValid
+            && manualScopeValid
+            && scenarioMatrixValid
             && scenariosSafe
             && manifest.selfValidation?.status === 'PASS'
-            && selfChecksComplete;
+            && manifest.selfValidation?.errors?.length === 0
+            && selfChecksComplete
+            && bundleValid;
 
           if (!valid) {
             throw new Error('RC UI QA manifest failed the no-order safety gate.');
@@ -185,7 +379,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: wallant-v2-rc-ui-qa-${{ github.run_attempt }}
-          path: v2/frontend/artifacts/playwright
+          path: v2/frontend/artifacts/playwright/verified
           if-no-files-found: warn
           retention-days: 30
       - name: Validate deployment scripts and Compose config
@@ -199,11 +393,19 @@ jobs:
             v2/infra/scripts/configure_cloudflare_tunnel.sh \
             v2/infra/scripts/preflight_staging.sh \
             v2/infra/scripts/preflight_access_staging.sh \
-            v2/infra/scripts/deploy_staging.sh
+            v2/infra/scripts/deploy_staging.sh \
+            v2/infra/tests/release_switch_test.sh
+          bash v2/infra/tests/release_switch_test.sh
           docker compose -f v2/infra/compose.yaml config --quiet
           grep -F \
             'ExecStart=/opt/wallant/current/venv/bin/python -m uvicorn' \
             v2/infra/systemd/wallant-v2-api.service
+          grep -F \
+            'EnvironmentFile=/opt/wallant/current/release.env' \
+            v2/infra/systemd/wallant-v2-api.service
+          grep -F \
+            "printf 'WALLANT_BUILD_SHA=%s\\n'" \
+            v2/infra/scripts/deploy_staging.sh
           grep -F -- \
             '--token-file %d/tunnel-token' \
             v2/infra/systemd/wallant-v2-cloudflared.service

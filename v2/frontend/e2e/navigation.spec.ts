@@ -16,7 +16,7 @@ for (const screen of screens) {
     if (screen.id !== 'overview') await navigateTo(page, screen.label);
 
     await expect(page.getByText(screen.marker, { exact: false }).first()).toBeVisible();
-    await expect(page.getByText('실주문 어댑터 비활성')).toBeVisible();
+    await expect(page.getByText('실주문 어댑터 비활성', { exact: true })).toBeVisible();
     const viewportOverflow = await page.evaluate(
       () => document.documentElement.scrollWidth - document.documentElement.clientWidth
     );

@@ -79,6 +79,7 @@ export type Account = {
 export type OperationsStatus = {
   service: string;
   environment: string;
+  build_sha: string;
   execution_enabled: boolean;
   broker_adapter: string;
   global_emergency_paused: boolean;
@@ -180,28 +181,50 @@ export type RollingResult = {
   warnings: string[];
 };
 
+export const API_REQUEST_TIMEOUT_MS = 10_000;
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`/api/v2${path}`, {
-    ...init,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(init?.headers ?? {})
+  const controller = new AbortController();
+  let timedOut = false;
+  const forwardAbort = () => controller.abort(init?.signal?.reason);
+  if (init?.signal?.aborted) forwardAbort();
+  else init?.signal?.addEventListener('abort', forwardAbort, { once: true });
+  const timeout = window.setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, API_REQUEST_TIMEOUT_MS);
+
+  try {
+    const response = await fetch(`/api/v2${path}`, {
+      ...init,
+      signal: controller.signal,
+      cache: init?.cache ?? 'no-store',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(init?.headers ?? {})
+      }
+    });
+    if (!response.ok) {
+      const payload = (await response.json().catch(() => null)) as { detail?: string } | null;
+      throw new Error(payload?.detail ?? `${response.status} ${response.statusText}`);
     }
-  });
-  if (!response.ok) {
-    const payload = (await response.json().catch(() => null)) as { detail?: string } | null;
-    throw new Error(payload?.detail ?? `${response.status} ${response.statusText}`);
+    return response.json() as Promise<T>;
+  } catch (cause) {
+    if (timedOut) throw new Error('API 응답 시간이 10초를 넘었습니다. 안전 상태를 확인할 수 없습니다.');
+    throw cause;
+  } finally {
+    window.clearTimeout(timeout);
+    init?.signal?.removeEventListener('abort', forwardAbort);
   }
-  return response.json() as Promise<T>;
 }
 
-export async function loadSnapshot(): Promise<Snapshot> {
+export async function loadSnapshot(signal?: AbortSignal): Promise<Snapshot> {
   const [status, strategies, accounts, catalog, audit] = await Promise.all([
-    request<OperationsStatus>('/operations/status'),
-    request<Strategy[]>('/strategies'),
-    request<Account[]>('/accounts'),
-    request<CatalogEntry[]>('/market-data/catalog'),
-    request<AuditEvent[]>('/operations/audit?limit=30')
+    request<OperationsStatus>('/operations/status', { signal }),
+    request<Strategy[]>('/strategies', { signal }),
+    request<Account[]>('/accounts', { signal }),
+    request<CatalogEntry[]>('/market-data/catalog', { signal }),
+    request<AuditEvent[]>('/operations/audit?limit=30', { signal })
   ]);
   return { status, strategies, accounts, catalog, audit };
 }

@@ -69,11 +69,19 @@ jobs:
             v2/infra/scripts/configure_cloudflare_tunnel.sh \
             v2/infra/scripts/preflight_staging.sh \
             v2/infra/scripts/preflight_access_staging.sh \
-            v2/infra/scripts/deploy_staging.sh
+            v2/infra/scripts/deploy_staging.sh \
+            v2/infra/tests/release_switch_test.sh
+          bash v2/infra/tests/release_switch_test.sh
           docker compose -f v2/infra/compose.yaml config --quiet
           grep -F \
             'ExecStart=/opt/wallant/current/venv/bin/python -m uvicorn' \
             v2/infra/systemd/wallant-v2-api.service
+          grep -F \
+            'EnvironmentFile=/opt/wallant/current/release.env' \
+            v2/infra/systemd/wallant-v2-api.service
+          grep -F \
+            "printf 'WALLANT_BUILD_SHA=%s\\n'" \
+            v2/infra/scripts/deploy_staging.sh
           grep -F -- \
             '--token-file %d/tunnel-token' \
             v2/infra/systemd/wallant-v2-cloudflared.service
@@ -145,6 +153,8 @@ jobs:
           cache-dependency-path: v2/frontend/package-lock.json
       - run: npm ci
       - run: npm run typecheck
+      - name: Install ACL inspection dependency
+        run: sudo apt-get update && sudo apt-get install -y acl
       - run: npm test
       - run: npm run build
 
@@ -166,6 +176,8 @@ jobs:
       - run: npm ci
       - name: Install deterministic browser runtime
         run: npx playwright install --with-deps chromium
+      - name: Verify deployed screenshot confidentiality mask
+        run: npm run test:e2e:masking
       - name: Run zero-real-order UI QA
         env:
           QA_GIT_SHA: ${{ github.sha }}
@@ -176,6 +188,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: v2-ui-qa-local-mock-${{ github.run_attempt }}
-          path: v2/frontend/artifacts/playwright
+          path: v2/frontend/artifacts/playwright/verified
           if-no-files-found: warn
           retention-days: 30

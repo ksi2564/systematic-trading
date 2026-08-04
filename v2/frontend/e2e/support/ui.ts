@@ -3,7 +3,7 @@ import { expect, type Page, type TestInfo } from '@playwright/test';
 export async function openConsole(page: Page) {
   await page.goto('/');
   await expect(page.getByRole('heading', { level: 1, name: '오늘의 운영' })).toBeVisible();
-  await expect(page.getByText('실주문 어댑터 비활성')).toBeVisible();
+  await expect(page.getByText('실주문 어댑터 비활성', { exact: true })).toBeVisible();
 }
 
 export async function navigateTo(page: Page, label: string) {

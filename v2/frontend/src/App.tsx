@@ -19,7 +19,15 @@ import {
   SlidersHorizontal,
   X
 } from 'lucide-react';
-import { type FormEvent, type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  type FormEvent,
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState
+} from 'react';
 import {
   type Account,
   type BacktestResult,
@@ -47,6 +55,7 @@ import {
 import { parseMarketBarsCsv } from './csv';
 
 type View = 'overview' | 'strategies' | 'research' | 'accounts' | 'data' | 'operations';
+type SafetyState = 'checking' | 'verified' | 'unsafe' | 'unavailable';
 
 const navigation = [
   { id: 'overview', label: '오늘의 운영', icon: Gauge },
@@ -61,6 +70,7 @@ const emptySnapshot: Snapshot = {
   status: {
     service: 'LOADING',
     environment: '-',
+    build_sha: 'unknown',
     execution_enabled: false,
     broker_adapter: 'disabled',
     global_emergency_paused: false,
@@ -80,21 +90,50 @@ export function App() {
   const [error, setError] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [safetyState, setSafetyState] = useState<SafetyState>('checking');
+  const [protectivePauseBusy, setProtectivePauseBusy] = useState(false);
+  const refreshSequence = useRef(0);
+  const refreshAbortController = useRef<AbortController | null>(null);
+  const protectivePauseInFlight = useRef(false);
 
   const refresh = useCallback(async () => {
+    const sequence = refreshSequence.current + 1;
+    refreshSequence.current = sequence;
+    refreshAbortController.current?.abort();
+    const controller = new AbortController();
+    refreshAbortController.current = controller;
     setLoading(true);
     setError(null);
+    setSafetyState('checking');
     try {
-      setSnapshot(await loadSnapshot());
+      const loaded = await loadSnapshot(controller.signal);
+      if (sequence !== refreshSequence.current) return;
+      setSnapshot(loaded);
+      setSafetyState(
+        loaded.status.execution_enabled === false && loaded.status.broker_adapter === 'disabled'
+          ? 'verified'
+          : 'unsafe'
+      );
     } catch (cause) {
+      if (sequence !== refreshSequence.current || controller.signal.aborted) return;
+      controller.abort();
+      setSafetyState('unavailable');
       setError(message(cause));
     } finally {
-      setLoading(false);
+      if (sequence === refreshSequence.current) {
+        refreshAbortController.current = null;
+        setLoading(false);
+      }
     }
   }, []);
 
   useEffect(() => {
     void refresh();
+    return () => {
+      refreshSequence.current += 1;
+      refreshAbortController.current?.abort();
+      refreshAbortController.current = null;
+    };
   }, [refresh]);
 
   const latestVersions = useMemo(
@@ -107,12 +146,28 @@ export function App() {
 
   const run = async (work: () => Promise<unknown>, success: string) => {
     setError(null);
+    setNotice(null);
     try {
       await work();
       setNotice(success);
       await refresh();
     } catch (cause) {
       setError(message(cause));
+    }
+  };
+
+  const requestProtectivePause = async () => {
+    if (protectivePauseInFlight.current) return;
+    protectivePauseInFlight.current = true;
+    setProtectivePauseBusy(true);
+    try {
+      await run(
+        () => pauseAll('안전 상태 미확인 수동 보호 정지'),
+        'v2 신규 제출을 차단했습니다. 재개는 별도 확인이 필요합니다.'
+      );
+    } finally {
+      protectivePauseInFlight.current = false;
+      setProtectivePauseBusy(false);
     }
   };
 
@@ -146,10 +201,20 @@ export function App() {
           ))}
         </nav>
         <div className="sidebar-status">
-          <span className={snapshot.status.global_emergency_paused ? 'status-dot danger' : 'status-dot'} />
+          <span
+            className={
+              safetyState === 'checking'
+                ? 'status-dot neutral'
+                : snapshot.status.global_emergency_paused
+                    || safetyState === 'unsafe'
+                    || safetyState === 'unavailable'
+                  ? 'status-dot danger'
+                  : 'status-dot'
+            }
+          />
           <div>
-            <strong>{snapshot.status.global_emergency_paused ? '전체 정지' : '연구 모드'}</strong>
-            <span>실주문 어댑터 비활성</span>
+            <strong>{safetySummary(safetyState, snapshot.status.global_emergency_paused).title}</strong>
+            <span>{safetySummary(safetyState, snapshot.status.global_emergency_paused).detail}</span>
           </div>
         </div>
       </aside>
@@ -175,64 +240,108 @@ export function App() {
         {error ? <Banner tone="danger" onClose={() => setError(null)}>{error}</Banner> : null}
         {notice ? <Banner tone="success" onClose={() => setNotice(null)}>{notice}</Banner> : null}
 
-        {view === 'overview' ? (
-          <Overview snapshot={snapshot} latestVersions={latestVersions} onNavigate={selectView} />
+        {safetyState !== 'verified' ? (
+          <div className="safety-lock" role="status">
+            <ShieldAlert size={18} />
+            <div className="safety-lock-copy">
+              <strong>{safetySummary(safetyState, snapshot.status.global_emergency_paused).title}</strong>
+              <span>서버에서 false/disabled를 확인할 때까지 화면의 변경 기능을 잠갔어요.</span>
+            </div>
+            {safetyState === 'unsafe' && snapshot.status.global_emergency_paused ? (
+              <span className="safety-freeze-complete">
+                <Check size={15} /> v2 신규 제출 차단됨
+              </span>
+            ) : safetyState === 'unsafe' || safetyState === 'unavailable' ? (
+              <button
+                className="danger-button safety-freeze-button"
+                type="button"
+                onClick={() => void requestProtectivePause()}
+                disabled={protectivePauseBusy}
+              >
+                <AlertOctagon size={15} /> {protectivePauseBusy ? '차단 중…' : 'v2 신규 제출 차단'}
+              </button>
+            ) : null}
+          </div>
         ) : null}
-        {view === 'strategies' ? (
-          <Strategies
-            snapshot={snapshot}
-            onCreateBaseline={() => run(createBaseline, '기존 QQQM 기준 전략을 만들었습니다.')}
-            onCreate={(definition) => run(() => createStrategy(definition), '새 전략 초안을 저장했습니다.')}
-            onTransition={(versionId, target) => {
-              const liveApproval = target === 'LIVE_APPROVED';
-              if (
-                liveApproval
-                && !window.confirm('완료된 모의투자 결과를 검토했고 이 버전을 실전 후보로 승인할까요?')
-              ) {
-                return;
+
+        <fieldset className="safety-scope" disabled={safetyState !== 'verified'}>
+          {view === 'overview' ? (
+            <Overview
+              snapshot={snapshot}
+              latestVersions={latestVersions}
+              onNavigate={selectView}
+              safetyState={safetyState}
+            />
+          ) : null}
+          {view === 'strategies' ? (
+            <Strategies
+              snapshot={snapshot}
+              onCreateBaseline={() => run(createBaseline, 'QQQM Python 후보 기준선을 만들었습니다.')}
+              onCreate={(definition) => run(() => createStrategy(definition), '새 전략 초안을 저장했습니다.')}
+              onTransition={(versionId, target) => {
+                const liveApproval = target === 'LIVE_APPROVED';
+                if (
+                  liveApproval
+                  && !window.confirm(
+                    '이 버전을 실전 후보로 표시할까요?\n\n이 작업은 실주문을 켜거나 Java를 중단하지 않습니다.'
+                  )
+                ) {
+                  return;
+                }
+                void run(
+                  () => transitionStrategy(versionId, target, liveApproval),
+                  target === 'LIVE_APPROVED'
+                    ? '실전 후보로 표시했습니다. 실주문은 여전히 꺼져 있습니다.'
+                    : `${target} 단계로 전환했습니다.`
+                );
+              }}
+            />
+          ) : null}
+          {view === 'research' ? <Research snapshot={snapshot} /> : null}
+          {view === 'accounts' ? (
+            <Accounts
+              snapshot={snapshot}
+              onCreate={(payload) => run(() => createAccount(payload), '계좌와 필수 위험 한도를 만들었습니다.')}
+              onAssign={(account, versionId) =>
+                run(
+                  () => assignStrategy(account.id, versionId),
+                  `${account.name} 계좌에 승인 전략을 할당했습니다.`
+                )
               }
-              void run(
-                () => transitionStrategy(versionId, target, liveApproval),
-                `${target} 단계로 전환했습니다.`
-              );
-            }}
-          />
-        ) : null}
-        {view === 'research' ? <Research snapshot={snapshot} /> : null}
-        {view === 'accounts' ? (
-          <Accounts
-            snapshot={snapshot}
-            onCreate={(payload) => run(() => createAccount(payload), '계좌와 필수 위험 한도를 만들었습니다.')}
-            onAssign={(account, versionId) =>
-              run(
-                () => assignStrategy(account.id, versionId),
-                `${account.name} 계좌에 승인 전략을 할당했습니다.`
-              )
-            }
-            onCredentials={(account, payload) =>
-              run(
-                () => storeCredentials(account.id, payload),
-                `${account.name} 계좌 자격증명을 암호화 저장했습니다.`
-              )
-            }
-            onPause={(account) => run(() => pauseAccount(account.id, '웹 콘솔에서 수동 정지'), '계좌를 정지했습니다.')}
-            onResume={(account) => {
-              if (!window.confirm(`${account.name} 계좌의 자동 판단을 다시 활성화할까요?`)) return;
-              void run(() => resumeAccount(account.id), '계좌를 재개했습니다.');
-            }}
-          />
-        ) : null}
-        {view === 'data' ? <DataCatalog snapshot={snapshot} /> : null}
-        {view === 'operations' ? (
-          <Operations
-            snapshot={snapshot}
-            onPause={() => run(() => pauseAll('웹 콘솔 긴급 정지'), '모든 계좌를 긴급 정지했습니다.')}
-            onResume={() => {
-              if (!window.confirm('전체 긴급 정지를 해제할까요? 계좌별 정지 상태는 유지됩니다.')) return;
-              void run(resumeAll, '전체 긴급 정지를 해제했습니다.');
-            }}
-          />
-        ) : null}
+              onCredentials={(account, payload) =>
+                run(
+                  () => storeCredentials(account.id, payload),
+                  `${account.name} 계좌 자격증명을 암호화 저장했습니다.`
+                )
+              }
+              onPause={(account) => run(() => pauseAccount(account.id, '웹 콘솔에서 수동 정지'), '계좌를 정지했습니다.')}
+              onResume={(account) => {
+                if (
+                  !window.confirm(
+                    `${account.name} 계좌의 자동 판단을 다시 활성화할까요?\n\n실주문 차단은 유지되며, 다시 멈추려면 계좌 정지를 선택하세요.`
+                  )
+                ) return;
+                void run(() => resumeAccount(account.id), '계좌를 재개했습니다. 실주문 차단은 유지됩니다.');
+              }}
+            />
+          ) : null}
+          {view === 'data' ? <DataCatalog snapshot={snapshot} /> : null}
+          {view === 'operations' ? (
+            <Operations
+              snapshot={snapshot}
+              safetyState={safetyState}
+              onPause={() => run(() => pauseAll('웹 콘솔 긴급 정지'), '모든 계좌를 긴급 정지했습니다.')}
+              onResume={() => {
+                if (
+                  !window.confirm(
+                    'v2 전체 긴급 정지를 해제할까요?\n\n계좌별 정지와 실주문 차단은 유지됩니다. 문제가 있으면 전체 긴급 정지를 다시 실행하세요.'
+                  )
+                ) return;
+                void run(resumeAll, 'v2 전체 긴급 정지를 해제했습니다. 실주문 차단은 유지됩니다.');
+              }}
+            />
+          ) : null}
+        </fieldset>
       </main>
     </div>
   );
@@ -241,31 +350,46 @@ export function App() {
 function Overview({
   snapshot,
   latestVersions,
-  onNavigate
+  onNavigate,
+  safetyState
 }: {
   snapshot: Snapshot;
   latestVersions: Array<{ strategy: Snapshot['strategies'][number]; version: Snapshot['strategies'][number]['versions'][number] | undefined }>;
   onNavigate: (view: View) => void;
+  safetyState: SafetyState;
 }) {
   const metrics = [
     { label: '전략', value: snapshot.status.counts.strategies, detail: '불변 버전 관리', icon: Layers3 },
     { label: '계좌', value: snapshot.status.counts.accounts, detail: `정지 ${snapshot.status.counts.paused_accounts}`, icon: CircleDollarSign },
-    { label: '주문 의도', value: snapshot.status.counts.order_intents, detail: '실주문 전송 없음', icon: BookOpenCheck },
+    {
+      label: '주문 의도',
+      value: snapshot.status.counts.order_intents,
+      detail: safetyState === 'verified' ? '실주문 전송 없음' : '안전 상태 확인 필요',
+      icon: BookOpenCheck
+    },
     { label: '데이터셋', value: snapshot.catalog.length, detail: '출처·범위 추적', icon: Database }
   ];
   return (
     <div className="page-stack">
-      <section className={snapshot.status.global_emergency_paused ? 'hero danger-hero' : 'hero'}>
+      <section className={snapshot.status.global_emergency_paused || safetyState !== 'verified' ? 'hero danger-hero' : 'hero'}>
         <div>
-          <p className="eyebrow">{snapshot.status.global_emergency_paused ? 'EMERGENCY PAUSE' : 'SAFE RESEARCH MODE'}</p>
-          <h2>{snapshot.status.global_emergency_paused ? '전체 거래 판단이 정지되어 있습니다' : '전략은 검증을 통과한 뒤에만 실전 후보가 됩니다'}</h2>
-          <p>백테스트, 롤링 검증, 내부 모의투자와 계좌별 위험 한도를 한 흐름에서 관리합니다.</p>
+          <p className="eyebrow">{safetyState === 'verified' ? 'SAFE RESEARCH MODE' : 'SAFETY CHECK REQUIRED'}</p>
+          <h2>{overviewSafetyTitle(safetyState, snapshot.status.global_emergency_paused)}</h2>
+          <p>
+            {safetyState === 'verified'
+              ? '백테스트, 롤링 검증, 내부 모의투자와 계좌별 위험 한도를 한 흐름에서 관리합니다.'
+              : '안전 상태를 확인하기 전에는 전략·계좌·운영 상태를 바꿀 수 없습니다.'}
+          </p>
         </div>
         <button className="primary-button" type="button" onClick={() => onNavigate('strategies')}>
           <Plus size={17} /> 전략 만들기
         </button>
       </section>
-      <section className="metric-grid">
+      <section
+        className="metric-grid"
+        data-qa-sensitive="true"
+        data-qa-sensitive-region="summary-metrics"
+      >
         {metrics.map(({ label, value, detail, icon: Icon }) => (
           <article className="metric-card" key={label}>
             <div className="metric-icon"><Icon size={19} /></div>
@@ -274,17 +398,17 @@ function Overview({
         ))}
       </section>
       <section className="two-column">
-        <Card title="최근 전략" subtitle="각 전략의 최신 불변 버전">
+        <Card title="최근 전략" subtitle="각 전략의 최신 불변 버전" qaSensitive="recent-strategies">
           {latestVersions.length ? latestVersions.slice(0, 4).map(({ strategy, version }) => (
-            <div className="list-row" key={strategy.id}>
+            <div className="list-row" data-qa-sensitive="true" key={strategy.id}>
               <div><strong>{strategy.name}</strong><span>v{version?.version} · {version?.lifecycle}</span></div>
               <StatusBadge value={version?.lifecycle ?? 'DRAFT'} />
             </div>
           )) : <Empty text="아직 전략이 없습니다." action="전략 빌더에서 기준 전략을 생성하세요." />}
         </Card>
-        <Card title="계좌 안전 상태" subtitle="계좌마다 독립적으로 정지·재개">
+        <Card title="계좌 안전 상태" subtitle="계좌마다 독립적으로 정지·재개" qaSensitive="recent-accounts">
           {snapshot.accounts.length ? snapshot.accounts.slice(0, 4).map((account) => (
-            <div className="list-row" key={account.id}>
+            <div className="list-row" data-qa-sensitive="true" key={account.id}>
               <div><strong>{account.name}</strong><span>{account.market} · {account.currency}</span></div>
               <StatusBadge value={account.status} />
             </div>
@@ -513,7 +637,7 @@ function Strategies({
           const latest = strategy.versions.at(-1);
           const next = latest ? nextLifecycle(latest.lifecycle) : null;
           return (
-            <article className="strategy-card" key={strategy.id}>
+            <article className="strategy-card" data-qa-sensitive="true" key={strategy.id}>
               <div className="card-topline"><StatusBadge value={latest?.lifecycle ?? 'DRAFT'} /><span>v{latest?.version ?? 0}</span></div>
               <h3>{strategy.name}</h3>
               <p>{strategy.description || '설명 없음'}</p>
@@ -536,7 +660,7 @@ function Strategies({
           );
         })}
       </section>
-      {!snapshot.strategies.length ? <Empty text="첫 전략을 만들어 보세요." action="기존 QQQM 기준선은 현재 Java 동작을 그대로 재현합니다." /> : null}
+      {!snapshot.strategies.length ? <Empty text="첫 전략을 만들어 보세요." action="기존 규칙을 기준으로 만든 Python 후보예요. Java 동등성은 자동 섀도에서 확인합니다." /> : null}
     </div>
   );
 }
@@ -746,7 +870,7 @@ function Research({ snapshot }: { snapshot: Snapshot }) {
                 <div className="table-wrap compact-table">
                   <table>
                     <thead><tr><th>구간</th><th>기간</th><th>수익률</th><th>최대 낙폭</th></tr></thead>
-                    <tbody>
+                    <tbody data-qa-sensitive="true">
                       {rollingResult.windows.map((window) => (
                         <tr key={window.window}>
                           <td>#{window.window}</td>
@@ -913,7 +1037,7 @@ function Accounts({
       ) : null}
       <section className="card-grid">
         {snapshot.accounts.map((account) => (
-          <article className="account-card" key={account.id}>
+          <article className="account-card" data-qa-sensitive="true" key={account.id}>
             <div className="card-topline"><StatusBadge value={account.status} /><span>{account.broker}</span></div>
             <h3>{account.name}</h3>
             <p>{account.status_reason ?? '자동 판단 준비 완료'}</p>
@@ -971,7 +1095,7 @@ function DataCatalog({ snapshot }: { snapshot: Snapshot }) {
       <Card title="보유 데이터" subtitle="실전 판단에는 공식 데이터만 사용할 수 있습니다.">
         {snapshot.catalog.length ? (
           <div className="table-wrap"><table><thead><tr><th>종목</th><th>해상도</th><th>출처</th><th>기간</th><th>행</th><th>신뢰</th></tr></thead>
-            <tbody>{snapshot.catalog.map((row) => <tr key={row.id}><td><strong>{row.symbol}</strong></td><td>{row.resolution}</td><td>{row.provider}</td><td>{row.start_date} – {row.end_date}</td><td>{row.row_count.toLocaleString()}</td><td><StatusBadge value={row.official ? 'OFFICIAL' : 'RESEARCH'} /></td></tr>)}</tbody>
+            <tbody data-qa-sensitive="true">{snapshot.catalog.map((row) => <tr key={row.id}><td><strong>{row.symbol}</strong></td><td>{row.resolution}</td><td>{row.provider}</td><td>{row.start_date} – {row.end_date}</td><td>{row.row_count.toLocaleString()}</td><td><StatusBadge value={row.official ? 'OFFICIAL' : 'RESEARCH'} /></td></tr>)}</tbody>
           </table></div>
         ) : <Empty text="저장된 시계열이 없습니다." action="데이터 API로 한 종목·한 연도 단위 파일을 적재할 수 있습니다." />}
       </Card>
@@ -981,13 +1105,16 @@ function DataCatalog({ snapshot }: { snapshot: Snapshot }) {
 
 function Operations({
   snapshot,
+  safetyState,
   onPause,
   onResume
 }: {
   snapshot: Snapshot;
+  safetyState: SafetyState;
   onPause: () => void;
   onResume: () => void;
 }) {
+  const safetyVerified = safetyState === 'verified';
   return (
     <div className="page-stack">
       <section className="page-heading"><div><h2>안전 제어</h2><p>중요한 오류는 자동 복구하지 않고 사용자의 명시적인 재개를 기다립니다.</p></div></section>
@@ -995,18 +1122,33 @@ function Operations({
         <Card title="전체 긴급 정지" subtitle="모든 계좌의 신규 판단과 주문 계획을 차단합니다.">
           <div className={snapshot.status.global_emergency_paused ? 'control-state is-paused' : 'control-state'}>
             <AlertOctagon size={26} />
-            <div><strong>{snapshot.status.global_emergency_paused ? '정지됨' : '대기 상태'}</strong><span>{snapshot.status.global_reason ?? '실주문 어댑터는 항상 비활성입니다.'}</span></div>
+            <div>
+              <strong>{snapshot.status.global_emergency_paused ? '정지됨' : safetyState === 'verified' ? '대기 상태' : '확인 필요'}</strong>
+              <span>
+                {snapshot.status.global_reason
+                  ?? (safetyState === 'verified'
+                    ? '서버에서 실주문 어댑터 비활성을 확인했습니다.'
+                    : '서버 안전 상태를 확인하지 못해 화면 변경 기능을 잠갔습니다.')}
+              </span>
+            </div>
           </div>
           <button className={snapshot.status.global_emergency_paused ? 'secondary-button full' : 'danger-button full'} type="button" onClick={snapshot.status.global_emergency_paused ? onResume : onPause}>
             {snapshot.status.global_emergency_paused ? '확인 후 전체 정지 해제' : '전체 긴급 정지'}
           </button>
         </Card>
-        <Card title="구조적 안전장치" subtitle="설정 실수로도 실주문이 나가지 않습니다.">
-          <ul className="check-list">
-            <li><Check size={16} /> 브로커 어댑터 <strong>{snapshot.status.broker_adapter}</strong></li>
-            <li><Check size={16} /> 실행 플래그 <strong>{String(snapshot.status.execution_enabled)}</strong></li>
-            <li><Check size={16} /> 주문 멱등키와 계좌별 위험 한도</li>
-            <li><Check size={16} /> 상태 불명 시 계좌 자동 정지</li>
+        <Card
+          title={safetyVerified ? '구조적 안전장치' : '안전 설정 검증 실패'}
+          subtitle={
+            safetyVerified
+              ? '서버가 실주문 비활성 설정을 보고했습니다.'
+              : '현재 값을 안전하다고 간주하지 않습니다. 필요하면 v2 신규 제출을 차단하세요.'
+          }
+        >
+          <ul className={safetyVerified ? 'check-list' : 'check-list is-danger'}>
+            <li>{safetyVerified ? <Check size={16} /> : <AlertOctagon size={16} />} 브로커 어댑터 <strong>{safetyValue(safetyState, snapshot.status.broker_adapter)}</strong></li>
+            <li>{safetyVerified ? <Check size={16} /> : <AlertOctagon size={16} />} 실행 플래그 <strong>{safetyValue(safetyState, String(snapshot.status.execution_enabled))}</strong></li>
+            <li>{safetyVerified ? <Check size={16} /> : <ShieldAlert size={16} />} 주문 멱등키와 계좌별 위험 한도</li>
+            <li>{safetyVerified ? <Check size={16} /> : <ShieldAlert size={16} />} 상태 불명 시 계좌 자동 정지</li>
           </ul>
         </Card>
       </section>
@@ -1015,7 +1157,7 @@ function Operations({
           <div className="table-wrap">
             <table>
               <thead><tr><th>시각</th><th>동작</th><th>대상</th><th>행위자</th></tr></thead>
-              <tbody>
+              <tbody data-qa-sensitive="true">
                 {snapshot.audit.map((event) => (
                   <tr key={event.id}>
                     <td>{new Date(event.created_at).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' })}</td>
@@ -1033,8 +1175,26 @@ function Operations({
   );
 }
 
-function Card({ title, subtitle, children }: { title: string; subtitle: string; children: ReactNode }) {
-  return <section className="card"><header><div><h3>{title}</h3><p>{subtitle}</p></div></header>{children}</section>;
+function Card({
+  title,
+  subtitle,
+  children,
+  qaSensitive
+}: {
+  title: string;
+  subtitle: string;
+  children: ReactNode;
+  qaSensitive?: string;
+}) {
+  return (
+    <section
+      className="card"
+      data-qa-sensitive={qaSensitive ? 'true' : undefined}
+      data-qa-sensitive-region={qaSensitive}
+    >
+      <header><div><h3>{title}</h3><p>{subtitle}</p></div></header>{children}
+    </section>
+  );
 }
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
@@ -1043,8 +1203,16 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
 
 function StatusBadge({ value }: { value: string }) {
   const danger = value === 'PAUSED' || value === 'RETIRED';
-  const success = value === 'ACTIVE' || value === 'LIVE_APPROVED' || value === 'OFFICIAL';
-  return <span className={`badge ${danger ? 'badge-danger' : success ? 'badge-success' : ''}`}>{value}</span>;
+  const success = value === 'ACTIVE' || value === 'OFFICIAL';
+  const candidate = value === 'LIVE_APPROVED';
+  return (
+    <span
+      className={`badge ${danger ? 'badge-danger' : success ? 'badge-success' : candidate ? 'badge-candidate' : ''}`}
+      aria-label={candidate ? 'LIVE_APPROVED, 실전 후보이며 주문은 꺼짐' : undefined}
+    >
+      {candidate ? '실전 후보 · 주문 꺼짐' : value}
+    </span>
+  );
 }
 
 function Empty({ text, action }: { text: string; action: string }) {
@@ -1087,4 +1255,24 @@ function lifecycleAction(target: Lifecycle): string {
     LIVE_APPROVED: '실전 후보로 수동 승인',
     RETIRED: '종료'
   }[target];
+}
+
+function safetySummary(safetyState: SafetyState, paused: boolean): { title: string; detail: string } {
+  if (paused && safetyState === 'verified') return { title: '전체 정지', detail: '실주문 어댑터 비활성' };
+  if (safetyState === 'verified') return { title: '연구 모드', detail: '실주문 어댑터 비활성' };
+  if (safetyState === 'unsafe') return { title: '안전 설정 불일치', detail: '화면 변경 기능 잠김' };
+  if (safetyState === 'unavailable') return { title: '안전 상태 확인 불가', detail: 'API 연결 확인 필요' };
+  return { title: '안전 상태 확인 중', detail: '서버 설정 확인 중' };
+}
+
+function overviewSafetyTitle(safetyState: SafetyState, paused: boolean): string {
+  if (paused && safetyState === 'verified') return '전체 거래 판단이 정지되어 있습니다';
+  if (safetyState === 'verified') return '전략은 검증을 통과한 뒤에만 실전 후보가 됩니다';
+  if (safetyState === 'unsafe') return '실주문 차단 설정이 예상과 달라요';
+  if (safetyState === 'unavailable') return '안전 상태를 확인하지 못했어요';
+  return '안전 설정을 확인하고 있어요';
+}
+
+function safetyValue(safetyState: SafetyState, value: string): string {
+  return safetyState === 'verified' || safetyState === 'unsafe' ? value : '확인 불가';
 }

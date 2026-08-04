@@ -58,5 +58,7 @@ v2/backend/data/
 v2/frontend/node_modules/
 v2/frontend/dist/
 v2/frontend/coverage/
+v2/frontend/test-results/
+v2/frontend/artifacts/playwright-deployed/
 check_result.log
 git_status.txt

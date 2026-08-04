@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     )
 
     environment: str = "local"
+    build_sha: str = "development"
     app_name: str = "Wall-Ant Trading v2"
     api_prefix: str = "/api/v2"
     database_url: str = "sqlite+pysqlite:///./wallant-v2.db"
@@ -43,6 +44,11 @@ class Settings(BaseSettings):
             raise RuntimeError("운영 환경에서는 SQLite를 사용할 수 없습니다.")
         if self.is_production and not self.allowed_access_emails:
             raise RuntimeError("운영 환경에는 Cloudflare Access 이메일 허용 목록이 필요합니다.")
+        if self.is_production and (
+            len(self.build_sha) != 40
+            or any(character not in "0123456789abcdef" for character in self.build_sha)
+        ):
+            raise RuntimeError("운영 환경에는 소문자 40자 Git build SHA가 필요합니다.")
         if self.discord_enabled and (
             not self.discord_bot_token
             or not self.discord_guild_id

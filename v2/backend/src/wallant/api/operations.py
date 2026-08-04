@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, Query, Request, Response
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -19,7 +19,12 @@ router = APIRouter(prefix="/operations", tags=["operations"])
 
 
 @router.get("/status")
-def status(request: Request, session: Session = Depends(get_session)) -> dict:
+def status(
+    request: Request,
+    response: Response,
+    session: Session = Depends(get_session),
+) -> dict:
+    response.headers["Cache-Control"] = "no-store"
     control = GlobalControlRepository(session).get()
     counts = {
         "strategies": session.scalar(select(func.count()).select_from(StrategyRecord)) or 0,
@@ -33,6 +38,7 @@ def status(request: Request, session: Session = Depends(get_session)) -> dict:
     return {
         "service": "UP",
         "environment": request.app.state.settings.environment,
+        "build_sha": request.app.state.settings.build_sha,
         "execution_enabled": False,
         "broker_adapter": "disabled",
         "global_emergency_paused": control.emergency_paused,

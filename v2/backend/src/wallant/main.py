@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 
-from fastapi import Depends, FastAPI, Request
+from fastapi import Depends, FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
@@ -54,9 +54,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return JSONResponse(status_code=422, content={"detail": str(exc)})
 
     @app.get("/health", include_in_schema=False)
-    def health() -> dict:
+    def health(response: Response) -> dict:
+        response.headers["Cache-Control"] = "no-store"
         return {
             "status": "UP",
+            "build_sha": settings.build_sha,
             "execution_enabled": False,
             "broker_adapter": "disabled",
         }

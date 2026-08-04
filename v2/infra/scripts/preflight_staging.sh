@@ -72,6 +72,15 @@ printf '\nSERVICE STATUS\n'
 for unit_name in trading caddy docker wallant-v2-api; do
   printf '%-18s %s\n' "${unit_name}" "$(systemctl is-active "${unit_name}" 2>/dev/null || true)"
 done
+trading_state="$(systemctl is-active trading.service 2>/dev/null || true)"
+trading_pid="$(systemctl show trading.service -p MainPID --value 2>/dev/null || true)"
+if [[ "${trading_state}" != active || ! "${trading_pid}" =~ ^[0-9]+$ || "${trading_pid}" -eq 0 ]]; then
+  printf 'Existing trading.service must be active with a non-zero MainPID; state=%s pid=%s\n' \
+    "${trading_state}" "${trading_pid}" >&2
+  failures=$((failures + 1))
+else
+  printf 'OK existing trading.service continuity baseline: pid=%s\n' "${trading_pid}"
+fi
 
 printf '\nDEPLOYMENT PATHS\n'
 for path_name in /opt/trading /opt/wallant /etc/wallant /var/lib/wallant; do

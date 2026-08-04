@@ -9,15 +9,130 @@ readonly config_root="/etc/wallant"
 readonly data_root="/var/lib/wallant"
 readonly log_root="/var/log/wallant"
 readonly release_root="${deploy_root}/releases"
-readonly release_dir="${release_root}/${release_sha}"
-readonly incoming_dir="${release_dir}.incoming"
 readonly current_link="${deploy_root}/current"
 readonly env_file="${config_root}/v2.env"
 readonly mysql_env_file="${config_root}/mysql.env"
 readonly systemd_unit="/etc/systemd/system/wallant-v2-api.service"
+readonly retain_recent_releases=3
+readonly deploy_lock_path="/run/lock/wallant-v2-deploy.lock"
 
 previous_target=""
 current_switched=false
+release_dir=""
+incoming_dir=""
+deploy_lock_acquired=false
+
+acquire_deploy_lock() {
+  if ! mkdir -m 0700 "${deploy_lock_path}" 2>/dev/null; then
+    printf 'Another Wall-Ant v2 deployment is running, or its stale lock needs review.\n' >&2
+    return 1
+  fi
+  deploy_lock_acquired=true
+  if ! printf '%s\n' "$$" >"${deploy_lock_path}/owner" \
+    || ! chmod 0600 "${deploy_lock_path}/owner"; then
+    release_deploy_lock || true
+    return 1
+  fi
+}
+
+release_deploy_lock() {
+  [[ "${deploy_lock_acquired}" == true ]] || return 0
+  [[ -d "${deploy_lock_path}" && ! -L "${deploy_lock_path}" ]] || return 1
+  local owner=""
+  IFS= read -r owner <"${deploy_lock_path}/owner" || return 1
+  [[ "${owner}" == "$$" ]] || return 1
+  rm -f -- "${deploy_lock_path}/owner" || return 1
+  rmdir -- "${deploy_lock_path}" || return 1
+  deploy_lock_acquired=false
+}
+
+trap 'release_deploy_lock || printf "Host deploy lock cleanup needs manual review.\n" >&2' EXIT
+
+is_managed_release_path() {
+  local candidate="${1:-}"
+  local kind="${2:-release}"
+  [[ "${candidate}" == "${release_root}/"* ]] || return 1
+  local name="${candidate#"${release_root}/"}"
+  if [[ "${kind}" == incoming ]]; then
+    [[ "${name}" =~ ^[0-9a-f]{40}\.[0-9]{8}T[0-9]{6}Z\.[0-9]+\.incoming$ ]]
+  else
+    [[ "${name}" =~ ^[0-9a-f]{40}\.[0-9]{8}T[0-9]{6}Z\.[0-9]+$ ]]
+  fi
+}
+
+cleanup_failed_attempt() {
+  local current_target=""
+  if [[ -L "${current_link}" ]]; then
+    current_target="$(readlink -f "${current_link}" 2>/dev/null || true)"
+  fi
+  if [[ -n "${incoming_dir}" && ( -d "${incoming_dir}" || -L "${incoming_dir}" ) ]]; then
+    is_managed_release_path "${incoming_dir}" incoming || {
+      printf 'Refused unsafe incoming cleanup path: %s\n' "${incoming_dir}" >&2
+      return 1
+    }
+    rm -rf -- "${incoming_dir}" || return 1
+  fi
+  if [[ -n "${release_dir}" && -d "${release_dir}" && "${release_dir}" != "${current_target}" && "${release_dir}" != "${previous_target}" ]]; then
+    is_managed_release_path "${release_dir}" release || {
+      printf 'Refused unsafe release cleanup path: %s\n' "${release_dir}" >&2
+      return 1
+    }
+    rm -rf -- "${release_dir}" || return 1
+  fi
+}
+
+prune_completed_releases() {
+  local current_target=""
+  local recent_count=0
+  local release_name=""
+  local candidate=""
+  local kept_candidate=""
+  local is_kept=false
+  local -a kept_releases=()
+  local -a completed_releases=()
+
+  if [[ -L "${current_link}" ]]; then
+    current_target="$(readlink -f "${current_link}")"
+    is_managed_release_path "${current_target}" release || return 1
+    kept_releases+=("${current_target}")
+  fi
+  if [[ -n "${previous_target}" && "${previous_target}" != "${current_target}" ]]; then
+    is_managed_release_path "${previous_target}" release || return 1
+    kept_releases+=("${previous_target}")
+  fi
+  while IFS= read -r release_name; do
+    candidate="${release_root}/${release_name}"
+    is_managed_release_path "${candidate}" release || continue
+    completed_releases+=("${candidate}")
+    if (( recent_count < retain_recent_releases )); then
+      kept_releases+=("${candidate}")
+      ((recent_count += 1))
+    fi
+  done < <(
+    for candidate in "${release_root}"/*; do
+      [[ -d "${candidate}" && ! -L "${candidate}" ]] || continue
+      release_name="${candidate#"${release_root}/"}"
+      is_managed_release_path "${candidate}" release || continue
+      printf '%s|%s\n' "${release_name#*.}" "${release_name}"
+    done |
+      sort -t '|' -k1,1r |
+      cut -d '|' -f2-
+  )
+
+  for candidate in "${completed_releases[@]}"; do
+    is_kept=false
+    for kept_candidate in "${kept_releases[@]}"; do
+      if [[ "${candidate}" == "${kept_candidate}" ]]; then
+        is_kept=true
+        break
+      fi
+    done
+    if [[ "${is_kept}" == false ]]; then
+      is_managed_release_path "${candidate}" release || return 1
+      rm -rf -- "${candidate}" || return 1
+    fi
+  done
+}
 
 fail() {
   printf 'ERROR: %s\n' "$*" >&2
@@ -26,31 +141,87 @@ fail() {
 
 rollback_on_error() {
   local exit_code="${1:-$?}"
-  trap - ERR
+  trap - ERR HUP INT TERM
+  set +e
 
   if [[ "${current_switched}" == true ]]; then
     if [[ -n "${previous_target}" && -d "${previous_target}" ]]; then
-      ln -sfn "${previous_target}" "${deploy_root}/current.rollback"
-      mv -Tf "${deploy_root}/current.rollback" "${current_link}"
-      if [[ -f "${previous_target}/v2/infra/systemd/wallant-v2-api.service" ]]; then
-        install -o root -g root -m 0644 \
-          "${previous_target}/v2/infra/systemd/wallant-v2-api.service" "${systemd_unit}"
-        systemctl daemon-reload || true
+      local link_restored=false
+      local unit_restored=true
+      local rollback_health=""
+      local previous_sha=""
+      if ln -sfn "${previous_target}" "${deploy_root}/current.rollback" \
+        && mv -Tf "${deploy_root}/current.rollback" "${current_link}"; then
+        link_restored=true
       fi
-      systemctl restart wallant-v2-api.service || true
-      printf 'Restored previous application release: %s\n' "${previous_target}" >&2
+      if [[ -f "${previous_target}/v2/infra/systemd/wallant-v2-api.service" ]]; then
+        if ! install -o root -g root -m 0644 \
+          "${previous_target}/v2/infra/systemd/wallant-v2-api.service" "${systemd_unit}" \
+          || ! systemctl daemon-reload; then
+          unit_restored=false
+        fi
+      fi
+      previous_sha="$(sed -n 's/^WALLANT_BUILD_SHA=//p' "${previous_target}/release.env" 2>/dev/null)"
+      if [[ "${link_restored}" == true \
+        && "${unit_restored}" == true \
+        && "${previous_sha}" =~ ^[0-9a-f]{40}$ ]] \
+        && systemctl restart wallant-v2-api.service \
+        && systemctl is-active --quiet wallant-v2-api.service \
+        && rollback_health="$(curl -fsS --connect-timeout 2 --max-time 5 http://127.0.0.1:8000/health)" \
+        && printf '%s' "${rollback_health}" | python3 -c '
+import json, sys
+payload = json.load(sys.stdin)
+if payload.get("status") != "UP":
+    raise SystemExit(1)
+if payload.get("execution_enabled") is not False:
+    raise SystemExit(1)
+if payload.get("broker_adapter") != "disabled":
+    raise SystemExit(1)
+if payload.get("build_sha") != sys.argv[1]:
+    raise SystemExit(1)
+' "${previous_sha}"; then
+        printf 'ROLLBACK_STATUS=verified previous=%s\n' "${previous_target}" >&2
+      else
+        printf 'ROLLBACK_STATUS=failed previous=%s; service and current require manual review.\n' \
+          "${previous_target}" >&2
+      fi
     else
-      systemctl stop wallant-v2-api.service || true
+      local stop_status=0
+      systemctl stop wallant-v2-api.service || stop_status=$?
       systemctl disable wallant-v2-api.service || true
-      printf 'Stopped the failed first deployment. MySQL data was retained.\n' >&2
+      if [[ -L "${current_link}" ]]; then
+        rm -f -- "${current_link}" || true
+      fi
+      if [[ "${stop_status}" -eq 0 \
+        && ! -L "${current_link}" ]] \
+        && ! systemctl is-active --quiet wallant-v2-api.service; then
+        printf 'ROLLBACK_STATUS=verified first deployment stopped; MySQL data retained.\n' >&2
+      else
+        printf 'ROLLBACK_STATUS=failed first deployment requires manual review; MySQL data retained.\n' >&2
+      fi
     fi
   fi
+  cleanup_failed_attempt || printf 'Failed attempt cleanup needs manual review.\n' >&2
 
   exit "${exit_code}"
 }
+
+rollback_on_signal() {
+  local signal_name="$1"
+  local exit_code="$2"
+  printf 'Received %s during deployment; rolling back before releasing the host lock.\n' \
+    "${signal_name}" >&2
+  rollback_on_error "${exit_code}"
+}
+
 trap 'rollback_on_error $?' ERR
+trap 'rollback_on_signal HUP 129' HUP
+trap 'rollback_on_signal INT 130' INT
+trap 'rollback_on_signal TERM 143' TERM
 
 [[ "${EUID}" -eq 0 ]] || fail "Run this script as root."
+[[ -d /run/lock && ! -L /run/lock ]] || fail "/run/lock must be a real directory."
+acquire_deploy_lock || fail "Could not acquire the host deployment lock."
 [[ "${archive_path}" == /tmp/wallant-v2-*.tgz ]] || fail "Archive must be a v2 package under /tmp."
 [[ -f "${archive_path}" ]] || fail "Archive not found: ${archive_path}"
 [[ "${release_sha}" =~ ^[0-9a-f]{40}$ ]] || fail "Release SHA must be a full Git commit SHA."
@@ -66,7 +237,7 @@ while IFS= read -r archive_entry; do
   esac
 done < <(tar -tzf "${archive_path}")
 
-for command_name in python3 docker systemctl curl openssl ss tar sha256sum runuser; do
+for command_name in python3 docker systemctl curl openssl ss tar sha256sum runuser sort cut readlink; do
   command -v "${command_name}" >/dev/null 2>&1 || fail "Missing required command: ${command_name}"
 done
 python3 -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 12) else 1)' \
@@ -79,7 +250,7 @@ docker info >/dev/null 2>&1 || fail "Docker daemon is not available."
 if [[ -L "${current_link}" ]]; then
   candidate_previous_target="$(readlink -f "${current_link}")"
   if systemctl is-active --quiet wallant-v2-api.service \
-    && curl -fsS http://127.0.0.1:8000/health >/dev/null; then
+    && curl -fsS --connect-timeout 2 --max-time 5 http://127.0.0.1:8000/health >/dev/null; then
     previous_target="${candidate_previous_target}"
   else
     systemctl stop wallant-v2-api.service || true
@@ -97,11 +268,16 @@ install -d -o wallant -g wallant -m 0750 "${data_root}" "${data_root}/market" "$
 install -d -o root -g wallant -m 0750 "${config_root}"
 
 timestamp="$(date -u +%Y%m%dT%H%M%SZ)"
-if [[ -e "${incoming_dir}" ]]; then
-  mv "${incoming_dir}" "${incoming_dir}.${timestamp}.stale"
-fi
+release_dir="${release_root}/${release_sha}.${timestamp}.${BASHPID}"
+incoming_dir="${release_dir}.incoming"
+[[ ! -e "${release_dir}" && ! -L "${release_dir}" ]] \
+  || fail "Immutable release path already exists: ${release_dir}"
+[[ ! -e "${incoming_dir}" && ! -L "${incoming_dir}" ]] \
+  || fail "Immutable incoming path already exists: ${incoming_dir}"
 install -d -o root -g root -m 0755 "${incoming_dir}"
 tar -xzf "${archive_path}" -C "${incoming_dir}"
+install -o root -g wallant -m 0640 /dev/null "${incoming_dir}/release.env"
+printf 'WALLANT_BUILD_SHA=%s\n' "${release_sha}" >"${incoming_dir}/release.env"
 
 [[ -f "${incoming_dir}/v2/backend/pyproject.toml" ]] || fail "Backend package is missing."
 [[ -f "${incoming_dir}/v2/frontend/dist/index.html" ]] || fail "Frontend build is missing."
@@ -180,13 +356,10 @@ runuser -u wallant -- env WALLANT_DATABASE_URL="${database_url}" \
   bash -c 'cd "$1" && "$2" -c alembic.ini upgrade head' \
   wallant-migrate "${incoming_dir}/v2/backend" "${incoming_dir}/venv/bin/alembic"
 
-if [[ -e "${release_dir}" ]]; then
-  mv "${release_dir}" "${release_dir}.${timestamp}.replaced"
-fi
 mv "${incoming_dir}" "${release_dir}"
 ln -sfn "${release_dir}" "${deploy_root}/current.next"
-mv -Tf "${deploy_root}/current.next" "${current_link}"
 current_switched=true
+mv -Tf "${deploy_root}/current.next" "${current_link}"
 
 install -o root -g root -m 0644 \
   "${release_dir}/v2/infra/systemd/wallant-v2-api.service" "${systemd_unit}"
@@ -196,7 +369,7 @@ systemctl restart wallant-v2-api.service
 
 health_payload=""
 for attempt in $(seq 1 30); do
-  if health_payload="$(curl -fsS http://127.0.0.1:8000/health)"; then
+  if health_payload="$(curl -fsS --connect-timeout 2 --max-time 5 http://127.0.0.1:8000/health)"; then
     break
   fi
   if [[ "${attempt}" -eq 30 ]]; then
@@ -216,9 +389,18 @@ if payload.get("execution_enabled") is not False:
     raise SystemExit("execution is not disabled")
 if payload.get("broker_adapter") != "disabled":
     raise SystemExit("broker adapter is not disabled")
-'
+if payload.get("build_sha") != sys.argv[1]:
+    raise SystemExit("deployed build SHA does not match the requested release")
+' "${release_sha}"
 systemctl is-active --quiet wallant-v2-api.service
+
+retention_status=ok
+if ! prune_completed_releases; then
+  retention_status=warning
+  printf 'Release retention cleanup needs manual review.\n' >&2
+fi
 
 printf 'DEPLOYED_RELEASE=%s\n' "$(readlink -f "${current_link}")"
 printf 'API_HEALTH=%s\n' "${health_payload}"
 printf 'EXECUTION_SAFETY=disabled\n'
+printf 'RELEASE_RETENTION=%s\n' "${retention_status}"

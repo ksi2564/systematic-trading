@@ -23,6 +23,7 @@ def evaluate(
     history: list[str] | None = None,
     vix: str | None = None,
     ma: str | None = None,
+    portfolio: dict | None = None,
 ):
     version = qqqm_drawdown_version()
     return EvaluatorRegistry().evaluate(
@@ -37,6 +38,7 @@ def evaluate(
             history={"QQQM": [Decimal(value) for value in history or []]},
             previous_state=previous_state or {},
             previous_target_weights=previous_target or {},
+            portfolio=portfolio or {},
         ),
     )
 
@@ -183,6 +185,20 @@ def test_vix는_tqqq_증가를_이전_비중으로_제한한다() -> None:
     )
     assert result.base_target_weights["TQQQ"] == Decimal("20.00")
     assert result.target_weights == previous_weights
+    assert "VIX_NO_LEVERAGE_INCREASE" in result.events
+
+
+def test_첫평가의_vix도_현재비중보다_tqqq를_늘리지_않는다() -> None:
+    result = evaluate(
+        "70",
+        history=["100"],
+        vix="40",
+        ma="60",
+        portfolio={"TQQQ.weight_pct": Decimal("5")},
+    )
+
+    assert result.base_target_weights["TQQQ"] == Decimal("20.00")
+    assert result.target_weights["TQQQ"] == Decimal("5")
     assert "VIX_NO_LEVERAGE_INCREASE" in result.events
 
 

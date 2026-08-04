@@ -299,6 +299,7 @@ def _paper_step_locked(
             detail="모의투자 입력은 평가일 순서대로 적용해야 합니다.",
         )
     paper_session = PaperSession(
+        id=paper_session_id,
         account_id=UUID(evidence["account_id"]),
         previous_state=evidence.get("previous_state", {}),
         previous_target_weights=evidence.get("previous_target_weights", {}),
@@ -364,6 +365,7 @@ def _paper_step_locked(
     run.end_date = result.evaluation.as_of
     session.add(
         StrategyStateRecord(
+            paper_session_id=run.id,
             account_id=account.id,
             strategy_version_id=str(version.id),
             as_of_date=result.evaluation.as_of,
@@ -376,6 +378,7 @@ def _paper_step_locked(
         session.add(
             OrderIntentRecord(
                 idempotency_key=intent.idempotency_key,
+                paper_session_id=run.id,
                 account_id=account.id,
                 strategy_version_id=str(version.id),
                 signal_date=intent.signal_date,

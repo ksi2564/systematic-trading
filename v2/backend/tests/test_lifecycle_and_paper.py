@@ -235,6 +235,23 @@ def test_전략승격은_각단계의_완료증거를_요구하고_모의입력�
         assert repeated_completion.status_code == 200
         assert repeated_completion.json()["completed_at"].endswith("Z")
 
+        repeated_paper = client.post(
+            "/api/v2/research/paper/sessions",
+            json={"version_id": version_id, "account_id": us_account["id"]},
+        )
+        assert repeated_paper.status_code == 201
+        repeated_paper_id = repeated_paper.json()["id"]
+        repeated_paper_step = client.post(
+            f"/api/v2/research/paper/sessions/{repeated_paper_id}/steps",
+            json=paper_payload(),
+        )
+        assert repeated_paper_step.status_code == 200, repeated_paper_step.text
+        repeated_paper_completion = client.post(
+            f"/api/v2/research/paper/sessions/{repeated_paper_id}/complete",
+            json={"confirmed": True},
+        )
+        assert repeated_paper_completion.status_code == 200
+
         no_confirmation = client.post(
             f"/api/v2/strategies/versions/{version_id}/transition",
             json={"target": "LIVE_APPROVED", "confirmed": False},

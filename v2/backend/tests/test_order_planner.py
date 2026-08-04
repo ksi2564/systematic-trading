@@ -108,6 +108,61 @@ def test_일일손실이_한도에_도달하면_새주문을_차단한다() -> N
     assert "MAX_DAILY_LOSS" in plan.reasons
 
 
+def test_위험한도에_도달해도_보호청산_매도는_허용한다() -> None:
+    account_id = uuid4()
+    version_id = uuid4()
+    exit_result = EvaluationResult(
+        as_of=date(2026, 4, 1),
+        strategy_version_id=version_id,
+        engine=StrategyEngine.SIGNAL_TRADING_V1,
+        state={"exit_pending": True},
+        target_weights={"AAPL": 0},
+        base_target_weights={"AAPL": 0},
+        events=["STOP_LOSS"],
+    )
+
+    plan = OrderPlanner().plan(
+        account_id=account_id,
+        strategy_version_id=version_id,
+        result=exit_result,
+        portfolio=Portfolio(
+            cash=0,
+            positions=(Position("AAPL", 10, 100, 100),),
+        ),
+        quotes={"AAPL": 100},
+        tolerance_pct=Decimal("5"),
+        risk_policy=policy("100"),
+        daily_usage=DailyRiskUsage(
+            order_notional="200000",
+            order_count=20,
+            realized_loss="10000",
+        ),
+    )
+
+    assert len(plan.intents) == 1
+    assert plan.intents[0].side == OrderSide.SELL
+    assert plan.intents[0].status == IntentStatus.PLANNED
+    assert not plan.pause_required
+
+
+def test_필수가격이_하나라도_없으면_부분주문을_계획하지_않는다() -> None:
+    version_id = uuid4()
+
+    plan = OrderPlanner().plan(
+        account_id=uuid4(),
+        strategy_version_id=version_id,
+        result=result(version_id),
+        portfolio=portfolio(),
+        quotes={"QQQM": 100, "QLD": 100},
+        tolerance_pct=Decimal("5"),
+        risk_policy=policy(),
+    )
+
+    assert plan.intents == ()
+    assert plan.pause_required
+    assert plan.reasons == ("TQQQ 필수 가격이 없습니다.",)
+
+
 def test_개별종목의_새_신호와_미체결청산은_허용오차를_적용하지_않는다() -> None:
     account_id = uuid4()
     version_id = uuid4()

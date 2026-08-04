@@ -176,14 +176,16 @@ class StrategyStateRecord(Base):
     __tablename__ = "v2_strategy_state"
     __table_args__ = (
         UniqueConstraint(
-            "account_id",
-            "strategy_version_id",
+            "paper_session_id",
             "as_of_date",
-            name="uq_v2_strategy_state_day",
+            name="uq_v2_strategy_state_paper_day",
         ),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    paper_session_id: Mapped[str | None] = mapped_column(
+        ForeignKey("v2_strategy_run.id", ondelete="CASCADE")
+    )
     account_id: Mapped[str | None] = mapped_column(ForeignKey("v2_account.id", ondelete="CASCADE"))
     strategy_version_id: Mapped[str] = mapped_column(
         ForeignKey("v2_strategy_version.id", ondelete="CASCADE"),
@@ -201,10 +203,14 @@ class OrderIntentRecord(Base):
     __table_args__ = (
         UniqueConstraint("idempotency_key", name="uq_v2_order_intent_idempotency"),
         Index("ix_v2_order_intent_account_signal", "account_id", "signal_date"),
+        Index("ix_v2_order_intent_paper_session", "paper_session_id"),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     idempotency_key: Mapped[str] = mapped_column(String(64), nullable=False)
+    paper_session_id: Mapped[str | None] = mapped_column(
+        ForeignKey("v2_strategy_run.id", ondelete="CASCADE")
+    )
     account_id: Mapped[str | None] = mapped_column(
         ForeignKey("v2_account.id", ondelete="CASCADE"),
         nullable=True,

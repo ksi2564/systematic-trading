@@ -118,6 +118,7 @@ def upgrade() -> None:
     op.create_table(
         "v2_strategy_state",
         sa.Column("id", sa.String(36), primary_key=True),
+        sa.Column("paper_session_id", sa.String(36)),
         sa.Column("account_id", sa.String(36)),
         sa.Column("strategy_version_id", sa.String(36), nullable=False),
         sa.Column("as_of_date", sa.Date(), nullable=False),
@@ -125,6 +126,11 @@ def upgrade() -> None:
         sa.Column("target_weights", sa.JSON(), nullable=False),
         sa.Column("explanation", sa.JSON(), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+        sa.ForeignKeyConstraint(
+            ["paper_session_id"],
+            ["v2_strategy_run.id"],
+            ondelete="CASCADE",
+        ),
         sa.ForeignKeyConstraint(["account_id"], ["v2_account.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(
             ["strategy_version_id"],
@@ -132,16 +138,16 @@ def upgrade() -> None:
             ondelete="CASCADE",
         ),
         sa.UniqueConstraint(
-            "account_id",
-            "strategy_version_id",
+            "paper_session_id",
             "as_of_date",
-            name="uq_v2_strategy_state_day",
+            name="uq_v2_strategy_state_paper_day",
         ),
     )
     op.create_table(
         "v2_order_intent",
         sa.Column("id", sa.String(36), primary_key=True),
         sa.Column("idempotency_key", sa.String(64), nullable=False),
+        sa.Column("paper_session_id", sa.String(36)),
         sa.Column("account_id", sa.String(36), nullable=True),
         sa.Column("strategy_version_id", sa.String(36), nullable=False),
         sa.Column("signal_date", sa.Date(), nullable=False),
@@ -154,6 +160,11 @@ def upgrade() -> None:
         sa.Column("reason", sa.Text(), nullable=False),
         sa.Column("payload", sa.JSON(), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+        sa.ForeignKeyConstraint(
+            ["paper_session_id"],
+            ["v2_strategy_run.id"],
+            ondelete="CASCADE",
+        ),
         sa.ForeignKeyConstraint(["account_id"], ["v2_account.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(
             ["strategy_version_id"],
@@ -166,6 +177,11 @@ def upgrade() -> None:
         "ix_v2_order_intent_account_signal",
         "v2_order_intent",
         ["account_id", "signal_date"],
+    )
+    op.create_index(
+        "ix_v2_order_intent_paper_session",
+        "v2_order_intent",
+        ["paper_session_id"],
     )
     op.create_table(
         "v2_market_data_catalog",
@@ -221,6 +237,7 @@ def downgrade() -> None:
     op.drop_table("v2_audit_event")
     op.drop_index("ix_v2_market_data_lookup", table_name="v2_market_data_catalog")
     op.drop_table("v2_market_data_catalog")
+    op.drop_index("ix_v2_order_intent_paper_session", table_name="v2_order_intent")
     op.drop_index("ix_v2_order_intent_account_signal", table_name="v2_order_intent")
     op.drop_table("v2_order_intent")
     op.drop_table("v2_strategy_state")

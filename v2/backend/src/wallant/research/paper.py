@@ -20,6 +20,7 @@ from wallant.domain.strategy import EvaluationContext, EvaluationResult, Strateg
 
 @dataclass(slots=True)
 class PaperSession:
+    id: UUID = field(default_factory=uuid4)
     account_id: UUID = field(default_factory=uuid4)
     previous_state: dict = field(default_factory=dict)
     previous_target_weights: dict[str, Decimal] = field(default_factory=dict)
@@ -70,6 +71,10 @@ class PaperTradingService:
                 "previous_target_weights": session.previous_target_weights,
                 "portfolio": {
                     **context.portfolio,
+                    **{
+                        f"{item}.weight_pct": portfolio.weight_of(item)
+                        for item in version.definition.universe.symbols
+                    },
                     "position_open": quantity > ZERO,
                     "quantity": quantity,
                     "average_price": average_price,
@@ -91,6 +96,7 @@ class PaperTradingService:
                 daily_usage=daily_usage,
                 sell_priority=version.definition.parameters.get("sell_priority"),
                 buy_priority=version.definition.parameters.get("buy_priority"),
+                idempotency_scope=str(session.id),
             )
             realized_loss = self._realized_loss(plan, portfolio)
         except Exception:

@@ -92,6 +92,7 @@ class OrderPlanner:
         daily_usage: DailyRiskUsage | None = None,
         sell_priority: list[str] | None = None,
         buy_priority: list[str] | None = None,
+        idempotency_scope: str = "LIVE",
     ) -> OrderPlan:
         daily_usage = daily_usage or DailyRiskUsage()
         sell_priority = sell_priority or ["TQQQ", "QLD", "QQQM"]
@@ -102,23 +103,34 @@ class OrderPlanner:
         if portfolio.quantity_of("QQQ") > ZERO and "QQQ" not in result.target_weights:
             return OrderPlan((), True, ("지원 종료된 QQQ 보유분의 수동 확인이 필요합니다.",))
 
-        raw: list[PlannedOrderIntent] = []
-        planned_daily_notional = daily_usage.order_notional
-        planned_daily_count = daily_usage.order_count
-        pause_reasons: list[str] = []
         force_signal_rebalance = result.engine == StrategyEngine.SIGNAL_TRADING_V1 and (
             "SIGNAL_ENTRY" in result.events or bool(result.state.get("exit_pending", False))
         )
-
+        rebalance_targets: list[tuple[str, Decimal, Decimal]] = []
         for symbol, target_weight in result.target_weights.items():
             target_weight = decimal(target_weight)
             current_weight = portfolio.weight_of(symbol)
             if not force_signal_rebalance and abs(target_weight - current_weight) < tolerance_pct:
                 continue
-            quote = decimal(quotes.get(symbol))
-            if quote <= ZERO:
-                pause_reasons.append(f"{symbol} 필수 가격이 없습니다.")
-                continue
+            rebalance_targets.append((symbol, target_weight, current_weight))
+
+        missing_quotes = [
+            symbol for symbol, _target_weight, _current_weight in rebalance_targets
+            if decimal(quotes.get(symbol)) <= ZERO
+        ]
+        if missing_quotes:
+            return OrderPlan(
+                (),
+                True,
+                tuple(f"{symbol} 필수 가격이 없습니다." for symbol in missing_quotes),
+            )
+
+        raw: list[PlannedOrderIntent] = []
+        planned_daily_notional = daily_usage.order_notional
+        planned_daily_count = daily_usage.order_count
+        pause_reasons: list[str] = []
+        for symbol, target_weight, current_weight in rebalance_targets:
+            quote = decimal(quotes[symbol])
             target_value = total_value * target_weight / HUNDRED
             current_value = portfolio.value_of(symbol)
             difference = target_value - current_value
@@ -136,19 +148,21 @@ class OrderPlanner:
                 symbol,
                 side,
                 target_weight,
+                idempotency_scope,
             )
             projected_notional = money(quote * desired_quantity)
             violations: list[str] = []
-            if projected_notional > risk_policy.max_order_notional:
-                violations.append("MAX_ORDER_NOTIONAL")
-            if target_weight > risk_policy.max_symbol_weight_pct:
-                violations.append("MAX_SYMBOL_WEIGHT")
-            if planned_daily_notional + projected_notional > risk_policy.max_daily_notional:
-                violations.append("MAX_DAILY_NOTIONAL")
-            if planned_daily_count + 1 > risk_policy.max_daily_order_count:
-                violations.append("MAX_DAILY_ORDER_COUNT")
-            if daily_usage.realized_loss >= risk_policy.max_daily_loss:
-                violations.append("MAX_DAILY_LOSS")
+            if side == OrderSide.BUY:
+                if projected_notional > risk_policy.max_order_notional:
+                    violations.append("MAX_ORDER_NOTIONAL")
+                if target_weight > risk_policy.max_symbol_weight_pct:
+                    violations.append("MAX_SYMBOL_WEIGHT")
+                if planned_daily_notional + projected_notional > risk_policy.max_daily_notional:
+                    violations.append("MAX_DAILY_NOTIONAL")
+                if planned_daily_count + 1 > risk_policy.max_daily_order_count:
+                    violations.append("MAX_DAILY_ORDER_COUNT")
+                if daily_usage.realized_loss >= risk_policy.max_daily_loss:
+                    violations.append("MAX_DAILY_LOSS")
 
             status = IntentStatus.BLOCKED if violations else IntentStatus.PLANNED
             reason = (
@@ -201,11 +215,13 @@ class OrderPlanner:
         symbol: str,
         side: OrderSide,
         target_weight: Decimal,
+        scope: str = "LIVE",
     ) -> str:
         raw = "|".join(
             [
                 str(account_id),
                 str(strategy_version_id),
+                scope,
                 signal_date.isoformat(),
                 symbol.strip().upper(),
                 side.value,

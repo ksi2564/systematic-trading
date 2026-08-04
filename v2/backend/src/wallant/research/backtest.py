@@ -182,6 +182,14 @@ class BacktestEngine:
             portfolio_payload = {
                 "cash": cash,
                 "total_value": portfolio_value,
+                **{
+                    f"{symbol}.weight_pct": (
+                        pct(holdings[symbol] * close_prices[symbol] / portfolio_value * HUNDRED)
+                        if portfolio_value > ZERO
+                        else ZERO
+                    )
+                    for symbol in symbols
+                },
             }
             if version.definition.engine == StrategyEngine.SIGNAL_TRADING_V1:
                 quantity = holdings.get(signal, ZERO)

@@ -27,7 +27,10 @@ jobs:
           WALLANT_MYSQL_PASSWORD: rc-placeholder
           WALLANT_MYSQL_ROOT_PASSWORD: rc-root-placeholder
         run: |
-          bash -n v2/infra/scripts/preflight_staging.sh v2/infra/scripts/deploy_staging.sh
+          bash -n \
+            v2/infra/scripts/bootstrap_staging.sh \
+            v2/infra/scripts/preflight_staging.sh \
+            v2/infra/scripts/deploy_staging.sh
           docker compose -f v2/infra/compose.yaml config --quiet
       - uses: actions/upload-artifact@v4
         with:

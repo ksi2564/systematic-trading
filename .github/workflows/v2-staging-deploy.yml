@@ -4,11 +4,12 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: Run a read-only preflight or deploy a verified release candidate
+        description: Bootstrap the host, run a read-only preflight, or deploy a verified release candidate
         required: true
         type: choice
         default: preflight
         options:
+          - bootstrap
           - preflight
           - deploy
       rc_run_id:
@@ -30,7 +31,7 @@ env:
 
 jobs:
   staging:
-    name: ${{ inputs.mode == 'deploy' && 'Deploy v2 staging' || 'Preflight v2 staging' }}
+    name: v2 staging / ${{ inputs.mode }}
     runs-on: ubuntu-latest
     environment: v2-staging
 
@@ -122,6 +123,42 @@ jobs:
           chmod 600 ~/.ssh/v2_staging_key
           ssh-keyscan -T 10 -H "${STAGING_HOST}" >>~/.ssh/known_hosts
 
+      - name: Bootstrap Docker and swap
+        if: inputs.mode == 'bootstrap'
+        shell: bash
+        run: |
+          set -euo pipefail
+          remote_script="/tmp/wallant-v2-bootstrap-${GITHUB_RUN_ID}.sh"
+          scp -i ~/.ssh/v2_staging_key -o BatchMode=yes \
+            v2/infra/scripts/bootstrap_staging.sh \
+            "${STAGING_USER}@${STAGING_HOST}:${remote_script}"
+
+          ssh -i ~/.ssh/v2_staging_key -o BatchMode=yes \
+            "${STAGING_USER}@${STAGING_HOST}" \
+            "sudo bash -s -- '${remote_script}'" <<'REMOTE'
+          set -u
+          bootstrap_script="$1"
+          trading_before="$(systemctl show trading.service -p ActiveState -p MainPID --value | tr '\n' ':')"
+          caddy_before="$(systemctl show caddy.service -p ActiveState -p MainPID --value | tr '\n' ':')"
+
+          set +e
+          bash "${bootstrap_script}"
+          bootstrap_exit=$?
+          set -e
+
+          trading_after="$(systemctl show trading.service -p ActiveState -p MainPID --value | tr '\n' ':')"
+          caddy_after="$(systemctl show caddy.service -p ActiveState -p MainPID --value | tr '\n' ':')"
+          if [[ "${trading_before}" != "${trading_after}" ]]; then
+            echo "Existing trading.service changed unexpectedly: ${trading_before} -> ${trading_after}" >&2
+            exit 1
+          fi
+          if [[ "${caddy_before}" != "${caddy_after}" ]]; then
+            echo "Existing caddy.service changed unexpectedly: ${caddy_before} -> ${caddy_after}" >&2
+            exit 1
+          fi
+          exit "${bootstrap_exit}"
+          REMOTE
+
       - name: Run read-only preflight
         shell: bash
         run: |
@@ -197,6 +234,6 @@ jobs:
           if [[ -f ~/.ssh/v2_staging_key ]]; then
             ssh -i ~/.ssh/v2_staging_key -o BatchMode=yes \
               "${STAGING_USER}@${STAGING_HOST}" \
-              "sudo rm -f '/tmp/wallant-v2-preflight-${GITHUB_RUN_ID}.sh' '/tmp/wallant-v2-deploy-${GITHUB_RUN_ID}.sh' '/tmp/wallant-v2-${GITHUB_SHA}.tgz'" \
+              "sudo rm -f '/tmp/wallant-v2-bootstrap-${GITHUB_RUN_ID}.sh' '/tmp/wallant-v2-preflight-${GITHUB_RUN_ID}.sh' '/tmp/wallant-v2-deploy-${GITHUB_RUN_ID}.sh' '/tmp/wallant-v2-${GITHUB_SHA}.tgz'" \
               || true
           fi

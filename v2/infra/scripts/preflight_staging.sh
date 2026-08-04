@@ -33,6 +33,13 @@ if command -v python3 >/dev/null 2>&1; then
     printf 'Python 3.12 or newer is required; found %s\n' "$(python3 --version 2>&1)" >&2
     failures=$((failures + 1))
   fi
+
+  if python3 -c 'import ensurepip, venv'; then
+    printf 'OK Python venv support\n'
+  else
+    printf 'Python venv support is required; install python3.12-venv.\n' >&2
+    failures=$((failures + 1))
+  fi
 fi
 
 if command -v docker >/dev/null 2>&1; then

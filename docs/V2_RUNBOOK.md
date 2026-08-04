@@ -74,8 +74,8 @@ v2 스테이징은 기존 Java 운영 앱과 같은 서버를 사용하되 다�
 
 1. 배포 자동화 변경을 `master`에 머지한다.
 2. 최초 한 번 **v2 Staging Deploy**를 `mode=bootstrap`으로 실행해 Ubuntu 패키지의
-   Docker·Compose와 2 GiB swap을 준비한다. 기존 swap이 있으면 유지하고, 기존 Java와
-   Caddy 프로세스가 바뀌면 실패 처리한다.
+   Docker·Compose·Python venv 지원과 2 GiB swap을 준비한다. 기존 swap이 있으면
+   유지하고, 기존 Java와 Caddy 프로세스가 바뀌면 실패 처리한다.
 3. 머지된 정확한 커밋에서 **v2 Release Candidate**를 다시 실행한다.
 4. **v2 Staging Deploy**에서 `mode=preflight`로 서버 요구 사항을 읽기 전용 점검한다.
 5. 점검이 통과하면 같은 워크플로를 `mode=deploy`로 실행하고 3번의 run ID를 입력한다.

@@ -52,11 +52,14 @@ apt-get update
 apt-cache show docker.io >/dev/null 2>&1 || fail "Ubuntu docker.io package is unavailable."
 apt-cache show docker-compose-v2 >/dev/null 2>&1 \
   || fail "Ubuntu docker-compose-v2 package is unavailable."
-apt-get install -y --no-install-recommends docker.io docker-compose-v2
+apt-cache show python3.12-venv >/dev/null 2>&1 \
+  || fail "Ubuntu python3.12-venv package is unavailable."
+apt-get install -y --no-install-recommends docker.io docker-compose-v2 python3.12-venv
 systemctl enable --now docker.service
 
 docker info >/dev/null
 docker compose version
+python3 -c 'import ensurepip, venv'
 swapon --show
 free -h
 printf 'BOOTSTRAP_STATUS=ready\n'

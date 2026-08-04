@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "qa_id": "QA-ACC-001",
+  "browser_observed_at": "2026-08-05T04:35:14+09:00",
+  "http_rechecked_at": "2026-08-05T04:41:41+09:00",
+  "redaction_policy": "Redirect query strings, Set-Cookie headers, cookies, tokens, email addresses, and OTP values are omitted.",
+  "canonical_http_lines": [
+    "https://app.wall-ant.com/|302|https://red-flower-78b6.cloudflareaccess.com/cdn-cgi/access/login/app.wall-ant.com",
+    "https://app.wall-ant.com/api/v2/operations/status|302|https://red-flower-78b6.cloudflareaccess.com/cdn-cgi/access/login/app.wall-ant.com"
+  ],
+  "canonical_http_sha256": "5d357682860b36723359ad457a07212338f2a1bc1d9b101b20c467c5c44e043e",
+  "canonical_dom_lines": [
+    "browser_title=Sign in ・ Cloudflare Access",
+    "h1=Log in to Wall-Ant v2",
+    "app_marker=오늘의 운영",
+    "app_marker_present=false"
+  ],
+  "canonical_dom_sha256": "64ba242199a37121f5f1a77294d422af711d7304e311e53afa9075499ccc76bc"
+}

@@ -113,8 +113,8 @@ PR #57 검증 source `b2037f3`의 원본 push run과 base `8eb580b`에 합친 te
   `QA-RWD-001`의 1440/360 가로 넘침
   단언도 이 26/26 범위에 포함한다. `MANUAL` 9건·`BLOCKED` 2건·`OUT_OF_SCOPE` 1건은
   통과로 올리지 않았다.
-- `QA-PLN-001`의 현재 보강 정본: source `b2037f3`의 review board desktop/mobile 2/2,
-  로컬 반복 10/10과 C0 gate 55/55가 통과했다.
+- `QA-PLN-001` 시나리오의 현재 보강 결과(정본 보고서: `QA-PLN-002`): source
+  `b2037f3`의 review board desktop/mobile 2/2, 로컬 반복 10/10과 C0 gate 55/55가 통과했다.
   D-01~D-10 10개, 문서와 1:1인 실제 대안 35개, native 단일 선택, 한 번에 하나만 펼침,
   선택만으로 자동 이동하지 않음, 필수 메모가 있어야 활성화되는 다음 버튼, 접힌 요약의
   선택 상태, 안전·실행 승인 경계를 포함한 검토안 복사 성공·수동 복사 대체 경로,

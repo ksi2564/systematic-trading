@@ -92,6 +92,15 @@ test('[QA-PLN-001] C0 결정·화면·추적 보드를 주문 없이 검토한�
   await expect(page.locator('#trace-body tr')).toHaveCount(13);
   await expect(page.getByText('C0-A/B', { exact: true })).toBeVisible();
   await expect(page.getByText('단건→범위→전환 승인', { exact: true })).toBeVisible();
+  for (const rowLabel of ['D-07', '현재 UI']) {
+    const evidenceRow = page.locator('#trace-body tr').filter({
+      has: page.getByText(rowLabel, { exact: true }),
+    });
+    await expect(evidenceRow).toHaveCount(1);
+    await expect(evidenceRow).toContainText('통합 안전 코드 a6a7174');
+    await expect(evidenceRow).toContainText('브랜치 CI 30965407547');
+    await expect(evidenceRow).toContainText('PR 병합 CI 30965409423');
+  }
 
   await expectNoHorizontalOverflow(page);
 

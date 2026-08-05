@@ -1295,7 +1295,11 @@ h3 {
   }
 
   .decision-group {
-    padding: 20px;
+    padding: 18px;
+  }
+
+  .decision-groups {
+    gap: 20px;
   }
 
   .review-handoff {
@@ -1313,6 +1317,7 @@ h3 {
   .decision-card summary {
     grid-template-columns: 50px 1fr auto;
     gap: 8px;
+    min-height: 84px;
   }
 
   .decision-body {

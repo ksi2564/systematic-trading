@@ -371,7 +371,7 @@ for planning_ci_path in \
   '.github/PULL_REQUEST_TEMPLATE/v2-feature.md'; do
   [[ "$(grep -Fc -- "- \"${planning_ci_path}\"" "${v2_ci_workflow}")" -eq 2 ]]
 done
-grep -F 'e0334d51b87d4c9a1a406ee3b908427606247c64317c61565cbfdfa8b894e8b6' \
+grep -F 'a8b6bccefa6b13487bd62a3206c205fe460687d8b356c815adb6ff19419a7872' \
   "${cutover_root}/C0_DECISIONS.md" >/dev/null
 
 printf 'C0 decision, planning board, single trace, feature template, and PR gate contract PASS\n'

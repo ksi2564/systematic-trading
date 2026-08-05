@@ -391,7 +391,7 @@ C0-B item ID는 다음 순서로 고정한다.
 이 gate는 문서에 선언된 상태·형식·체크섬·시간 순서를 검사한다. 또한 `v2/backend`,
 `v2/frontend`, `v2/infra` 아래의 추적·미추적 파일 경로, 실행 권한, 내용 SHA-256을
 합친 기준 tree digest
-`e0334d51b87d4c9a1a406ee3b908427606247c64317c61565cbfdfa8b894e8b6`와 현재 tree를
+`a8b6bccefa6b13487bd62a3206c205fe460687d8b356c815adb6ff19419a7872`와 현재 tree를
 비교해 `미시작` 상태의 C2 변경을 거부한다. 이 방식은 특정 branch commit 보존이나 전체
 Git history에 의존하지 않는다. gate 자체를 고칠 수 있도록 제외하는 파일은 정확히
 `v2/infra/tests/verify_c0_gate.py`, `test_verify_c0_gate.py`,

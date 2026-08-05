@@ -96,6 +96,9 @@ async function attachPngEvidence(
     height: body.readUInt32BE(20),
     viewport
   };
+  if (viewport?.width === 320) {
+    expect(record.height, `${name} must remain at or below 10,000px`).toBeLessThanOrEqual(10_000);
+  }
   records.push(record);
   await testInfo.attach(name, { body, contentType: 'image/png' });
 }

@@ -35,16 +35,18 @@
 - v2 본체 배포: #54 커밋 `66e374c`, GitHub Actions run `30931862737` 성공
 - #56 접근 수정: 커밋 `8eb580b`, `access-configure` run `30937893445` 성공
 - `master@8eb580b` 기준 #55·#56에는 `v2/backend`, `v2/frontend` 변경이 없어
-  #54 배포본과 동일했음. PR #57 통합 안전 기능 코드 `a6a71740b9e2b12c1b488020edfda57d422f1914`는
-  미배포 상태임
-- 위 원본 head는 로컬 clean-tree 가상 데이터 UI QA 26/26·증적 참조 78개 SHA-256 검증과
-  [push v2 CI run `30965407547`](https://github.com/ksi2564/systematic-trading/actions/runs/30965407547)의
+  #54 배포본과 동일했음. PR #57 현재 검토·안전 source
+  `46a34eaa9251637a117d038a6eb62c51263fff65`는 미배포 상태임
+- 위 원본 head는 가상 데이터 UI QA 26/26·증적 참조 78개 SHA-256 검증과
+  [push v2 CI run `30975237262`](https://github.com/ksi2564/systematic-trading/actions/runs/30975237262)의
   backend(MySQL 8.4 포함)·frontend·infra·Java/Python 전략 패리티·`ui-qa` 5개 작업을 통과했음
 - GitHub가 base `8eb580b0bb21b90e9bb19dc26a7b79f8444149b2`와 위 head를 합친 test-merge
-  `41fc46b5f94b4c15a331f88c3974a68633747a5d`도 [PR v2 CI run
-  `30965409423`](https://github.com/ksi2564/systematic-trading/actions/runs/30965409423)의 같은 5개
+  `992b4039144e3d3052fa34478332cb550630729b`도 [PR v2 CI run
+  `30975239146`](https://github.com/ksi2564/systematic-trading/actions/runs/30975239146)의 같은 5개
   작업을 통과했음. 두 CI는 RC·운영 배포·인증 화면 통과를 뜻하지 않으며, 실제 staging이나
   Java 전략 on/off·최근 성공·주문 모드도 확인하지 않음
+- 두 lane의 planning/mock UI ZIP과 내부 manifest·파일 무결성은
+  [`QA-PLN-001 정본 증적`](evidence/2026-08-05-QA-PLN-001.md)에 기록했음
 - 위 CI 결과를 기록하는 문서 전용 후속 커밋은 기능 코드의 통과 근거로 올려 적지 않음
 - 현재 RC 워크플로 변경은 공통 Java golden·두 스케줄러·프런트엔드
   typecheck/단위 테스트/빌드·no-order Playwright·manifest 안전 검증을 같은
@@ -81,8 +83,9 @@
    범위·보존 기준만, D-09·10은 미래 복구·자동운용 완료 기준만 정하며 실행 승인이 아니다.
 4. `10 / 10 응답 작성`과 `검토안이 준비됐어요`를 확인한 뒤 `검토안 복사`를 누르고,
    `D-01 ... D-10 ...` 검토안을 이 Codex 작업에 붙여넣는다.
-5. 반영된 [C0-A 기록](C0_DECISIONS.md#c0-a-제품-결정-기록)을 다시 확인한다. 이때도
-   C0-B 운영값 재확인 전에는 자동 섀도 개발을 시작하지 않는다.
+5. 반영된 [C0-A 기록](C0_DECISIONS.md#c0-a-제품-결정-기록)을 다시 확인한다. 이후에도
+   C0-B 읽기 전용 수집은 별도로 승인받고, 수집한 운영값·차이를 다시 승인하기 전에는
+   자동 섀도 개발을 시작하지 않는다.
 
 > C0-A 검토안은 후보 배포, 시험 서버 변경, 자격증명 사용, 실제 주문, Java 중단,
 > DNS·트래픽 변경을 승인하지 않는다. 이 작업들은 각각 정해진 단계에서 별도로 확인한다.
@@ -95,16 +98,17 @@
 | D-01~D-10의 상세 근거와 수치 | [C0_DECISIONS.md](C0_DECISIONS.md) | D-01~D-10 확정은 사용자 승인 필수 |
 | 화면에서 볼 정보와 순서 | [SCREEN_SPEC.md](SCREEN_SPEC.md) | 기존 안전 화면 QA 자동 진행 가능 |
 | 안전·차이·증적 통과 기준 | [TRACEABILITY_QA.md](TRACEABILITY_QA.md) | 섀도 증적은 C0 이후, 위험 시나리오는 사용자 승인 필수 |
-| 자동 섀도와 화면 API 설계 | [FUNCTIONAL_SPEC.md](FUNCTIONAL_SPEC.md) | C0-A/B 뒤 개발·로컬 테스트 자동, 공유 시험 서버 실행은 별도 승인 |
+| 자동 섀도와 화면 API 설계 | [FUNCTIONAL_SPEC.md](FUNCTIONAL_SPEC.md) | C0-A 확정 → C0-B 수집 별도 승인 → 결과 재승인 뒤 개발·로컬 테스트 자동, 공유 시험 서버 실행은 별도 승인 |
 | 전환·되돌리기 순서 | [CUTOVER_ROLLBACK.md](CUTOVER_ROLLBACK.md) | LIVE·Java 중단·DNS/트래픽·공유 환경 롤백 확정은 사용자 승인 필수 |
 
 ## 소유자 결정 체크리스트
 
 [`C0_DECISIONS.md`](C0_DECISIONS.md)의 D-01~D-10이 C0-A 제품 결정 체크리스트다.
-그 뒤 기존 Java 코드·effective 설정·DB 상태 checksum, production 공급자·가격/시각
-의미와 C0-A의 diff를 읽기 전용으로 캡처하고 사용자가 C0-B에서 다시 확인한다. 두 기록에 승인자·시각·문서/코드 SHA가
-남기 전에는 자동 섀도 개발을 시작하지 않는다. C0-B 승인 후에는 확정된 범위 안의
-개발·로컬·mock·일회용 격리 테스트만 자동 진행할 수 있다. 공유 시험 서버의 자원 생성,
+C0-A 확정만으로 운영값 접근을 허가하지 않는다. 사용자가 C0-B 읽기 전용 수집을 별도로
+승인한 뒤에만 기존 Java 코드·effective 설정·DB 상태 checksum, production 공급자·가격/시각
+의미와 C0-A의 diff를 캡처한다. 수집 결과를 사용자가 C0-B에서 다시 승인하고 두 기록에
+승인자·시각·문서/코드 SHA가 남기 전에는 자동 섀도 개발을 시작하지 않는다. C0-B 결과
+재승인 후에는 확정된 범위 안의 개발·로컬·mock·일회용 격리 테스트만 자동 진행할 수 있다. 공유 시험 서버의 자원 생성,
 상태 변경, 스케줄 시작, 데이터 기록은 대상·영향·정리 방법을 다시 보여 주고 실행 직전에
 별도 승인받는다.
 
@@ -113,12 +117,13 @@
 - [ ] D-07~D-08: 향후 QA 범위·보존 기준(실행 승인 아님)과 20거래일 통과 기준
 - [ ] D-09: 복구 훈련의 자동/수동 경계와 RTO/RPO
 - [ ] D-10: Java 대체 후 자동 제출·접수·체결·대조 완료 조건
-- [ ] C0-B: 운영 Java snapshot·production 데이터 계약·operational 비교 시간창/값 허용 기준·C0-A diff·최종 checksum 재확인
+- [ ] C0-B 수집 승인: 읽기 전용 대상·접근 방식·정제 및 저장 범위 확인
+- [ ] C0-B 결과 재승인: 운영 Java snapshot·production 데이터 계약·operational 비교 시간창/값 허용 기준·C0-A diff·최종 checksum 확인
 
 ## 변하지 않는 안전 원칙
 
 1. 섀도 단계에서는 v2에 주문 소유권을 주지 않고 Java 서비스·PID를 유지한다. 실제 Java
-   전략 on/off·최근 실행·주문 모드는 C0-B에서 확인하기 전까지 단정하지 않는다.
+   전략 on/off·최근 실행·주문 모드는 C0-B 읽기 전용 수집을 별도 승인받아 확인하기 전까지 단정하지 않는다.
 2. v2는 공식·완전한 입력이 없으면 계산을 생략하고 이유를 남긴다.
 3. 섀도 결과는 `주문 의도`일 뿐 브로커 전송 대상이 아니다.
 4. 화면 QA는 실제 주문 없이 끝나야 한다.

@@ -23,6 +23,8 @@
 `검토안 복사`로 이 Codex 작업에 붙여넣을 수 있다. 작성 중인 값은 브라우저 안에 저장되거나
 서버로 전송되지 않고 새로고침하면 사라진다. 복사만으로도 승인되지 않으며, 사용자가 대화로
 보낸 답을 `C0_DECISIONS.md`에 승인자·시각·SHA와 함께 반영하고 다시 확인해야 기록이 된다.
+보드 안의 자동검사 상태는 증적 source를 캡처한 시점의 문구이며, 최신 통과 결과는
+[`QA-PLN-002`](evidence/2026-08-05-QA-PLN-002.md)를 기준으로 본다.
 
 브라우저에서 실제 선택 UI를 열려면 저장소의 `v2/frontend` 폴더에서
 `npm run review:planning`을 실행한 뒤
@@ -35,21 +37,23 @@
 - v2 본체 배포: #54 커밋 `66e374c`, GitHub Actions run `30931862737` 성공
 - #56 접근 수정: 커밋 `8eb580b`, `access-configure` run `30937893445` 성공
 - `master@8eb580b` 기준 #55·#56에는 `v2/backend`, `v2/frontend` 변경이 없어
-  #54 배포본과 동일했음. PR #57 직전 독립 검증 source
-  `46a34eaa9251637a117d038a6eb62c51263fff65`는 미배포 상태임
-- 위 원본 head는 가상 데이터 UI QA 26/26·증적 참조 78개 SHA-256 검증과
-  [push v2 CI run `30975237262`](https://github.com/ksi2564/systematic-trading/actions/runs/30975237262)의
+  #54 배포본과 동일했음. PR #57의 현재 기획·안전 검증 source
+  `b2037f30512d338b1d1d3ee7b0475af7cb4da904`는 미배포 상태임
+- 위 source는 C0 승인 순서를 `C0-A 확정 → C0-B 수집 별도 승인 → capture/snapshot/diff →
+  C0-B 결과 재승인 → C2`로 고정했다. 로컬 기획 화면 10/10·C0 기록 gate 55/55와
+  [push v2 CI run `30978131514`](https://github.com/ksi2564/systematic-trading/actions/runs/30978131514)의
   backend(MySQL 8.4 포함)·frontend·infra·Java/Python 전략 패리티·`ui-qa` 5개 작업을 통과했음
-- GitHub가 base `8eb580b0bb21b90e9bb19dc26a7b79f8444149b2`와 위 head를 합친 test-merge
-  `992b4039144e3d3052fa34478332cb550630729b`도 [PR v2 CI run
-  `30975239146`](https://github.com/ksi2564/systematic-trading/actions/runs/30975239146)의 같은 5개
+- GitHub가 base `8eb580b0bb21b90e9bb19dc26a7b79f8444149b2`와 위 source를 합친 test-merge
+  `e03cbdd4277f1db08e45b9a2246f207c8d0e7d52`도 [PR v2 CI run
+  `30978133806`](https://github.com/ksi2564/systematic-trading/actions/runs/30978133806)의 같은 5개
   작업을 통과했음. 두 CI는 RC·운영 배포·인증 화면 통과를 뜻하지 않으며, 실제 staging이나
   Java 전략 on/off·최근 성공·주문 모드도 확인하지 않음
-- 두 lane의 planning/mock UI ZIP과 내부 manifest·파일 무결성은
-  [`QA-PLN-001 정본 증적`](evidence/2026-08-05-QA-PLN-001.md)에 기록했음
-- 현재 C0-B 승인 경계 보강본은 로컬 기획 화면 10/10·C0 기록 gate 55/55를 통과했으며,
-  새 source SHA·원격 CI·artifact 검증은 PR #57에서 확인 대기임. 직전 `46a34ea`의
-  51/51 gate와 현재 55/55 gate를 같은 실행 근거로 합치지 않음
+- 두 lane의 planning/mock UI ZIP 4개를 직접 내려받아 archive digest, source SHA,
+  소스·PNG·증적 파일 SHA-256을 대조했다. planning 2/2, mock UI 26/26, 증적 참조
+  78개·고유 파일 56개, 외부·비GET·WebSocket·상태 변경·실주문 경로·리소스 변경 0건을
+  [`QA-PLN-002 정본 증적`](evidence/2026-08-05-QA-PLN-002.md)에 기록했음
+- [`QA-PLN-001`](evidence/2026-08-05-QA-PLN-001.md)의 source `46a34ea`·51/51은 당시
+  계약의 역사적 정본으로 유지하며, 현재 55/55 계약의 실행 근거로 합치지 않음
 - 위 CI 결과를 기록하는 문서 전용 후속 커밋은 기능 코드의 통과 근거로 올려 적지 않음
 - 현재 RC 워크플로 변경은 공통 Java golden·두 스케줄러·프런트엔드
   typecheck/단위 테스트/빌드·no-order Playwright·manifest 안전 검증을 같은

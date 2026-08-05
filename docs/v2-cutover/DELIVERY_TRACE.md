@@ -12,7 +12,7 @@
 
 SHA와 CI 증적은 다음처럼 구분한다.
 
-- 현재 기획·안전 검증 source 정본: `b2037f30512d338b1d1d3ee7b0475af7cb4da904`.
+- C0-B 승인 경계 기획·안전 검증 source 정본: `b2037f30512d338b1d1d3ee7b0475af7cb4da904`.
   원본을 checkout한 [push v2 CI `30978131514`](https://github.com/ksi2564/systematic-trading/actions/runs/30978131514)와
   base `8eb580b0bb21b90e9bb19dc26a7b79f8444149b2` 합본 test-merge
   `e03cbdd4277f1db08e45b9a2246f207c8d0e7d52`를 checkout한
@@ -22,6 +22,16 @@ SHA와 CI 증적은 다음처럼 구분한다.
   [QA-PLN-002 정본 보고서](evidence/2026-08-05-QA-PLN-002.md)에 기록했다.
 - 현재 C0-B 승인 경계 보강본: 로컬 planning 10/10과 C0 gate 55/55를 통과했다.
   source·PR CI와 네 artifact의 독립 검증도 위 현재 정본과 같은 결과다.
+- 현재 14단계 실행 로드맵 검증 source:
+  `d2c2bb11857a55e0bdabdd9158be8cdfa2e7207d`. 원본의
+  [push v2 CI `30989853114`](https://github.com/ksi2564/systematic-trading/actions/runs/30989853114)와
+  base 합본 `7f620de31fe53f3845bc52b54be3989524b772ce`의
+  [PR v2 CI `30989856303`](https://github.com/ksi2564/systematic-trading/actions/runs/30989856303)가
+  각각 5개 작업을 모두 통과했다. 성공 전용 런웨이 artifact ID는
+  `8923691867`, `8923700176`이고, 정확히 3파일인 두 ZIP의 archive·source·PNG
+  SHA-256과 안전 필드를 직접 내려받아 재검증했다. 결과는
+  [QA-RWY-001 정본 보고서](evidence/2026-08-05-QA-RWY-001.md)에 기록했으며,
+  이는 C2 runtime·후보 배포·운영 인수 증적이 아니다.
 - 직전 source `46a34eaa9251637a117d038a6eb62c51263fff65`의 51/51 계약과 네 artifact는
   [QA-PLN-001 역사적 정본](evidence/2026-08-05-QA-PLN-001.md)으로 유지한다. 별도 C0-B
   수집 승인을 추가한 현재 55/55 계약의 실행 근거로 합치지 않는다. 이 source의
@@ -38,8 +48,9 @@ SHA와 CI 증적은 다음처럼 구분한다.
   합친 test-merge `5fca72ec8ba5167bcbbf3bf99ffad1f4273a6cb7`에서
   [PR v2 CI `30959379072`](https://github.com/ksi2564/systematic-trading/actions/runs/30959379072)가 통과했다.
 - 기능 후보와 `a6a7174`의 과거 실행은 각 기능을 도입했을 당시의 이력으로만 남긴다.
-  현재 전체 회귀·UI 증적은 위 `b2037f3` 원본 push와 `e03cbdd` test-merge PR 실행이다.
-  이 표를 갱신하는 문서 전용 후속 커밋은 기능 코드의 통과 근거로 올려 적지 않는다.
+  C0-B 경계·mock UI 정본은 `b2037f3`/`e03cbdd`와 `QA-PLN-002`, 최신 런웨이·전체
+  회귀는 `d2c2bb1`/`7f620de`의 두 5/5 실행과 `QA-RWY-001`로 구분한다.
+  이 표를 갱신하는 문서 전용 후속 커밋은 위 소스의 화면·기능 통과 근거로 올려 적지 않는다.
 
 | 결정·게이트 | 정본 요구사항 | 기능·API | 화면 | QA ID·검증 범위 | 실행 SHA·run/artifact | 증적 링크 | 상태 | 다음 필수 승인 |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -56,7 +67,7 @@ SHA와 CI 증적은 다음처럼 구분한다.
 | C1 현재 UI | `V2-UI-001`, `V2-OPS-001` | 현재 6개 화면, 안전 상태 `checking/verified/unsafe/unavailable` | 현재 운영 콘솔(S-01 일부·S-02·S-03·S-05·S-06·S-07) | `QA-NAV-001`, `QA-OPS-001`, `QA-SAF-001`, `QA-RWD-001`: **현재 구현 화면** desktop/mobile mock 후보의 탐색·안전 잠금·반응형만 검증. STR/RES/ERR/ACCNT/AUD 기능 시나리오는 별도 미실행. 배포 성공 bundle 계약은 6화면×2 viewport, PNG 12+관찰 JSON 2+manifest 1의 정확한 15파일 | source `b2037f3`: [push CI 30978131514](https://github.com/ksi2564/systematic-trading/actions/runs/30978131514), test-merge `e03cbdd`: [PR CI 30978133806](https://github.com/ksi2564/systematic-trading/actions/runs/30978133806)의 `frontend`·`ui-qa` 26/26 PASS. 운영 배포·인증 화면은 미실행 | [QA-PLN-002 정본 증적](evidence/2026-08-05-QA-PLN-002.md) · [현재 UI QA 범위](TRACEABILITY_QA.md) | 부분 | 사용자 승인 동일 SHA 배포 뒤 인증 QA |
 | C2 미래 화면 | `V2-OPS-001`, `V2-API-001` | 스케줄·데이터·차이·마지막 성공의 GET 조회 API | `S-01`, `S-04`, `S-08` | `QA-SHD-001~002`: 자동 섀도 runtime·API·화면 모두 **계획** | 실행 없음 · artifact 없음 | [기능 명세](FUNCTIONAL_SPEC.md) | 미구현 | C0-B 결과 재승인 |
 | C2 종합 | `V2-AUT-001`, `V2-DAT-001`, `V2-PER-001`, `V2-OPS-001`, `V2-API-001` | 자동 실행기·운영 데이터·Java 결과 비교·저장·조회 API | `S-01`, `S-04`, `S-08` | `QA-SHD-001~002`, `QA-PAR-001`: C2 전체 진행을 하나의 행에서 종합 판정 | 실행 없음 · artifact 없음 | [C0 gate 계약](C0_DECISIONS.md#c0-b-운영-기준선-재확인-기록) | 미구현 | C0-B 결과 재승인 |
-| 공통 명세 | `V2-DOC-001` | 요구·기능·화면·QA·롤백·구현 런웨이·기능 제안 템플릿, C0 기록 완전성 gate | **실행 로드맵과 기획 미리보기** `S-01/S-04/S-08/S-10/S-09` | `QA-PLN-001`: 선택·화면·추적 계약. `QA-RWY-001`: 16:15 ET 상태 → 다음 거래일 09:45 ET 판단 → 의도 → Java 비교 → 제출 0건의 하루 정확한 5단계, 권한 3카드, C2 6묶음, C0-A/C0-B 수집 승인/C0-B 결과 재승인/C2/C2 후보 배포 승인/C3 실행 승인/C3/C4-A/C4-B/C5 후보 배포 승인/C5-A/C5-B/C6/C7의 정확한 14단계, `20거래일+5주기+20거래일`. OS가 외부 TCP·UDP를 거부하고 loopback TCP만 허용한 최소 환경에서 메모리에 고정한 문서·CSS·JavaScript 3 GET·응답만 검증한다. WebRTC·worker·지연 API·영속 저장의 인스턴스/prototype 우회, 선언형 외부 전송 표면, clipping·극저투명도·투명 글자·가림·offscreen DOM, 소스/응답 변경을 fail-closed로 감사한다. isolated world에서 128개 계약 노드의 Text Range·content fit·텍스트 잘림 금지·4.5:1 대비와 100개 leaf·panel root의 자체 불투명 배경을 확인하고 CDP backend tree의 1,152개 paint point를 대조하며, 캡처 직전 page script를 동결한다. schema 4 main verifier가 desktop/mobile PNG 2+매니페스트 1의 정확한 3파일을 `v2/frontend/artifacts/planning-runway-verified/`에만 생성하고, independent verifier를 생성 직후와 무주문 UI QA 직후·업로드 직전에 두 번 통과한 실행만 `v2-qa-runway-evidence-<run_attempt>` artifact를 올린다. C0 gate 양성/음성 55건 | 기능·안전 정본 source `b2037f3` planning 2/2·C0 gate 55/55: [push CI 30978131514](https://github.com/ksi2564/systematic-trading/actions/runs/30978131514) 5/5 PASS · planning artifact `8919110235`; test-merge `e03cbdd`: [PR CI 30978133806](https://github.com/ksi2564/systematic-trading/actions/runs/30978133806) 5/5 PASS · planning artifact `8919108340`. 14단계 런웨이 보강본은 새 source의 wrapper+main+두 번의 independent verifier와 성공 전용 artifact를 통과한 뒤만 실행 증적으로 기록 | [QA-PLN-002 기능·안전 정본 증적](evidence/2026-08-05-QA-PLN-002.md) · [상세 QA 판정](TRACEABILITY_QA.md) | 부분 | D-01~D-10 검토 |
+| 공통 명세 | `V2-DOC-001` | 요구·기능·화면·QA·롤백·구현 런웨이·기능 제안 템플릿, C0 기록 완전성 gate | **실행 로드맵과 기획 미리보기** `S-01/S-04/S-08/S-10/S-09` | `QA-PLN-001`: 선택·화면·추적 계약. `QA-RWY-001`: 16:15 ET 상태 → 다음 거래일 09:45 ET 판단 → 의도 → Java 비교 → 제출 0건의 하루 정확한 5단계, 권한 3카드, C2 6묶음, C0-A/C0-B 수집 승인/C0-B 결과 재승인/C2/C2 후보 배포 승인/C3 실행 승인/C3/C4-A/C4-B/C5 후보 배포 승인/C5-A/C5-B/C6/C7의 정확한 14단계, `20거래일+5주기+20거래일`. OS가 외부 TCP·UDP를 거부하고 loopback TCP만 허용한 최소 환경에서 메모리에 고정한 문서·CSS·JavaScript 3 GET·응답만 검증한다. WebRTC·worker·지연 API·영속 저장의 인스턴스/prototype 우회, 선언형 외부 전송 표면, clipping·극저투명도·투명 글자·가림·offscreen DOM, 소스/응답 변경을 fail-closed로 감사한다. isolated world에서 128개 계약 노드의 Text Range·content fit·텍스트 잘림 금지·4.5:1 대비와 100개 leaf·panel root의 자체 불투명 배경을 확인하고 CDP backend tree의 1,152개 paint point를 대조하며, 캡처 직전 page script를 동결한다. schema 4 main verifier가 desktop/mobile PNG 2+매니페스트 1의 정확한 3파일을 `v2/frontend/artifacts/planning-runway-verified/`에만 생성하고, independent verifier를 생성 직후와 무주문 UI QA 직후·업로드 직전에 두 번 통과한 실행만 `v2-qa-runway-evidence-<run_attempt>` artifact를 올린다. C0 gate 양성/음성 55건 | C0-B 경계·mock UI 정본 source `b2037f3`/test-merge `e03cbdd`는 `QA-PLN-002`에 보존한다. 14단계 런웨이 source `d2c2bb1`: [push CI 30989853114](https://github.com/ksi2564/systematic-trading/actions/runs/30989853114) 5/5 PASS · runway artifact `8923691867`; test-merge `7f620de`: [PR CI 30989856303](https://github.com/ksi2564/systematic-trading/actions/runs/30989856303) 5/5 PASS · runway artifact `8923700176`. 두 ZIP은 정확히 3파일이고 archive·source·PNG SHA-256과 안전 필드를 다운로드 후 재검증했다 | [QA-PLN-002 기능·안전 정본 증적](evidence/2026-08-05-QA-PLN-002.md) · [QA-RWY-001 실행 로드맵 정본 증적](evidence/2026-08-05-QA-RWY-001.md) · [상세 QA 판정](TRACEABILITY_QA.md) | 부분 | D-01~D-10 검토 |
 
 ## PR에서 사용하는 방법
 

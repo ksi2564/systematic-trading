@@ -36,12 +36,14 @@
 | `V2-LIV-001` | 자동 제출·접수·미체결/부분체결·대조 완료 계약만 문서화 | 없음 | `QA-LIV-001`: C3 통과 뒤 C4-A에서 LIVE 후보를 개발하고 실제 자격증명·실증권사 endpoint 없는 broker simulator로 durable journal, 단일 주문 소유권, 접수·미체결/부분체결·대조, 자동 재전송 금지와 crash matrix를 격리 인수. `QA-RCV-001`: C4-B 주문 없는 복구 훈련. 이후 제출 차단 후보 배포 별도 승인과 C5-A/B canary·인수 QA | 미구현 |
 | `V2-REL-001` | C0/CUTOVER 문서의 세 독립 20거래일 레인과 C4-A/C4-B/C5 후보 배포/C5-A/C5-B/C6/C7 계약 | 없음 | 연속 섀도 집계, `QA-LIV-001` C4-A 실증권사 미연결 simulator·crash matrix·단일 소유권 격리 인수, `QA-RCV-001` C4-B 복구, 후보 배포 승인 게이트, C5-A 단건 canary, C5-B 예약 5주기, C6 전체 전환·20거래일 안정화, C7 Java 퇴역 별도 승인 | 미구현 |
 | `V2-RBK-001` | SHA+attempt 불변 릴리스 경로와 심볼릭 링크 복구, 첫 배포 실패 시 서비스 정지, 검증 실패 release 보존과 current/rollback/latest-3 보존, host 동시 배포 잠금 | `QA-INF-001`: active/stale host lock fail-closed; HUP/TERM→129/143; modern·#54 legacy·same-SHA 복구; health transport·안전값·SHA 오류; 안전 env 중복·기존 비정상 서비스 stop 실패의 pre-switch 거부; rollback 경로/SHA 불일치; systemd restart 오류; rollback health/restart 실패 시 새 bytes 보존; 최초 배포 stop 성공/실패·상태 조회 오류; lock cleanup 실패 non-green을 whole-script 격리 fault test로 검증. workflow의 기존 Java active·nonzero·동일 PID wrapper를 실제 shell matrix로 실행하고 배포 후 SHA·false/disabled 계약을 검사. source `b2037f3`의 [push CI `30978131514`](https://github.com/ksi2564/systematic-trading/actions/runs/30978131514)와 test-merge `e03cbdd`의 [PR CI `30978133806`](https://github.com/ksi2564/systematic-trading/actions/runs/30978133806) `infra` 통과. `QA-RCV-001` C4-B 제출 차단·주문 없는 복구 인수는 계획·미구현 | 실제 staging retention warning·DB 복구·systemd/health 장애·미확정 주문·Java 복귀 훈련과 사용자 확정 | 부분 |
-| `V2-DOC-001` | `docs/v2-cutover/` 문서 묶음, 단일 `DELIVERY_TRACE`, [`IMPLEMENTATION_RUNWAY`](IMPLEMENTATION_RUNWAY.md), 기능 제안·선택형 PR 템플릿, 비개발자용 review board | D-01~D-10·전체 승인 순서·C2 6묶음·핵심 화면·요구사항 ID 계약 검사. 기능·안전 source `b2037f3`는 review board desktop/mobile 2/2와 C0 gate 55/55를 통과했고, [push CI `30978131514`](https://github.com/ksi2564/systematic-trading/actions/runs/30978131514)와 test-merge `e03cbdd`의 [PR CI `30978133806`](https://github.com/ksi2564/systematic-trading/actions/runs/30978133806)에서 artifact를 생성했다. 네 ZIP의 archive와 내부 소스·PNG·UI 증적 SHA-256을 내려받아 재검증하고 [`QA-PLN-002`](evidence/2026-08-05-QA-PLN-002.md)에 기록했다. 별도 C0-B 수집 승인 기록·접근 방법·저장 범위·12개 정제 원천·차이 파일 digest, snapshot/diff 상호참조, 동일 최종 승인 SHA, 시간 순서, C2 보호 tree gate를 포함한다. 구현 런웨이 보강본은 새 source에서 다시 검증해 별도 증적으로 기록한다 | 사용자 D-01~D-10 검토·승인과 이후 PR별 승인 SHA 연결 | 부분 |
+| `V2-DOC-001` | `docs/v2-cutover/` 문서 묶음, 단일 `DELIVERY_TRACE`, [`IMPLEMENTATION_RUNWAY`](IMPLEMENTATION_RUNWAY.md), 기능 제안·선택형 PR 템플릿, 비개발자용 review board | D-01~D-10·전체 승인 순서·C2 6묶음·핵심 화면·요구사항 ID 계약 검사. 기능·안전 source `b2037f3`는 review board desktop/mobile 2/2와 C0 gate 55/55를 통과했고, [push CI `30978131514`](https://github.com/ksi2564/systematic-trading/actions/runs/30978131514)와 test-merge `e03cbdd`의 [PR CI `30978133806`](https://github.com/ksi2564/systematic-trading/actions/runs/30978133806)에서 artifact를 생성했다. 네 ZIP의 archive와 내부 소스·PNG·UI 증적 SHA-256을 내려받아 재검증하고 [`QA-PLN-002`](evidence/2026-08-05-QA-PLN-002.md)에 기록했다. 별도 C0-B 수집 승인 기록·접근 방법·저장 범위·12개 정제 원천·차이 파일 digest, snapshot/diff 상호참조, 동일 최종 승인 SHA, 시간 순서, C2 보호 tree gate를 포함한다. 14단계 런웨이 source `d2c2bb1`과 test-merge `7f620de`는 [push CI `30989853114`](https://github.com/ksi2564/systematic-trading/actions/runs/30989853114)·[PR CI `30989856303`](https://github.com/ksi2564/systematic-trading/actions/runs/30989856303)에서 각각 5/5를 통과했다. 정확히 3파일인 런웨이 artifact `8923691867`, `8923700176`의 archive·source·PNG digest와 안전 필드를 다운로드 후 재검증하고 [`QA-RWY-001`](evidence/2026-08-05-QA-RWY-001.md)에 기록했다 | 사용자 D-01~D-10 검토·승인과 이후 PR별 승인 SHA 연결 | 부분 |
 
-역할은 다음과 같이 나눈다. `v2 CI`는 PR·push의 빠른 피드백을 위한 동일 테스트이며
-PR #57 검증 source `b2037f3`의 원본 push run과 base `8eb580b`에 합친 test-merge
-`e03cbdd`의 PR run에서 각각 통과했다. 이 증적을 기록하는 문서 전용 후속 커밋은 기능
-코드의 통과 근거로 올려 적지 않는다. `v2 Release Candidate`는 Staging Deploy가 신뢰하는
+역할은 다음과 같이 나눈다. `v2 CI`는 PR·push의 빠른 피드백을 위한 동일 테스트이며,
+C0-B 경계·mock UI source `b2037f3`/test-merge `e03cbdd`의 역사적 정본은
+`QA-PLN-002`에 보존한다. 최신 런웨이 source `d2c2bb1`과 test-merge `7f620de`는
+원본 push run `30989853114`와 PR run `30989856303`에서 각각 5/5를 통과했다. 이 증적을
+기록하는 문서 전용 후속 커밋은 위 source의 화면·기능 통과 근거로 올려 적지 않는다.
+`v2 Release Candidate`는 Staging Deploy가 신뢰하는
 정확한 `master` SHA에서 패리티·no-order UI QA·manifest 안전 검증을 다시 강제하는 배포 게이트 후보다.
 현재 실제 RC run은 없으므로 v2 CI 성공을 RC·배포 통과 증적으로 계산하지 않는다.
 
@@ -152,6 +154,18 @@ QA, 업로드 직전의 두 번째 독립 검증이 모두 통과한 실행만
   독립 재검증해 [QA-PLN-002 정본 보고서](evidence/2026-08-05-QA-PLN-002.md)에 기록했다.
   `QA-PLN-001`의 source `46a34ea`·51/51은 당시 계약의 역사적 정본으로 유지한다. 이 결과는
   기획 화면의 사용성 증적이지 v2 기능 구현·배포 증적이 아니다.
+- `QA-RWY-001` 실행 로드맵 정본: source `d2c2bb1`과 test-merge `7f620de`의
+  [push CI `30989853114`](https://github.com/ksi2564/systematic-trading/actions/runs/30989853114)·
+  [PR CI `30989856303`](https://github.com/ksi2564/systematic-trading/actions/runs/30989856303)가
+  `backend`, `frontend`, `infra`, `legacy-strategy-parity`, `ui-qa` 5/5를 각각 통과했다.
+  두 런웨이 artifact `8923691867`, `8923700176`은 schema 4 manifest와 desktop/mobile
+  PNG로 정확히 3파일이다. 직접 내려받아 archive·source·PNG SHA-256을 다시
+  대조했고, 두 lane 모두 desktop 1,440×4,491·mobile 360×9,028·가로 overflow 0,
+  최소 대비 4.673:1, 128개 계약 노드·100개 leaf·1,152개 paint point·가림 0이다.
+  실주문 허용은 `false`이고 resource mutation, storage, WebRTC, deferred registration,
+  source/Git 변경은 모두 0건이다. 상세 digest·실패 교정 이력·비판정 범위는
+  [QA-RWY-001 정본 보고서](evidence/2026-08-05-QA-RWY-001.md)에 있다. 이 통과는
+  C2 runtime·후보/RC/운영 배포·인증된 외부 화면·Java 중단·실주문 증적이 아니다.
 - `QA-ACC-001`: 2026-08-05 KST 읽기 전용 외부 검증 `PASS`. `/`와
   `/api/v2/operations/status` 모두 앱 본문을 직접 반환하지 않고 Cloudflare Access
   로그인으로 `302` 이동했다. 상세 근거는

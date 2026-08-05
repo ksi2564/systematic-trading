@@ -25,6 +25,8 @@
 보낸 답을 `C0_DECISIONS.md`에 승인자·시각·SHA와 함께 반영하고 다시 확인해야 기록이 된다.
 보드 안의 자동검사 상태는 증적 source를 캡처한 시점의 문구이며, 최신 통과 결과는
 [`QA-PLN-002`](evidence/2026-08-05-QA-PLN-002.md)를 기준으로 본다.
+전체 14단계 실행 로드맵과 성공 전용 3파일 증적의 최신 판정은
+[`QA-RWY-001`](evidence/2026-08-05-QA-RWY-001.md)에서 확인한다.
 
 브라우저에서 실제 선택 UI를 열려면 저장소의 `v2/frontend` 폴더에서
 `npm run review:planning`을 실행한 뒤
@@ -37,7 +39,7 @@
 - v2 본체 배포: #54 커밋 `66e374c`, GitHub Actions run `30931862737` 성공
 - #56 접근 수정: 커밋 `8eb580b`, `access-configure` run `30937893445` 성공
 - `master@8eb580b` 기준 #55·#56에는 `v2/backend`, `v2/frontend` 변경이 없어
-  #54 배포본과 동일했음. PR #57의 현재 기획·안전 검증 source
+  #54 배포본과 동일했음. PR #57의 C0-B 승인 경계 기획·안전 검증 정본
   `b2037f30512d338b1d1d3ee7b0475af7cb4da904`는 미배포 상태임
 - 위 source는 C0 승인 순서를 `C0-A 확정 → C0-B 수집 별도 승인 → capture/snapshot/diff →
   C0-B 결과 재승인 → C2`로 고정했다. 로컬 기획 화면 10/10·C0 기록 gate 55/55와
@@ -52,6 +54,15 @@
   소스·PNG·증적 파일 SHA-256을 대조했다. planning 2/2, mock UI 26/26, 증적 참조
   78개·고유 파일 56개, 외부·비GET·WebSocket·상태 변경·실주문 경로·리소스 변경 0건을
   [`QA-PLN-002 정본 증적`](evidence/2026-08-05-QA-PLN-002.md)에 기록했음
+- PR #57의 최신 런웨이 source `d2c2bb11857a55e0bdabdd9158be8cdfa2e7207d`는
+  [push v2 CI `30989853114`](https://github.com/ksi2564/systematic-trading/actions/runs/30989853114)와
+  test-merge `7f620de31fe53f3845bc52b54be3989524b772ce`의
+  [PR v2 CI `30989856303`](https://github.com/ksi2564/systematic-trading/actions/runs/30989856303)에서 각각 5/5를
+  통과했다. 두 성공 전용 `QA-RWY-001` artifact ID `8923691867`, `8923700176`은
+  desktop/mobile PNG 2개와 schema 4 manifest 1개로 정확히 3파일이며, 직접 내려받은
+  archive·source·PNG digest와 안전 필드 재검증 결과를
+  [`QA-RWY-001 정본 증적`](evidence/2026-08-05-QA-RWY-001.md)에 기록했음. 이는
+  RC·후보·운영 배포나 인증된 외부 화면 QA가 아님
 - [`QA-PLN-001`](evidence/2026-08-05-QA-PLN-001.md)의 source `46a34ea`·51/51은 당시
   계약의 역사적 정본으로 유지하며, 현재 55/55 계약의 실행 근거로 합치지 않음
 - 위 CI 결과를 기록하는 문서 전용 후속 커밋은 기능 코드의 통과 근거로 올려 적지 않음

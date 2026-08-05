@@ -9,6 +9,7 @@ import pytest
 from alembic import command
 from alembic.config import Config
 from sqlalchemy import create_engine, func, select, text
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm import sessionmaker
 
 from wallant.config import get_settings
@@ -68,27 +69,42 @@ def test_mysql_최초_pause_resume_동시_쓰기는_단일행과_감사를_직�
         assert actions == ["GLOBAL_PAUSED", "GLOBAL_RESUMED"]
 
 
-def test_mysql_감사_insert_실패는_제어행까지_rollback한다(mysql_engine) -> None:
+def test_mysql_제어_update_실패는_선행_감사_insert까지_rollback한다(mysql_engine) -> None:
     Base.metadata.create_all(mysql_engine)
     sessions = sessionmaker(bind=mysql_engine, autoflush=False, expire_on_commit=False)
+    with sessions() as session:
+        session.add(
+            GlobalControlRecord(
+                singleton_key="GLOBAL",
+                emergency_paused=False,
+                reason=None,
+            )
+        )
+        session.commit()
+
     with mysql_engine.begin() as connection:
         connection.execute(
             text(
                 """
-                ALTER TABLE v2_audit_event
-                ADD CONSTRAINT wallant_fail_audit_insert
-                CHECK (action <> 'GLOBAL_PAUSED')
+                ALTER TABLE v2_global_control
+                ADD CONSTRAINT wallant_fail_control_pause
+                CHECK (emergency_paused = 0)
                 """
             )
         )
 
     with sessions() as session:
-        with pytest.raises(Exception, match="wallant_fail_audit_insert"):
+        with pytest.raises(DBAPIError) as exc_info:
             GlobalControlRepository(session).pause("rollback", actor="tester")
         session.rollback()
+    assert exc_info.value.orig.args[0] == 3819
+    assert "wallant_fail_control_pause" in str(exc_info.value.orig)
 
     with sessions() as session:
-        assert session.scalar(select(func.count()).select_from(GlobalControlRecord)) == 0
+        control = session.get(GlobalControlRecord, "GLOBAL")
+        assert control is not None
+        assert control.emergency_paused is False
+        assert control.reason is None
         assert session.scalar(select(func.count()).select_from(AuditEventRecord)) == 0
 
 

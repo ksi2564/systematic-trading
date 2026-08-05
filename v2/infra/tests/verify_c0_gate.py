@@ -99,7 +99,7 @@ ARTIFACT_REF_PATTERN = re.compile(
 )
 KST_OFFSET = timedelta(hours=9)
 C2_SOURCE_BASELINE_TREE_SHA256 = (
-    "ba25e6d6dc2dd4b0c05e3a3dbd51de221280cc5cb7dd5ca462787c7f0ea36acb"
+    "e0334d51b87d4c9a1a406ee3b908427606247c64317c61565cbfdfa8b894e8b6"
 )
 C2_PROTECTED_PATHS = (
     "v2/backend",

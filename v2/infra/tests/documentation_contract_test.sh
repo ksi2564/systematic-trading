@@ -359,6 +359,10 @@ grep -F "baseURL: 'http://127.0.0.1:4182/docs/v2-cutover/review-board/'" \
   "${repository_root}/v2/frontend/playwright.planning.config.ts" >/dev/null
 grep -F "python3 -m http.server 4182 --bind 127.0.0.1 --directory ../.." \
   "${repository_root}/v2/frontend/playwright.planning.config.ts" >/dev/null
+grep -F "const manifestPath = testInfo.outputPath('planning-320-manifest.json');" \
+  "${repository_root}/v2/frontend/e2e-planning/review-board.spec.ts" >/dev/null
+grep -F 'path: manifestPath' \
+  "${repository_root}/v2/frontend/e2e-planning/review-board.spec.ts" >/dev/null
 grep -F '[`DELIVERY_TRACE.md`](DELIVERY_TRACE.md)' \
   "${cutover_root}/README.md" >/dev/null
 for planning_ci_path in \
@@ -367,7 +371,7 @@ for planning_ci_path in \
   '.github/PULL_REQUEST_TEMPLATE/v2-feature.md'; do
   [[ "$(grep -Fc -- "- \"${planning_ci_path}\"" "${v2_ci_workflow}")" -eq 2 ]]
 done
-grep -F 'ba25e6d6dc2dd4b0c05e3a3dbd51de221280cc5cb7dd5ca462787c7f0ea36acb' \
+grep -F 'e0334d51b87d4c9a1a406ee3b908427606247c64317c61565cbfdfa8b894e8b6' \
   "${cutover_root}/C0_DECISIONS.md" >/dev/null
 
 printf 'C0 decision, planning board, single trace, feature template, and PR gate contract PASS\n'

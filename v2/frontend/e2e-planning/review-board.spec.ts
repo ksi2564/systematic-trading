@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 import { expect, test, type Locator, type Page, type TestInfo } from '@playwright/test';
@@ -603,15 +603,20 @@ test('[QA-PLN-001] C0 결정·화면·추적 보드를 주문 없이 검토한�
     if (process.env.CI) {
       expect(gitStatus, 'CI planning evidence requires a clean tracked tree').toBe('');
     }
-    await testInfo.attach('planning-320-manifest.json', {
-      body: Buffer.from(`${JSON.stringify({
+    const manifestPath = testInfo.outputPath('planning-320-manifest.json');
+    writeFileSync(
+      manifestPath,
+      `${JSON.stringify({
         sourceSha,
         gitClean: gitStatus === '',
         sourceTreeSha256,
         sourceFiles,
         viewport: { width: 320, height: 800 },
         files: evidence320
-      }, null, 2)}\n`),
+      }, null, 2)}\n`
+    );
+    await testInfo.attach('planning-320-manifest.json', {
+      path: manifestPath,
       contentType: 'application/json'
     });
   }

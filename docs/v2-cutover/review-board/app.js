@@ -1,7 +1,7 @@
 "use strict";
 
 const planningState = Object.freeze({
-  c0A: "승인 대기",
+  c0A: "조건부 승인",
   c2: "미시작",
 });
 
@@ -198,7 +198,7 @@ const screens = [
         <article class="mock-card"><span>기존 시스템</span><strong>마지막 제어 작업에서 미중단</strong><p>현재 서비스·전략 켜짐/꺼짐·최근 성공·주문 모드는 C0-B 수집 승인 대기예요.</p></article>
         <article class="mock-card"><span>v2 주문 안전 예시</span><strong>후보 코드상 제출 차단</strong><p>검토 중인 화면 예시예요. 현재 원격 값은 다시 확인해야 해요.</p></article>
         <article class="mock-card"><span>오늘의 다음 일정</span><strong>기획 확정 대기</strong><p>자동 실행기는 C0-B 결과 재승인 뒤 개발해요.</p></article>
-        <article class="mock-card full"><span>오늘 확인할 일</span><ul class="gate-list"><li><strong>C0-A D-01~D-10</strong><small>사용자 검토</small></li><li><strong>C0-B 수집 승인·결과 재승인</strong><small>아직 수집 안 함</small></li><li><strong>인증된 화면 검증</strong><small>후보 배포 승인·사용자 직접 로그인 대기</small></li></ul></article>
+        <article class="mock-card full"><span>오늘 확인할 일</span><ul class="gate-list"><li><strong>C0-A D-01~D-10</strong><small>조건부 승인 · C0-B 수집 권한 없음</small></li><li><strong>C0-B 수집 승인·결과 재승인</strong><small>아직 수집 안 함</small></li><li><strong>인증된 화면 검증</strong><small>후보 배포 승인·사용자 직접 로그인 대기</small></li></ul></article>
       </div>`,
   },
   {
@@ -243,7 +243,7 @@ const screens = [
     description: "실전으로 갈 준비와 수동 승인 경계",
     content: `
       <div class="mock-grid">
-        <article class="mock-card full"><span>전환 게이트 · 전체 14단계</span><ul class="gate-list"><li><strong>1 · C0-A 제품 규칙 승인</strong><small>D-01~D-10 승인 대기</small></li><li><strong>2 · C0-B ① 운영값 읽기 승인</strong><small>C0-A와 별도 승인</small></li><li><strong>3 · C0-B ② 정제 결과·차이 재승인</strong><small>수집 전이라 결과 없음</small></li><li><strong>4 · C2 주문 없는 자동 병행 개발</strong><small>C0-B ② 전에는 미시작</small></li><li><strong>5 · C2 후보 동일 SHA 배포 승인</strong><small>별도 승인 전 미배포</small></li><li><strong>6 · C3 대상·기간·영향 실행 승인</strong><small>별도 승인 전 미실행</small></li><li><strong>7 · C3 세 레인 20거래일 관찰</strong><small>0 / 20 · 미시작</small></li><li><strong>8 · C4-A LIVE 후보 격리 인수</strong><small>실증권사 연결 없는 simulator</small></li><li><strong>9 · C4-B 주문 없는 복구 훈련</strong><small>공유 환경 미실행</small></li><li><strong>10 · C5 제출 차단 후보 배포 승인</strong><small>별도 승인 전 미배포</small></li><li><strong>11 · C5-A v2 단건 제출·대조</strong><button class="mock-button" type="button" disabled>사용자 승인 전 잠김</button></li><li><strong>12 · C5-B를 선택한 경우만 범위·기간 승인 뒤 5주기 자동운용</strong><small>Java 복원 선택 시 v2 제출 차단·canary 종료</small></li><li><strong>13 · C6 v2 단독 전환·20거래일 안정화</strong><small>범위 확대·진행률을 따로 표시</small></li><li><strong>14 · C7 Java 퇴역</strong><small>안정화 뒤 별도 사용자 승인</small></li></ul></article>
+        <article class="mock-card full"><span>전환 게이트 · 전체 14단계</span><ul class="gate-list"><li><strong>1 · C0-A 제품 규칙 승인</strong><small>D-01~D-10 조건부 승인 · C0-B 별도 승인 대기</small></li><li><strong>2 · C0-B ① 운영값 읽기 승인</strong><small>C0-A와 별도 승인</small></li><li><strong>3 · C0-B ② 정제 결과·차이 재승인</strong><small>수집 전이라 결과 없음</small></li><li><strong>4 · C2 주문 없는 자동 병행 개발</strong><small>C0-B ② 전에는 미시작</small></li><li><strong>5 · C2 후보 동일 SHA 배포 승인</strong><small>별도 승인 전 미배포</small></li><li><strong>6 · C3 대상·기간·영향 실행 승인</strong><small>별도 승인 전 미실행</small></li><li><strong>7 · C3 세 레인 20거래일 관찰</strong><small>0 / 20 · 미시작</small></li><li><strong>8 · C4-A LIVE 후보 격리 인수</strong><small>실증권사 연결 없는 simulator</small></li><li><strong>9 · C4-B 주문 없는 복구 훈련</strong><small>공유 환경 미실행</small></li><li><strong>10 · C5 제출 차단 후보 배포 승인</strong><small>별도 승인 전 미배포</small></li><li><strong>11 · C5-A v2 단건 제출·대조</strong><button class="mock-button" type="button" disabled>사용자 승인 전 잠김</button></li><li><strong>12 · C5-B를 선택한 경우만 범위·기간 승인 뒤 5주기 자동운용</strong><small>Java 복원 선택 시 v2 제출 차단·canary 종료</small></li><li><strong>13 · C6 v2 단독 전환·20거래일 안정화</strong><small>범위 확대·진행률을 따로 표시</small></li><li><strong>14 · C7 Java 퇴역</strong><small>안정화 뒤 별도 사용자 승인</small></li></ul></article>
         <article class="mock-card wide"><span>현재 주문 소유권</span><strong>C0-B ① 수집 승인 대기</strong><p>Java와 v2가 동시에 주문하지 않는 계약은 유지해요.</p></article>
         <article class="mock-card"><span>직전 승인 작업</span><strong>범위 확대·재개</strong><p>C5 범위 · Java 중단 · 접속 경로 변경 · 되돌리기</p></article>
       </div>`,

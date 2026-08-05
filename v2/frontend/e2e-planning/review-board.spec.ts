@@ -137,7 +137,7 @@ test('[QA-PLN-001] C0 결정·화면·추적 보드를 주문 없이 검토한�
 
   await expect(page).toHaveTitle('Wall-Ant v2 전환 검토 보드');
   await expect(page.getByRole('heading', { name: /지금 결정할 건/ })).toBeVisible();
-  await expect(page.getByText('기획안 · 승인 대기', { exact: true })).toBeVisible();
+  await expect(page.getByText('기획안 · 조건부 승인', { exact: true })).toBeVisible();
   const safetyStrip = page.getByLabel('현재 안전 상태');
   await expect(
     safetyStrip.getByText('마지막 제어 작업에서 미중단 · C0-B 수집 승인 대기', { exact: true })
@@ -270,7 +270,7 @@ test('[QA-PLN-001] C0 결정·화면·추적 보드를 주문 없이 검토한�
       (element) => element.scrollHeight <= element.clientHeight + 1
     )
   ).toBe(true);
-  await expect(page.getByText('기획안 · 승인 대기', { exact: true })).toBeVisible();
+  await expect(page.getByText('기획안 · 조건부 승인', { exact: true })).toBeVisible();
   const firstNextButton = decisionCards.nth(0).locator('.next-decision');
   await expect(firstNextButton).toBeEnabled();
   await expect(firstNextButton).toHaveText('다음 미응답 보기');
@@ -527,7 +527,7 @@ test('[QA-PLN-001] C0 결정·화면·추적 보드를 주문 없이 검토한�
   await expect(evidenceScreen.getByText('78개 참조 · 모두 해시 검증 통과', { exact: true })).toBeVisible();
   await expect(evidenceScreen.getByText('현재 보강본', { exact: true })).toBeVisible();
   await expect(evidenceScreen.getByText(
-    '현재 검토 보드 화면 검사 10 / 10 · C0 문서·기록 검사 55 / 55 통과 · PR 자동검사 확인 대기 · 운영 미배포',
+    '현재 검토 보드 화면 검사 10 / 10 · C0 문서·기록 검사 57 / 57 통과 · PR 자동검사 확인 대기 · 운영 미배포',
     { exact: true }
   )).toBeVisible();
   await expect(evidenceScreen.getByText('운영 배포·인증 화면 검증', { exact: true })).toBeVisible();

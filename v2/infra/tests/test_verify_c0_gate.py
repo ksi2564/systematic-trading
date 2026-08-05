@@ -48,6 +48,7 @@ class VerifyC0GateTest(unittest.TestCase):
         self.c0 = self.source_c0
         self.trace = self.source_trace
         self.board = self.source_board
+        self._reset_c0_a_fixture_to_pending()
         self._write_documents()
 
     def tearDown(self) -> None:
@@ -63,6 +64,29 @@ class VerifyC0GateTest(unittest.TestCase):
         board_path = self.root / "docs/v2-cutover/review-board/app.js"
         board_path.parent.mkdir(parents=True, exist_ok=True)
         board_path.write_text(self.board, encoding="utf-8")
+
+    def _reset_c0_a_fixture_to_pending(self) -> None:
+        self.c0, decision_state_replacements = re.subn(
+            r"결정 상태: `조건부 승인`",
+            "결정 상태: `승인 대기`",
+            self.c0,
+            count=10,
+        )
+        self.assertEqual(decision_state_replacements, 10)
+        self.c0, record_replacements = re.subn(
+            r"(?m)^\| (D-\d{2}) \| .*? \| 조건부 승인 \| Inys \| [^|]+ \| [^|]+ \|$",
+            r"| \1 | - | 승인 대기 | - | - | - |",
+            self.c0,
+            count=10,
+        )
+        self.assertEqual(record_replacements, 10)
+        self.board, board_replacements = re.subn(
+            r'(c0A: ")조건부 승인(",)',
+            r"\g<1>승인 대기\g<2>",
+            self.board,
+            count=1,
+        )
+        self.assertEqual(board_replacements, 1)
 
     def _approve_decision(self, decision_id: str, choice_index: int = 0) -> None:
         choice = _decision_sections(self.c0)[decision_id][1][choice_index]

@@ -3,6 +3,7 @@ from __future__ import annotations
 from uuid import UUID
 
 from sqlalchemy import func, select
+from sqlalchemy.orm import Session, sessionmaker
 
 from wallant.alerts.discord_gateway import DiscordGatewayActions, run_discord_gateway
 from wallant.config import get_settings
@@ -12,13 +13,16 @@ from wallant.persistence.repositories import AccountRepository, GlobalControlRep
 
 
 class DatabaseDiscordActions(DiscordGatewayActions):
-    def __init__(self) -> None:
-        self.engine = create_database_engine()
-        self.sessions = create_session_factory(self.engine)
+    def __init__(self, sessions: sessionmaker[Session] | None = None) -> None:
+        self.engine = None
+        if sessions is None:
+            self.engine = create_database_engine()
+            sessions = create_session_factory(self.engine)
+        self.sessions = sessions
 
     async def status(self) -> str:
         with self.sessions() as session:
-            control = GlobalControlRepository(session).get()
+            control = GlobalControlRepository(session).read()
             accounts = session.scalar(select(func.count()).select_from(AccountRecord)) or 0
             paused = (
                 session.scalar(
@@ -27,7 +31,10 @@ class DatabaseDiscordActions(DiscordGatewayActions):
                 or 0
             )
             intents = session.scalar(select(func.count()).select_from(OrderIntentRecord)) or 0
-            global_state = "정지" if control.emergency_paused else "정상"
+            if control is None:
+                global_state = "안전 제어 확인 불가(정지 취급)"
+            else:
+                global_state = "정지" if control.emergency_paused else "정상"
             return (
                 f"Wall-Ant: 전체 {global_state}, 계좌 {accounts}개 "
                 f"(정지 {paused}개), 주문 의도 {intents}건, 실주문 비활성"

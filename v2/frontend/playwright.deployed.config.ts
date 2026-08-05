@@ -1,7 +1,7 @@
 import { defineConfig } from '@playwright/test';
 import { execFileSync } from 'node:child_process';
 import { lstatSync, readFileSync, realpathSync, readdirSync, statSync } from 'node:fs';
-import { isAbsolute, relative, resolve } from 'node:path';
+import { dirname, isAbsolute, relative, resolve } from 'node:path';
 
 const requiredUrl = 'https://app.wall-ant.com/';
 const baseURL = process.env.DEPLOYED_QA_BASE_URL ?? requiredUrl;
@@ -103,6 +103,15 @@ if (!lstatSync(storageStatePath).isFile()) {
 }
 const storageState = realpathSync(storageStatePath);
 const storageStats = statSync(storageState);
+const storageParent = realpathSync(dirname(storageState));
+const storageParentStats = statSync(storageParent);
+if (!storageParentStats.isDirectory() || storageParentStats.uid !== currentUserId) {
+  throw new Error('DEPLOYED_QA_STORAGE_STATE parent must be a current-user-owned directory');
+}
+if ((storageParentStats.mode & 0o7777) !== 0o700) {
+  throw new Error('DEPLOYED_QA_STORAGE_STATE parent permissions must be mode 700');
+}
+requireNoExtendedAcl(storageParent, 'DEPLOYED_QA_STORAGE_STATE parent', true);
 if (storageStats.uid !== currentUserId) {
   throw new Error('DEPLOYED_QA_STORAGE_STATE must be owned by the current user');
 }
@@ -112,7 +121,7 @@ if (storageStats.nlink !== 1) {
 if (isInsideRepository(storageState)) {
   throw new Error('DEPLOYED_QA_STORAGE_STATE must be stored outside the repository');
 }
-if ((storageStats.mode & 0o077) !== 0) {
+if ((storageStats.mode & 0o7777) !== 0o600) {
   throw new Error('DEPLOYED_QA_STORAGE_STATE permissions must not allow group or other access (chmod 600)');
 }
 requireNoExtendedAcl(storageState, 'DEPLOYED_QA_STORAGE_STATE', false);
@@ -120,12 +129,28 @@ if (storageStats.size > 1_048_576) {
   throw new Error('DEPLOYED_QA_STORAGE_STATE is unexpectedly large');
 }
 try {
-  const parsed = JSON.parse(readFileSync(storageState, 'utf8')) as Record<string, unknown>;
+  const parsed = JSON.parse(readFileSync(storageState, 'utf8')) as {
+    cookies?: Array<Record<string, unknown>>;
+    origins?: Array<Record<string, unknown>>;
+  };
   if (!Array.isArray(parsed.cookies) || !Array.isArray(parsed.origins)) {
     throw new Error('missing cookies/origins arrays');
   }
+  if (parsed.cookies.length !== 1 || parsed.cookies.some((cookie) => (
+    cookie.name !== 'CF_Authorization'
+    || (cookie.domain !== 'app.wall-ant.com' && cookie.domain !== '.app.wall-ant.com')
+    || cookie.httpOnly !== true
+    || cookie.secure !== true
+  ))) {
+    throw new Error('cookies are not app-scoped');
+  }
+  if (parsed.origins.length !== 0) {
+    throw new Error('localStorage origins are not permitted');
+  }
 } catch {
-  throw new Error('DEPLOYED_QA_STORAGE_STATE must be valid Playwright storage-state JSON');
+  throw new Error(
+    'DEPLOYED_QA_STORAGE_STATE must be valid, non-empty, and scoped only to app.wall-ant.com'
+  );
 }
 
 const evidenceRootPath = requireAbsolutePath(evidenceRootInput, 'DEPLOYED_QA_OUTPUT_DIR');
@@ -140,12 +165,17 @@ if (evidenceStats.uid !== currentUserId) {
 if (isInsideRepository(evidenceRoot)) {
   throw new Error('DEPLOYED_QA_OUTPUT_DIR must be outside the repository');
 }
-if ((evidenceStats.mode & 0o077) !== 0) {
+if ((evidenceStats.mode & 0o7777) !== 0o700) {
   throw new Error('DEPLOYED_QA_OUTPUT_DIR permissions must not allow group or other access (chmod 700)');
 }
 requireNoExtendedAcl(evidenceRoot, 'DEPLOYED_QA_OUTPUT_DIR', true);
 if (storageState.startsWith(`${evidenceRoot}/`)) {
   throw new Error('DEPLOYED_QA_STORAGE_STATE must not be placed inside DEPLOYED_QA_OUTPUT_DIR');
+}
+if (evidenceRoot === storageParent
+  || evidenceRoot.startsWith(`${storageParent}/`)
+  || storageParent.startsWith(`${evidenceRoot}/`)) {
+  throw new Error('DEPLOYED_QA_STORAGE_STATE parent and DEPLOYED_QA_OUTPUT_DIR must be separate');
 }
 if (readdirSync(evidenceRoot).length !== 0) {
   throw new Error('DEPLOYED_QA_OUTPUT_DIR must be empty before each evidence run');

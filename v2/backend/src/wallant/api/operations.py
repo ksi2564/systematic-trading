@@ -13,7 +13,10 @@ from wallant.persistence.models import (
     OrderIntentRecord,
     StrategyRecord,
 )
-from wallant.persistence.repositories import GlobalControlRepository
+from wallant.persistence.repositories import (
+    GLOBAL_CONTROL_MISSING_REASON,
+    GlobalControlRepository,
+)
 
 router = APIRouter(prefix="/operations", tags=["operations"])
 
@@ -25,7 +28,7 @@ def status(
     session: Session = Depends(get_session),
 ) -> dict:
     response.headers["Cache-Control"] = "no-store"
-    control = GlobalControlRepository(session).get()
+    control = GlobalControlRepository(session).read()
     counts = {
         "strategies": session.scalar(select(func.count()).select_from(StrategyRecord)) or 0,
         "accounts": session.scalar(select(func.count()).select_from(AccountRecord)) or 0,
@@ -41,8 +44,8 @@ def status(
         "build_sha": request.app.state.settings.build_sha,
         "execution_enabled": False,
         "broker_adapter": "disabled",
-        "global_emergency_paused": control.emergency_paused,
-        "global_reason": control.reason,
+        "global_emergency_paused": control.emergency_paused if control is not None else True,
+        "global_reason": control.reason if control is not None else GLOBAL_CONTROL_MISSING_REASON,
         "counts": counts,
     }
 

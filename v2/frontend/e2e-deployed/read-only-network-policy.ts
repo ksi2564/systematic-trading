@@ -1,6 +1,15 @@
 export const deployedQaOrigin = 'https://app.wall-ant.com';
+export const deployedHealthRouteId = 'health-safety-gate' as const;
+export const deployedSnapshotRouteId = 'deployed-read-only-snapshot' as const;
+export const deployedRequestPolicy =
+  'candidate-only snapshot; allowlisted UI GET fulfilled locally; exact-origin static GET/HEAD only';
 
-const allowedApiRoutes = Object.freeze({
+const allowedPreflightRoutes = Object.freeze({
+  '/health': deployedHealthRouteId,
+  '/api/v2/qa/deployed-read-only-snapshot': deployedSnapshotRouteId
+} as const);
+
+const allowedUiApiRoutes = Object.freeze({
   '/api/v2/operations/status': 'operations-status',
   '/api/v2/strategies': 'strategies',
   '/api/v2/accounts': 'accounts',
@@ -8,10 +17,16 @@ const allowedApiRoutes = Object.freeze({
   '/api/v2/operations/audit?limit=30': 'operations-audit-limit-30'
 } as const);
 
-export const allowedApiRouteIds = Object.freeze(Object.values(allowedApiRoutes));
+export const deployedUiApiRouteIds = Object.freeze(Object.values(allowedUiApiRoutes));
+export type DeployedUiApiRouteId = (typeof deployedUiApiRouteIds)[number];
+export const allowedApiRouteIds = Object.freeze([
+  ...Object.values(allowedPreflightRoutes),
+  ...deployedUiApiRouteIds
+]);
 
 export type ReadOnlyRequestDecision =
-  | { kind: 'api'; routeId: (typeof allowedApiRouteIds)[number] }
+  | { kind: 'preflight'; routeId: typeof deployedHealthRouteId | typeof deployedSnapshotRouteId }
+  | { kind: 'api'; routeId: DeployedUiApiRouteId }
   | { kind: 'static' }
   | { kind: 'blocked'; reason: 'external-origin' | 'unsafe-method' | 'disallowed-path' };
 
@@ -32,10 +47,14 @@ export function classifyReadOnlyRequest(rawUrl: string, rawMethod: string): Read
     return { kind: 'blocked', reason: 'unsafe-method' };
   }
 
-  const exactApiRoute = `${url.pathname}${url.search}` as keyof typeof allowedApiRoutes;
-  const routeId = allowedApiRoutes[exactApiRoute];
-  if (routeId && method === 'GET') {
-    return { kind: 'api', routeId };
+  const exactRoute = `${url.pathname}${url.search}`;
+  const preflightRouteId = allowedPreflightRoutes[exactRoute as keyof typeof allowedPreflightRoutes];
+  if (preflightRouteId && method === 'GET') {
+    return { kind: 'preflight', routeId: preflightRouteId };
+  }
+  const uiRouteId = allowedUiApiRoutes[exactRoute as keyof typeof allowedUiApiRoutes];
+  if (uiRouteId && method === 'GET') {
+    return { kind: 'api', routeId: uiRouteId };
   }
   if (url.search === '' && isAllowedStaticPath(url.pathname)) {
     return { kind: 'static' };

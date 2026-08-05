@@ -125,6 +125,21 @@ jobs:
 
   backend:
     runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_DATABASE: wallant_v2_ci
+          MYSQL_USER: wallant
+          MYSQL_PASSWORD: ci-password
+          MYSQL_ROOT_PASSWORD: ci-root-password
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -pci-root-password"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
     defaults:
       run:
         working-directory: v2/backend
@@ -143,6 +158,10 @@ jobs:
           -W "ignore:'audioop' is deprecated and slated for removal in Python 3.13:DeprecationWarning"
           --cov=wallant
           --cov-fail-under=80
+      - name: Verify GlobalControl concurrency, rollback, and migrations on MySQL 8.4
+        env:
+          WALLANT_MYSQL_TEST_URL: "mysql+pymysql://wallant:ci-password@127.0.0.1:3306/wallant_v2_ci?charset=utf8mb4"
+        run: pytest tests/test_global_control_mysql.py
       - run: |
           migration_db="$(mktemp /tmp/wallant-migration-XXXXXX.db)"
           WALLANT_ENVIRONMENT=test \
@@ -166,7 +185,12 @@ jobs:
       - name: Install ACL inspection dependency
         run: sudo apt-get update && sudo apt-get install -y acl
       - run: npm test
-      - run: npm run build
+      - name: Build frontend with immutable UI SHA marker
+        env:
+          VITE_BUILD_SHA: ${{ github.sha }}
+        run: |
+          npm run build
+          grep -R -F "${VITE_BUILD_SHA}" dist/assets >/dev/null
 
   # 빠른 mock-only 회귀 검사용이며 RC는 manifest 안전 필드까지 독립 검증한다.
   ui-qa:

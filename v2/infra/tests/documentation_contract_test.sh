@@ -58,7 +58,7 @@ done
 
 grep -F '기획안 · 승인 대기' "${board_root}/index.html" >/dev/null
 grep -F '저장·전송·승인되지 않으며' "${board_root}/index.html" >/dev/null
-grep -F '실제 주문 · 증권사 자격증명 · Java 중단 · 접속 경로 변경 없음' \
+grep -F '이번 기획·QA 준비가 만든 실제 주문 · 증권사 자격증명 · Java 중단 · 접속 경로 변경 0건' \
   "${board_root}/index.html" >/dev/null
 grep -F 'C1 인증 화면 읽기 검증은 C0-A와 동시에 진행할 수 있어요.' \
   "${board_root}/index.html" >/dev/null

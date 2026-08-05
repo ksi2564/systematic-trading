@@ -11,7 +11,7 @@
 | 단계 | 지금 상태 | 의미 |
 | --- | --- | --- |
 | 1. 비공개 화면 접근 | **부분 완료** | PR #56 원본 구성과 미인증 UI/API의 Access 리디렉션은 확인했다. 허용 계정 로그인 뒤 실제 화면 QA는 남았다. |
-| 2. 안전한 v2 연구 화면 | **프로세스 배포 확인 · 인증 QA 대기** | v2 API·웹 프로세스와 차단 설정은 확인했다. 허용 계정의 실제 화면·동일 출처 API 증적 전에는 배포 완료로 판정하지 않는다. |
+| 2. 안전한 v2 연구 화면 | **마지막 제어된 배포 확인 · 현재 재확인 필요** | #56 실행 당시 v2 API·웹 프로세스와 차단 설정을 확인했다. 현재 런타임과 허용 계정의 실제 화면·동일 출처 API 증적 전에는 배포 완료로 판정하지 않는다. |
 | 3. QQQM/QLD/TQQQ 자동 섀도 | **미구현** | 평가기는 있지만 공식 데이터 수집·스케줄러·Java 결과 대조가 없다. |
 | 4. 실거래 대체 | **미승인·미구현** | Java 종료, v2 실주문, 계좌 전환은 아직 하지 않는다. |
 
@@ -44,7 +44,7 @@
 - 현재 RC 워크플로 변경은 공통 Java golden·두 스케줄러·프런트엔드
   typecheck/단위 테스트/빌드·no-order Playwright·manifest 안전 검증을 같은
   SHA에서 강제하는 **배포 게이트 후보**임. 아직 실제 RC run 증적은 없음
-- #56 `access-configure` run `30937893445`에서 당시 v2 API, Cloudflare Tunnel, Java,
+- #56 `access-configure` run `30937893445`에서 **그 실행 당시** v2 API, Cloudflare Tunnel, Java,
   Caddy 서비스 활성과 `execution_enabled=false`, `broker_adapter=disabled`, 무인증 API
   `401`을 확인
 - #56 실행은 접근 원본 구성을 갱신한 것이며 v2 자동 섀도나 실주문 기능을 배포한
@@ -53,6 +53,18 @@
   [`QA-ACC-001`](evidence/2026-08-05-QA-ACC-001.md)에서 확인
 - 허용 이메일 로그인, 동일 출처 UI/API와 실제 화면 흐름은 인증된 브라우저 QA
   증적이 있어야 완료로 판정
+- 2026-08-05 08:49 KST 빈 브라우저로 인증 화면 QA를 다시 시도했지만 Access 로그인에서
+  멈췄다. 또한 마지막 GitHub-controlled 배포 #54에는 동일 SHA를 증명할
+  `build_sha`와 배포 QA harness가
+  없으므로, [차단 증적](evidence/2026-08-05-QA-ACC-002-BLOCKED.md)대로 사용자가 새 후보
+  배포를 승인한 뒤에만 배포하고 사용자 로그인 세션으로 GET-only 검증해야 한다
+- #54의 operations status GET은 전역 제어 행이 없을 때 기본 행을 생성할 수 있었다.
+  PR #57 후속 후보는 상태 GET을 순수 조회로 바꾸고 배포 QA allowlist 5개 GET의 전 테이블
+  무변경 회귀 테스트를 추가했다. 이 수정은 아직 미배포다
+- 후속 후보는 exact health 통과 후 현재 후보에만 있는 순수 snapshot을 먼저 고정한다.
+  그 뒤 화면의 5개 GET은 서버로 재전송하지 않고 snapshot으로 채워, health 직후 #54로
+  돌아가도 구 status GET이 DB에 닿지 않게 한다. 성공 증적은 6화면×2 viewport의
+  opaque mask PNG 12개·정제 관찰 JSON 2개·manifest 1개, 정확히 15파일이다
 
 ## 15분 검토 순서
 

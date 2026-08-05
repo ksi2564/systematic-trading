@@ -177,7 +177,10 @@ export function App() {
   };
 
   return (
-    <div className="app-shell">
+    <div
+      className="app-shell"
+      data-wallant-ui-build-sha={import.meta.env.VITE_BUILD_SHA ?? 'development'}
+    >
       <aside className={menuOpen ? 'sidebar is-open' : 'sidebar'}>
         <button className="mobile-close" type="button" onClick={() => setMenuOpen(false)} aria-label="메뉴 닫기">
           <X size={20} />
@@ -230,7 +233,11 @@ export function App() {
             <h1>{navigation.find((item) => item.id === view)?.label}</h1>
           </div>
           <div className="topbar-actions">
-            <span className="mode-chip"><Activity size={14} /> {snapshot.status.environment}</span>
+            <span
+              className="mode-chip"
+              data-qa-sensitive="true"
+              data-qa-sensitive-region="shell-environment"
+            ><Activity size={14} /> {snapshot.status.environment}</span>
             <button className="icon-button" type="button" onClick={() => void refresh()} aria-label="새로고침">
               <RefreshCw size={17} className={loading ? 'spin' : undefined} />
             </button>
@@ -370,7 +377,7 @@ function Overview({
     { label: '데이터셋', value: snapshot.catalog.length, detail: '출처·범위 추적', icon: Database }
   ];
   return (
-    <div className="page-stack">
+    <div className="page-stack" data-qa-screen="overview">
       <section className={snapshot.status.global_emergency_paused || safetyState !== 'verified' ? 'hero danger-hero' : 'hero'}>
         <div>
           <p className="eyebrow">{safetyState === 'verified' ? 'SAFE RESEARCH MODE' : 'SAFETY CHECK REQUIRED'}</p>
@@ -536,7 +543,7 @@ function Strategies({
     setBuilderOpen(false);
   };
   return (
-    <div className="page-stack">
+    <div className="page-stack" data-qa-screen="strategies">
       <section className="page-heading">
         <div><h2>전략 정의</h2><p>저장된 버전은 수정하지 않고 새 버전으로만 발전시킵니다.</p></div>
         <div className="button-row">
@@ -632,7 +639,11 @@ function Strategies({
           </form>
         </Card>
       ) : null}
-      <section className="card-grid">
+      <section
+        className="card-grid"
+        data-qa-sensitive="true"
+        data-qa-sensitive-region="strategy-catalog"
+      >
         {snapshot.strategies.map((strategy) => {
           const latest = strategy.versions.at(-1);
           const next = latest ? nextLifecycle(latest.lifecycle) : null;
@@ -659,8 +670,8 @@ function Strategies({
             </article>
           );
         })}
+        {!snapshot.strategies.length ? <Empty text="첫 전략을 만들어 보세요." action="기존 규칙을 기준으로 만든 Python 후보예요. Java 동등성은 자동 섀도에서 확인합니다." /> : null}
       </section>
-      {!snapshot.strategies.length ? <Empty text="첫 전략을 만들어 보세요." action="기존 규칙을 기준으로 만든 Python 후보예요. Java 동등성은 자동 섀도에서 확인합니다." /> : null}
     </div>
   );
 }
@@ -760,10 +771,14 @@ function Research({ snapshot }: { snapshot: Snapshot }) {
   );
 
   return (
-    <div className="page-stack">
+    <div className="page-stack" data-qa-screen="research">
       <section className="page-heading"><div><h2>전략 연구</h2><p>단일 평가, 백테스트, 롤링 검증이 같은 결정론적 평가기를 사용합니다.</p></div></section>
       <section className="two-column research-grid">
-        <Card title="시장 관측값" subtitle="현재 기준 전략의 상태 전이를 빠르게 확인합니다.">
+        <Card
+          title="시장 관측값"
+          subtitle="현재 기준 전략의 상태 전이를 빠르게 확인합니다."
+          qaSensitive="research-strategy-selector"
+        >
           <form className="form-grid one-column" onSubmit={submit}>
             <Field label="전략 버전">
               <select value={versionId} onChange={(e) => setVersionId(e.target.value)} required>
@@ -995,7 +1010,7 @@ function Accounts({
     setAccountNumber('');
   };
   return (
-    <div className="page-stack">
+    <div className="page-stack" data-qa-screen="accounts">
       <section className="page-heading">
         <div><h2>계좌별 독립 운영</h2><p>신규 계좌는 위험 한도를 갖춘 정지 상태로 생성됩니다.</p></div>
         <button className="primary-button" type="button" onClick={() => setOpen((value) => !value)}><Plus size={16} /> 계좌 등록</button>
@@ -1035,7 +1050,11 @@ function Accounts({
           </form>
         </Card>
       ) : null}
-      <section className="card-grid">
+      <section
+        className="card-grid"
+        data-qa-sensitive="true"
+        data-qa-sensitive-region="account-catalog"
+      >
         {snapshot.accounts.map((account) => (
           <article className="account-card" data-qa-sensitive="true" key={account.id}>
             <div className="card-topline"><StatusBadge value={account.status} /><span>{account.broker}</span></div>
@@ -1082,17 +1101,21 @@ function Accounts({
             </div>
           </article>
         ))}
+        {!snapshot.accounts.length ? <Empty text="계좌가 없습니다." action="위험 한도 없이는 계좌를 생성할 수 없습니다." /> : null}
       </section>
-      {!snapshot.accounts.length ? <Empty text="계좌가 없습니다." action="위험 한도 없이는 계좌를 생성할 수 없습니다." /> : null}
     </div>
   );
 }
 
 function DataCatalog({ snapshot }: { snapshot: Snapshot }) {
   return (
-    <div className="page-stack">
+    <div className="page-stack" data-qa-screen="data">
       <section className="page-heading"><div><h2>시장 데이터 카탈로그</h2><p>Parquet 파일의 출처, 신뢰 수준, 실제 사용 가능 기간을 추적합니다.</p></div></section>
-      <Card title="보유 데이터" subtitle="실전 판단에는 공식 데이터만 사용할 수 있습니다.">
+      <Card
+        title="보유 데이터"
+        subtitle="실전 판단에는 공식 데이터만 사용할 수 있습니다."
+        qaSensitive="market-data-catalog"
+      >
         {snapshot.catalog.length ? (
           <div className="table-wrap"><table><thead><tr><th>종목</th><th>해상도</th><th>출처</th><th>기간</th><th>행</th><th>신뢰</th></tr></thead>
             <tbody data-qa-sensitive="true">{snapshot.catalog.map((row) => <tr key={row.id}><td><strong>{row.symbol}</strong></td><td>{row.resolution}</td><td>{row.provider}</td><td>{row.start_date} – {row.end_date}</td><td>{row.row_count.toLocaleString()}</td><td><StatusBadge value={row.official ? 'OFFICIAL' : 'RESEARCH'} /></td></tr>)}</tbody>
@@ -1116,11 +1139,15 @@ function Operations({
 }) {
   const safetyVerified = safetyState === 'verified';
   return (
-    <div className="page-stack">
+    <div className="page-stack" data-qa-screen="operations">
       <section className="page-heading"><div><h2>안전 제어</h2><p>중요한 오류는 자동 복구하지 않고 사용자의 명시적인 재개를 기다립니다.</p></div></section>
       <section className="two-column">
         <Card title="전체 긴급 정지" subtitle="모든 계좌의 신규 판단과 주문 계획을 차단합니다.">
-          <div className={snapshot.status.global_emergency_paused ? 'control-state is-paused' : 'control-state'}>
+          <div
+            className={snapshot.status.global_emergency_paused ? 'control-state is-paused' : 'control-state'}
+            data-qa-sensitive="true"
+            data-qa-sensitive-region="global-control-reason"
+          >
             <AlertOctagon size={26} />
             <div>
               <strong>{snapshot.status.global_emergency_paused ? '정지됨' : safetyState === 'verified' ? '대기 상태' : '확인 필요'}</strong>
@@ -1152,7 +1179,11 @@ function Operations({
           </ul>
         </Card>
       </section>
-      <Card title="최근 감사 기록" subtitle="승격, 계좌 할당, 정지·재개처럼 운영 상태를 바꾼 동작입니다.">
+      <Card
+        title="최근 감사 기록"
+        subtitle="승격, 계좌 할당, 정지·재개처럼 운영 상태를 바꾼 동작입니다."
+        qaSensitive="operations-audit"
+      >
         {snapshot.audit.length ? (
           <div className="table-wrap">
             <table>
@@ -1220,7 +1251,7 @@ function Empty({ text, action }: { text: string; action: string }) {
 }
 
 function Banner({ tone, onClose, children }: { tone: 'danger' | 'success'; onClose: () => void; children: ReactNode }) {
-  return <div className={`banner ${tone}`} role="alert"><span>{children}</span><button type="button" onClick={onClose}><X size={16} /></button></div>;
+  return <div className={`banner ${tone}`} role="alert" data-qa-sensitive="true" data-qa-sensitive-region="global-notice"><span>{children}</span><button type="button" onClick={onClose}><X size={16} /></button></div>;
 }
 
 function message(cause: unknown): string {

@@ -6,7 +6,7 @@ from fastapi import Depends, FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from wallant.api import accounts, market_data, operations, research, strategies
+from wallant.api import accounts, deployed_qa, market_data, operations, research, strategies
 from wallant.api.dependencies import get_actor
 from wallant.config import Settings, get_settings
 from wallant.persistence.database import (
@@ -69,6 +69,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         accounts.router,
         market_data.router,
         operations.router,
+        deployed_qa.router,
     ):
         app.include_router(
             router,

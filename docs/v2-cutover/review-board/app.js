@@ -180,10 +180,10 @@ const screens = [
     description: "오늘 무엇이 돌고 무엇이 막혔는지",
     content: `
       <div class="mock-grid">
-        <article class="mock-card"><span>기존 시스템</span><strong>서비스·프로세스 번호(PID) 유지</strong><p>전략 켜짐/꺼짐·최근 성공·주문 모드는 C0-B 확인 대기예요.</p></article>
-        <article class="mock-card"><span>v2 주문 안전</span><strong>제출 차단</strong><p>주문 실행 꺼짐 · 브로커 연결 없음</p></article>
+        <article class="mock-card"><span>기존 시스템</span><strong>마지막 제어 작업에서 미중단</strong><p>현재 서비스·전략 켜짐/꺼짐·최근 성공·주문 모드는 C0-B 확인 대기예요.</p></article>
+        <article class="mock-card"><span>v2 주문 안전 예시</span><strong>후보 코드상 제출 차단</strong><p>검토 중인 화면 예시예요. 현재 원격 값은 다시 확인해야 해요.</p></article>
         <article class="mock-card"><span>오늘의 다음 일정</span><strong>기획 확정 대기</strong><p>자동 실행기는 C0-B 뒤 개발해요.</p></article>
-        <article class="mock-card full"><span>오늘 확인할 일</span><ul class="gate-list"><li><strong>C0-A D-01~D-10</strong><small>사용자 검토</small></li><li><strong>C0-B 운영 상태 복사본</strong><small>아직 수집 안 함</small></li><li><strong>인증된 화면 검증</strong><small>로그인 세션 대기</small></li></ul></article>
+        <article class="mock-card full"><span>오늘 확인할 일</span><ul class="gate-list"><li><strong>C0-A D-01~D-10</strong><small>사용자 검토</small></li><li><strong>C0-B 운영 상태 복사본</strong><small>아직 수집 안 함</small></li><li><strong>인증된 화면 검증</strong><small>사용자 승인 검증 SHA 배포·로그인 세션 대기</small></li></ul></article>
       </div>`,
   },
   {
@@ -203,9 +203,10 @@ const screens = [
     description: "누가 언제 무엇을 검증했는지",
     content: `
       <div class="mock-grid">
-        <article class="mock-card full"><span>검증 단계</span><ul class="evidence-list"><li><strong>로컬 가상 화면 검증</strong><small>기능 후보 1520166 · 26 / 26 통과</small></li><li><strong>내 작업 버전 자동 검사</strong><small>브랜치 CI 30959376884 · 5개 작업 통과</small></li><li><strong>기준 버전과 합친 상태 검사</strong><small>PR CI 30959379072 · 5개 작업 통과</small></li><li><strong>증적 참조 무결성</strong><small>78개 참조 · 모두 해시 검증 통과</small></li><li><strong>운영 배포·인증 화면 검증</strong><small>미실행 · 사용자 세션 대기</small></li></ul></article>
-        <article class="mock-card wide"><span>민감정보 처리</span><strong>마스킹 뒤 보존</strong><p>원본 실행 기록과 로그인 상태는 저장소 밖, 소유자만 읽을 수 있는 경로를 사용해요.</p></article>
-        <article class="mock-card"><span>실제 주문</span><strong>0건</strong><p>화면 조회 이외 요청은 차단해요.</p></article>
+        <article class="mock-card full"><span>검증 단계</span><ul class="evidence-list"><li><strong>로컬 가상 화면 검증</strong><small>기능 후보 1520166 · 26 / 26 통과</small></li><li><strong>내 작업 버전 자동 검사</strong><small>브랜치 CI 30959376884 · 5개 작업 통과</small></li><li><strong>기준 버전과 합친 상태 검사</strong><small>PR CI 30959379072 · 5개 작업 통과</small></li><li><strong>증적 참조 무결성</strong><small>78개 참조 · 모두 해시 검증 통과</small></li><li><strong>운영 배포·인증 화면 검증</strong><small>차단 확인 · 사용자 승인 배포와 로그인 세션 대기</small></li><li><strong>성공 증적 계약</strong><small>6개 화면 × 2크기 · 그림 12 + 관찰 2 + 검증 목록 1</small></li></ul></article>
+        <article class="mock-card wide"><span>읽기 전용 방식</span><strong>안전 확인 1 + 고정 조회 1</strong><p>화면의 5개 조회는 고정 조회 묶음으로 응답해 서버에 다시 보내지 않아요.</p></article>
+        <article class="mock-card wide"><span>민감정보 처리</span><strong>정제·마스킹 뒤 증적</strong><p>로그인 상태는 저장소 밖 별도 경로에 두고 증적에는 넣지 않아요.</p></article>
+        <article class="mock-card"><span>이번 화면 QA의 주문 제출</span><strong>0건</strong><p>화면 조회 이외 앱 요청은 차단해요.</p></article>
       </div>`,
   },
   {
@@ -222,17 +223,17 @@ const screens = [
 ];
 
 const traceRows = [
-  ["D-01~02", "V2-STR-001 · V2-STR-002 · V2-DAT-001", "S-02 · S-04 · S-06", "QA-PAR-001", "직전 실행 버전에서 수식·주문 방향 비교 통과 · 운영값 미수집", "부분", "C0-A/B"],
+  ["D-01~02", "V2-STR-001 · V2-STR-002 · V2-DAT-001", "S-02 · S-04 · S-06", "QA-PAR-001", "저장소 Java 후보와 공통 시험값의 수식·주문 방향 비교 통과 · 운영값 미수집", "부분", "C0-A/B"],
   ["D-03", "V2-AUT-001 · V2-DAT-001", "S-01 · S-04 · S-06", "QA-SHD-001/002", "계획만 있음 · 실행·증적 파일 없음", "미구현", "C0-B"],
   ["D-04", "V2-DAT-001 · V2-SAF-001", "S-01 · S-07", "QA-SAF-001", "현재 UI 잠금만 통과 · 운영 입력 미검증", "부분", "C0-B"],
   ["D-05~06", "V2-STR-002 · V2-PER-001", "S-04 · S-05", "QA-PAR-001", "Python 후보 수량·저장만 통과 · Java/Python 수량 비교와 실제 주문 미리보기 없음", "부분", "C0-B"],
-  ["D-07", "V2-QA-001", "S-03 · S-08", "QA-NAV-001 · QA-OPS-001 · QA-RWD-001 · QA-SAF-001", "기능 후보 1520166 · 로컬 가상 화면 26/26·브랜치 CI 30959376884·PR 병합 CI 30959379072·증적 참조 78개 해시 검증 통과 · QA-OPS-002와 QA-MAN-001~009 위험 작업 미실행", "부분", "검증 범위 승인"],
+  ["D-07", "V2-QA-001", "S-03 · S-08", "QA-NAV-001 · QA-OPS-001 · QA-RWD-001 · QA-SAF-001", "기능 후보 1520166 · 로컬 가상 화면 26/26·브랜치 CI 30959376884·PR 병합 CI 30959379072·증적 참조 78개 해시 검증 통과 · 배포 증적 계약은 6화면×2, 정확히 15파일 · QA-OPS-002와 QA-MAN-001~009 위험 작업 미실행", "부분", "배포 승인·로그인"],
   ["D-08", "V2-REL-001", "S-04 · S-09", "QA-SHD-001/002", "세 가지 비교 모두 0/20", "미구현", "C3 진입"],
   ["D-09", "V2-RBK-001", "S-07 · S-09", "QA-INF-001", "격리 장애 시험 통과 · 실제 공유 시험 서버 훈련 없음", "부분", "C4 실행 승인"],
-  ["D-10", "V2-LIV-001 · V2-APR-001", "S-05 · S-09", "C5-A/B 계획", "실제 주문 0건 · 제한 시험 없음", "미구현", "단건→범위→전환 승인"],
-  ["C1 접근", "V2-ACC-001", "S-00", "QA-ACC-001/002", "미인증 경계 통과 · 인증 화면 미실행", "부분", "로그인 검증"],
+  ["D-10", "V2-LIV-001 · V2-APR-001", "S-05 · S-09", "C5-A/B 계획", "QA-ACC-002 시도가 제출한 실제 주문 0건 · 실운영 전체 주문 여부 미확인 · 제한 시험 없음", "미구현", "단건→범위→전환 승인"],
+  ["C1 접근", "V2-ACC-001", "S-00", "QA-ACC-001/002", "미인증 경계 통과 · 마지막 GitHub-controlled #54는 버전 표시 없음 · 사용자 승인 새 검증 SHA와 로그인 세션 대기", "부분", "배포 승인 뒤 로그인 검증"],
   ["C1 격리", "V2-CUT-001 · V2-CUT-002", "S-01 · S-09", "QA-CUT-001", "서비스·프로세스 번호 연속성 시험 통과 · 실제 운용 미확인", "부분", "C0-B"],
-  ["현재 UI", "V2-UI-001 · V2-OPS-001", "현재 콘솔(S-01 일부 · S-02 · S-03 · S-05 · S-06 · S-07)", "QA-NAV-001 · QA-OPS-001 · QA-SAF-001 · QA-RWD-001", "기능 후보 1520166 · 로컬 가상 화면 26/26·브랜치 CI 30959376884·PR 병합 CI 30959379072 통과 · 운영 배포·인증 화면 미실행", "부분", "배포 인증 검증"],
+  ["현재 UI", "V2-UI-001 · V2-OPS-001", "현재 콘솔(S-01 일부 · S-02 · S-03 · S-05 · S-06 · S-07)", "QA-NAV-001 · QA-OPS-001 · QA-SAF-001 · QA-RWD-001", "기능 후보 1520166 · 로컬 가상 화면 26/26·브랜치 CI 30959376884·PR 병합 CI 30959379072 통과 · 운영 배포·인증 화면 미실행", "부분", "사용자 승인 배포 뒤 인증 QA"],
   ["C2 미래 화면", "V2-OPS-001 · V2-API-001", "S-01 · S-04 · S-08", "QA-SHD-001/002", "자동 병행 비교의 실행·조회 기능·화면 모두 미구현", "미구현", "C0-B"],
   ["공통 명세", "V2-DOC-001", "기획 미리보기 S-01 · S-04 · S-08 · S-09", "QA-PLN-001", "보드 탐색 2/2 · 기능 구현 증적 아님", "부분", "D-01~10"],
 ];

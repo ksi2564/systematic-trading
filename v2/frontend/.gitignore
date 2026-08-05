@@ -1,3 +1,6 @@
 /artifacts/playwright/
 /dist/
 /node_modules/
+/.auth/
+*access-state*.json
+*storage-state*.json

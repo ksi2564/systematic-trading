@@ -19,8 +19,12 @@ test('[QA-PLN-001] C0 결정·화면·추적 보드를 주문 없이 검토한�
   await expect(page.getByRole('heading', { name: /지금 결정할 건/ })).toBeVisible();
   await expect(page.getByText('기획안 · 승인 대기', { exact: true })).toBeVisible();
   const safetyStrip = page.getByLabel('현재 안전 상태');
-  await expect(safetyStrip.getByText('서비스 유지 · 운용 확인 대기', { exact: true })).toBeVisible();
-  await expect(safetyStrip.getByText('구조적으로 차단', { exact: true })).toBeVisible();
+  await expect(
+    safetyStrip.getByText('마지막 제어 작업에서 미중단 · C0-B 재확인 대기', { exact: true })
+  ).toBeVisible();
+  await expect(
+    safetyStrip.getByText('코드 후보는 차단 · 원격 재확인 대기', { exact: true })
+  ).toBeVisible();
   await expect(page.getByText('C1 인증 화면 읽기 검증은 C0-A와 동시에 진행할 수 있어요.', { exact: true })).toBeVisible();
   await expect(page.getByText('사용자 로그인 필요', { exact: true })).toBeVisible();
   await expect(page.getByText(/임시 로그인 세션은 저장소 밖 소유자 전용 경로/)).toBeVisible();
@@ -67,7 +71,10 @@ test('[QA-PLN-001] C0 결정·화면·추적 보드를 주문 없이 검토한�
   await expect(page.getByText('증적 참조 무결성', { exact: true })).toBeVisible();
   await expect(page.getByText('78개 참조 · 모두 해시 검증 통과', { exact: true })).toBeVisible();
   await expect(page.getByText('운영 배포·인증 화면 검증', { exact: true })).toBeVisible();
-  await expect(page.getByText('미실행 · 사용자 세션 대기', { exact: true })).toBeVisible();
+  await expect(page.getByText(
+    '차단 확인 · 사용자 승인 배포와 로그인 세션 대기',
+    { exact: true }
+  )).toBeVisible();
   await expectNoHorizontalOverflow(page);
   const projectViewport = page.viewportSize();
   await page.setViewportSize({ width: 320, height: 800 });

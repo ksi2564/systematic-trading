@@ -4,6 +4,8 @@ from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
 from sqlalchemy import select
+from sqlalchemy.dialects.mysql import insert as mysql_insert
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
@@ -26,6 +28,9 @@ from wallant.persistence.models import (
 
 class DuplicateStrategyVersionError(ValueError):
     pass
+
+
+GLOBAL_CONTROL_MISSING_REASON = "전역 안전 제어 상태를 확인할 수 없습니다."
 
 
 class InvalidLifecycleTransitionError(ValueError):
@@ -327,16 +332,45 @@ class GlobalControlRepository:
     def __init__(self, session: Session) -> None:
         self.session = session
 
-    def get(self) -> GlobalControlRecord:
-        control = self.session.get(GlobalControlRecord, "GLOBAL")
+    def read(self) -> GlobalControlRecord | None:
+        """Return the persisted control without creating or committing anything."""
+        with self.session.no_autoflush:
+            return self.session.get(GlobalControlRecord, "GLOBAL")
+
+    def _get_or_create_for_write(self) -> GlobalControlRecord:
+        values = {
+            "singleton_key": "GLOBAL",
+            "emergency_paused": False,
+            "reason": None,
+            "updated_at": datetime.now(UTC),
+        }
+        dialect = self.session.get_bind().dialect.name
+        if dialect == "mysql":
+            insert_statement = mysql_insert(GlobalControlRecord).values(**values)
+            ensure_statement = insert_statement.on_duplicate_key_update(
+                singleton_key=insert_statement.inserted.singleton_key
+            )
+        elif dialect == "sqlite":
+            ensure_statement = sqlite_insert(GlobalControlRecord).values(**values).on_conflict_do_nothing(
+                index_elements=["singleton_key"]
+            )
+        else:
+            raise RuntimeError(f"지원하지 않는 전역 제어 DB dialect입니다: {dialect}")
+
+        # The upsert acquires the write serialization point without committing.
+        # State and its audit event are committed together below.
+        self.session.execute(ensure_statement)
+        control = self.session.scalar(
+            select(GlobalControlRecord)
+            .where(GlobalControlRecord.singleton_key == "GLOBAL")
+            .with_for_update()
+        )
         if control is None:
-            control = GlobalControlRecord(singleton_key="GLOBAL")
-            self.session.add(control)
-            self.session.commit()
+            raise RuntimeError("전역 제어 행을 잠그고 읽지 못했습니다.")
         return control
 
     def pause(self, reason: str, *, actor: str) -> GlobalControlRecord:
-        control = self.get()
+        control = self._get_or_create_for_write()
         control.emergency_paused = True
         control.reason = reason.strip()
         self.session.add(
@@ -354,7 +388,7 @@ class GlobalControlRepository:
     def resume(self, *, actor: str, confirmed: bool) -> GlobalControlRecord:
         if not confirmed:
             raise ValueError("전체 재개에는 명시적인 확인이 필요합니다.")
-        control = self.get()
+        control = self._get_or_create_for_write()
         control.emergency_paused = False
         control.reason = None
         self.session.add(

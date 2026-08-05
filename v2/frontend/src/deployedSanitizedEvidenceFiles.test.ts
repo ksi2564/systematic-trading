@@ -25,8 +25,43 @@ import {
 
 const temporaryRoots: string[] = [];
 const expectedBuildSha = '0'.repeat(40);
-const requiredScreens = ['오늘의 운영', '전략 빌더', '연구·검증', '계좌·위험', '데이터', '안전·감사'];
+const requiredScreens = [
+  {
+    id: 'overview',
+    label: '오늘의 운영',
+    maskedRegions: ['recent-accounts', 'recent-strategies', 'shell-environment', 'summary-metrics']
+  },
+  {
+    id: 'strategies',
+    label: '전략 빌더',
+    maskedRegions: ['shell-environment', 'strategy-catalog']
+  },
+  {
+    id: 'research',
+    label: '연구·검증',
+    maskedRegions: ['research-strategy-selector', 'shell-environment']
+  },
+  {
+    id: 'accounts',
+    label: '계좌·위험',
+    maskedRegions: ['account-catalog', 'shell-environment']
+  },
+  {
+    id: 'data',
+    label: '데이터',
+    maskedRegions: ['market-data-catalog', 'shell-environment']
+  },
+  {
+    id: 'operations',
+    label: '안전·감사',
+    maskedRegions: ['global-control-reason', 'operations-audit', 'shell-environment']
+  }
+] as const;
+const expectedMasking =
+  'every deployed screen uses its exact registered sensitive-region set with opaque Playwright locator masks';
 const requiredApiRouteIds = [
+  'health-safety-gate',
+  'deployed-read-only-snapshot',
   'operations-status',
   'strategies',
   'accounts',
@@ -36,6 +71,24 @@ const requiredApiRouteIds = [
 
 function sha256(path: string) {
   return createHash('sha256').update(readFileSync(path)).digest('hex');
+}
+
+function deployedNetworkObservation() {
+  return {
+    allowedStaticRequestCount: 3,
+    allowedApiRequestCount: requiredApiRouteIds.length,
+    apiRequestCountByRouteId: Object.fromEntries(requiredApiRouteIds.map((routeId) => [routeId, 1])),
+    preflightBackendGetCount: 2,
+    uiApiLocalFulfillCount: requiredApiRouteIds.length - 2,
+    uiApiBackendContinueCount: 0,
+    unexpectedPageCount: 0,
+    unsafeMethodCount: 0,
+    externalRequestCount: 0,
+    disallowedPathCount: 0,
+    webSocketCount: 0,
+    consoleErrorCount: 0,
+    pageErrorCount: 0
+  };
 }
 
 function temporaryRoot() {
@@ -50,34 +103,44 @@ function writeIndependentVerifierFixture(root: string) {
     { project: 'deployed-desktop-readonly', viewport: { width: 1440, height: 1000 } },
     { project: 'deployed-mobile-readonly', viewport: { width: 360, height: 800 } }
   ] as const;
-  const network = {
-    allowedStaticRequestCount: 3,
-    allowedApiRequestCount: requiredApiRouteIds.length,
-    apiRequestCountByRouteId: Object.fromEntries(requiredApiRouteIds.map((routeId) => [routeId, 1])),
-    unsafeMethodCount: 0,
-    externalRequestCount: 0,
-    disallowedPathCount: 0,
-    webSocketCount: 0,
-    consoleErrorCount: 0,
-    pageErrorCount: 0
-  };
+  const network = deployedNetworkObservation();
   const scenarios = projects.map(({ project, viewport }) => {
-    const screenshotName = `QA-ACC-002-${project}-masked.png`;
     const observationName = `QA-ACC-002-${project}-sanitized-observation.json`;
-    const screenshotPath = join(root, screenshotName);
     const observationPath = join(root, observationName);
-    writeFileSync(
-      screenshotPath,
-      Buffer.from(
-        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl2w9sAAAAASUVORK5CYII=',
-        'base64'
-      ),
-      { mode: 0o600 }
-    );
-    chmodSync(screenshotPath, 0o600);
-    const screenshotHash = sha256(screenshotPath);
+    const screenFixture = requiredScreens.map((screen) => {
+      const screenshotName = `QA-ACC-002-${project}-${screen.id}-masked.png`;
+      const screenshotPath = join(root, screenshotName);
+      writeFileSync(
+        screenshotPath,
+        Buffer.from(
+          'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl2w9sAAAAASUVORK5CYII=',
+          'base64'
+        ),
+        { mode: 0o600 }
+      );
+      chmodSync(screenshotPath, 0o600);
+      const screenshotHash = sha256(screenshotPath);
+      return {
+        observation: {
+          id: screen.id,
+          label: screen.label,
+          horizontalOverflowPx: 0,
+          maskedRegions: [...screen.maskedRegions],
+          screenshot: {
+            fileName: screenshotName,
+            sha256: screenshotHash,
+            masking: expectedMasking
+          }
+        },
+        evidence: {
+          kind: 'opaque-masked-screenshot',
+          path: screenshotName,
+          sha256: screenshotHash
+        }
+      };
+    });
     const observation = {
-      schemaVersion: '2.1',
+      schemaVersion: '2.3',
       observationType: 'DEPLOYED_READ_ONLY_UI_QA_SANITIZED_OBSERVATION',
       qaId: 'QA-ACC-002',
       environment: 'deployed',
@@ -85,24 +148,19 @@ function writeIndependentVerifierFixture(root: string) {
       project,
       browserName: 'chromium',
       viewport,
-      maskedRegions: ['recent-accounts', 'recent-strategies', 'summary-metrics'],
-      verifiedScreens: requiredScreens,
+      screens: screenFixture.map((screen) => screen.observation),
       expectedBuildSha,
       observedBuildSha: expectedBuildSha,
+      observedUiBuildSha: expectedBuildSha,
       qaStartedAt: '2026-08-05T00:00:00.000Z',
       observationFinishedAt: '2026-08-05T00:01:00.000Z',
       operationsSafety: { execution_enabled: false, broker_adapter: 'disabled' },
       harnessSafety: {
         realOrderSubmissionAllowed: false,
-        requestPolicy: 'exact-origin allowlisted GET/HEAD only',
+        requestPolicy: 'candidate-only snapshot; allowlisted UI GET fulfilled locally; exact-origin static GET/HEAD only',
         resourceMutationCount: 0
       },
       network,
-      screenshot: {
-        fileName: screenshotName,
-        sha256: screenshotHash,
-        masking: 'required overview summary-metrics, recent-strategies, and recent-accounts covered by opaque Playwright locator masks'
-      },
       excludedSecretCategories: [
         'cookies',
         'authorization headers',
@@ -122,25 +180,25 @@ function writeIndependentVerifierFixture(root: string) {
       project,
       browserName: 'chromium',
       viewport,
-      maskedRegions: ['recent-accounts', 'recent-strategies', 'summary-metrics'],
+      screens: screenFixture.map((screen) => screen.observation),
       status: 'PASS',
       playwrightStatus: 'passed',
       errorCategories: [],
       observedBuildSha: expectedBuildSha,
+      observedUiBuildSha: expectedBuildSha,
       operationsSafety: { execution_enabled: false, broker_adapter: 'disabled' },
       network,
-      verifiedScreens: requiredScreens,
       startedAt: '2026-08-05T00:00:00.000Z',
       finishedAt: '2026-08-05T00:01:00.000Z',
       evidence: [
-        { kind: 'opaque-masked-screenshot', path: screenshotName, sha256: screenshotHash },
+        ...screenFixture.map((screen) => screen.evidence),
         { kind: 'sanitized-observation', path: observationName, sha256: sha256(observationPath) }
       ]
     };
   });
   const manifestPath = join(root, 'manifest.json');
   writeFileSync(manifestPath, `${JSON.stringify({
-    schemaVersion: '2.0',
+    schemaVersion: '2.2',
     evidenceType: 'DEPLOYED_READ_ONLY_UI_QA',
     qaId: 'QA-ACC-002',
     runStatus: 'PASS',
@@ -149,7 +207,7 @@ function writeIndependentVerifierFixture(root: string) {
     runtimeMatrix: projects.map(({ project, viewport }) => ({ project, browserName: 'chromium', viewport })),
     baseUrlHost: 'app.wall-ant.com',
     exactOrigin: 'https://app.wall-ant.com',
-    requestPolicy: 'exact-origin allowlisted GET/HEAD only',
+    requestPolicy: 'candidate-only snapshot; allowlisted UI GET fulfilled locally; exact-origin static GET/HEAD only',
     automaticCapture: { trace: false, screenshotOnFailure: false, video: false },
     artifactRetention: {
       sanitizedArtifactsOnly: true,
@@ -164,7 +222,9 @@ function writeIndependentVerifierFixture(root: string) {
   }, null, 2)}\n`, { mode: 0o600 });
   chmodSync(manifestPath, 0o600);
   return {
-    screenshotName: scenarios[0].evidence[0].path,
+    screenshotNames: scenarios.flatMap((scenario) => scenario.evidence
+      .filter((item) => item.kind === 'opaque-masked-screenshot')
+      .map((item) => item.path)),
     projects,
     scenarios
   };
@@ -314,6 +374,118 @@ describe('배포 QA 증적 파일 경계', () => {
     expect(result).toEqual({ status: 'failed' });
   });
 
+  it('raw 6화면 attachment를 viewport별로 정제해 12 PNG exact bundle을 만든다', async () => {
+    const root = temporaryRoot();
+    chmodSync(root, 0o700);
+    const projects = [
+      { project: 'deployed-desktop-readonly', viewport: { width: 1440, height: 1000 } },
+      { project: 'deployed-mobile-readonly', viewport: { width: 360, height: 800 } }
+    ] as const;
+    const reporter = new DeployedEvidenceReporter({
+      evidenceRoot: root,
+      expectedBuildSha,
+      harnessGitSha: expectedBuildSha
+    });
+    const reporterInternals = reporter as unknown as {
+      runtimeByProject: Map<string, { browserName: string; viewport: { width: number; height: number } }>;
+      runtimeConfigValid: boolean;
+    };
+    reporterInternals.runtimeConfigValid = true;
+
+    for (const { project, viewport } of projects) {
+      reporterInternals.runtimeByProject.set(project, { browserName: 'chromium', viewport });
+      const resultRoot = join(root, 'results', project);
+      mkdirSync(resultRoot, { recursive: true, mode: 0o700 });
+      const attachments: Array<{
+        name: string;
+        contentType: string;
+        path?: string;
+        body?: Buffer;
+      }> = [];
+      const screens = requiredScreens.map((screen) => {
+        const screenshotName = `QA-ACC-002-${project}-${screen.id}-masked.png`;
+        const screenshotPath = join(resultRoot, screenshotName);
+        writeFileSync(
+          screenshotPath,
+          Buffer.from(
+            'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl2w9sAAAAASUVORK5CYII=',
+            'base64'
+          ),
+          { mode: 0o600 }
+        );
+        attachments.push({
+          name: `masked-deployed-screenshot:${screen.id}`,
+          contentType: 'image/png',
+          path: screenshotPath
+        });
+        return {
+          id: screen.id,
+          label: screen.label,
+          horizontalOverflowPx: 0,
+          maskedRegions: [...screen.maskedRegions],
+          screenshot: {
+            fileName: screenshotName,
+            sha256: sha256(screenshotPath),
+            masking: expectedMasking
+          }
+        };
+      });
+      attachments.push({
+        name: 'deployed-readonly-observation',
+        contentType: 'application/json',
+        body: Buffer.from(`${JSON.stringify({
+          schemaVersion: '2.2',
+          observationType: 'DEPLOYED_READ_ONLY_UI_QA_OBSERVATION',
+          qaId: 'QA-ACC-002',
+          environment: 'deployed',
+          baseUrlHost: 'app.wall-ant.com',
+          project,
+          browserName: 'chromium',
+          viewport,
+          screens,
+          expectedBuildSha,
+          observedBuildSha: expectedBuildSha,
+          observedUiBuildSha: expectedBuildSha,
+          qaStartedAt: '2026-08-05T00:00:00.000Z',
+          observationFinishedAt: '2026-08-05T00:01:00.000Z',
+          operationsSafety: { execution_enabled: false, broker_adapter: 'disabled' },
+          harnessSafety: {
+            realOrderSubmissionAllowed: false,
+            requestPolicy: 'candidate-only snapshot; allowlisted UI GET fulfilled locally; exact-origin static GET/HEAD only',
+            resourceMutations: []
+          },
+          network: deployedNetworkObservation(),
+          excludedSecrets: [
+            'cookies',
+            'authorization headers',
+            'OTP',
+            'Access tokens',
+            'account numbers',
+            'request headers',
+            'query strings'
+          ],
+          automaticPlaywrightCapture: { trace: false, screenshotOnFailure: false, video: false }
+        }, null, 2)}\n`, 'utf8')
+      });
+      reporter.onTestEnd({
+        parent: { project: () => ({ name: project }) },
+        titlePath: () => ['QA-ACC-002'],
+        expectedStatus: 'passed'
+      } as never, {
+        status: 'passed',
+        attachments,
+        startTime: new Date('2026-08-05T00:00:00.000Z'),
+        duration: 60_000
+      } as never);
+    }
+
+    expect(await reporter.onEnd({ status: 'passed' } as never)).toBeUndefined();
+    const entries = readdirSync(root);
+    expect(entries.filter((entry) => entry.endsWith('.png'))).toHaveLength(12);
+    expect(entries.filter((entry) => entry.endsWith('-sanitized-observation.json'))).toHaveLength(2);
+    expect(entries).toHaveLength(15);
+  });
+
   it('reporter가 만든 exact PASS bundle을 독립 verifier가 통과시키고 hash 변조는 거부한다', async () => {
     const root = temporaryRoot();
     const outsideRoot = temporaryRoot();
@@ -335,6 +507,8 @@ describe('배포 QA 증적 파일 경계', () => {
     }
     reporterInternals.runtimeConfigValid = true;
     expect(await reporter.onEnd({ status: 'passed' } as never)).toBeUndefined();
+    expect(fixture.screenshotNames).toHaveLength(12);
+    expect(readdirSync(root)).toHaveLength(15);
 
     const verifierPath = join(process.cwd(), 'e2e-deployed', 'verify-sanitized-evidence.mjs');
     const environment = {
@@ -347,8 +521,31 @@ describe('배포 QA 증적 파일 경계', () => {
     expect(passed.status, passed.stderr).toBe(0);
     expect(passed.stdout).toContain('DEPLOYED_READ_ONLY_UI_QA VERIFIED_PASS');
 
+    const firstScreenshotPath = join(root, fixture.screenshotNames[0]!);
+    chmodSync(firstScreenshotPath, 0o700);
+    const wrongFileMode = spawnSync(process.execPath, [verifierPath], {
+      env: environment,
+      encoding: 'utf8'
+    });
+    expect(wrongFileMode.status).toBe(1);
+    expect(wrongFileMode.stderr).toContain(
+      'DEPLOYED_READ_ONLY_UI_QA VERIFIED_FAIL EVIDENCE_PERMISSIONS_NOT_600'
+    );
+    chmodSync(firstScreenshotPath, 0o600);
+
+    chmodSync(root, 0o500);
+    const wrongRootMode = spawnSync(process.execPath, [verifierPath], {
+      env: environment,
+      encoding: 'utf8'
+    });
+    expect(wrongRootMode.status).toBe(1);
+    expect(wrongRootMode.stderr).toContain(
+      'DEPLOYED_READ_ONLY_UI_QA VERIFIED_FAIL OUTPUT_ROOT_PERMISSIONS_NOT_700'
+    );
+    chmodSync(root, 0o700);
+
     const hardlinkPath = join(outsideRoot, 'hardlinked-evidence.png');
-    linkSync(join(root, fixture.screenshotName), hardlinkPath);
+    linkSync(join(root, fixture.screenshotNames[0]!), hardlinkPath);
     const hardlinked = spawnSync(process.execPath, [verifierPath], { env: environment, encoding: 'utf8' });
     expect(hardlinked.status).toBe(1);
     expect(hardlinked.stderr).toContain('DEPLOYED_READ_ONLY_UI_QA VERIFIED_FAIL EVIDENCE_LINK_COUNT_INVALID');
@@ -356,6 +553,46 @@ describe('배포 QA 증적 파일 경계', () => {
 
     const manifestPath = join(root, 'manifest.json');
     const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
+    const originalEvidence = [...manifest.scenarios[0].evidence];
+    manifest.scenarios[0].evidence = originalEvidence.slice(1);
+    writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, { mode: 0o600 });
+    chmodSync(manifestPath, 0o600);
+    const missingScreenshot = spawnSync(process.execPath, [verifierPath], {
+      env: environment,
+      encoding: 'utf8'
+    });
+    expect(missingScreenshot.status).toBe(1);
+    expect(missingScreenshot.stderr).toContain(
+      'DEPLOYED_READ_ONLY_UI_QA VERIFIED_FAIL SCENARIO_EVIDENCE_COUNT_INVALID'
+    );
+
+    manifest.scenarios[0].evidence = [...originalEvidence, originalEvidence[0]];
+    writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, { mode: 0o600 });
+    chmodSync(manifestPath, 0o600);
+    const duplicateScreenshot = spawnSync(process.execPath, [verifierPath], {
+      env: environment,
+      encoding: 'utf8'
+    });
+    expect(duplicateScreenshot.status).toBe(1);
+    expect(duplicateScreenshot.stderr).toContain(
+      'DEPLOYED_READ_ONLY_UI_QA VERIFIED_FAIL SCENARIO_EVIDENCE_COUNT_INVALID'
+    );
+
+    manifest.scenarios[0].evidence = originalEvidence;
+    const originalRegions = [...manifest.scenarios[0].screens[0].maskedRegions];
+    manifest.scenarios[0].screens[0].maskedRegions = originalRegions.slice(1);
+    writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, { mode: 0o600 });
+    chmodSync(manifestPath, 0o600);
+    const missingMaskRegion = spawnSync(process.execPath, [verifierPath], {
+      env: environment,
+      encoding: 'utf8'
+    });
+    expect(missingMaskRegion.status).toBe(1);
+    expect(missingMaskRegion.stderr).toContain(
+      'DEPLOYED_READ_ONLY_UI_QA VERIFIED_FAIL SCREEN_MASKING_REGIONS_INVALID'
+    );
+    manifest.scenarios[0].screens[0].maskedRegions = originalRegions;
+
     const observationEvidence = manifest.scenarios[0].evidence.find(
       (item: { kind: string }) => item.kind === 'sanitized-observation'
     );
@@ -377,7 +614,7 @@ describe('배포 QA 증적 파일 경계', () => {
     const canonicalObservation = `${JSON.stringify(observation, null, 2)}\n`;
     const duplicateKeyObservation = canonicalObservation.replace(
       '{\n',
-      '{\n  "schemaVersion": "2.1",\n'
+      '{\n  "schemaVersion": "2.3",\n'
     );
     writeFileSync(observationPath, duplicateKeyObservation, { mode: 0o600 });
     chmodSync(observationPath, 0o600);
@@ -390,7 +627,7 @@ describe('배포 QA 증적 파일 경계', () => {
       'DEPLOYED_READ_ONLY_UI_QA VERIFIED_FAIL OBSERVATION_JSON_NOT_CANONICAL'
     );
 
-    writeFileSync(join(root, fixture.screenshotName), 'tampered', { mode: 0o600 });
+    writeFileSync(join(root, fixture.screenshotNames[0]!), 'tampered', { mode: 0o600 });
     const failed = spawnSync(process.execPath, [verifierPath], { env: environment, encoding: 'utf8' });
     expect(failed.status).toBe(1);
     expect(failed.stderr).toContain('DEPLOYED_READ_ONLY_UI_QA VERIFIED_FAIL EVIDENCE_HASH_MISMATCH');

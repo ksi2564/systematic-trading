@@ -7,15 +7,16 @@
 
 | 레인 | 상태 | 허용 동작 | 금지 동작 | 권한 |
 | --- | --- | --- | --- | --- |
-| #56 접근 경로 | 적용됨 | Access/Caddy를 통한 비공개 UI·API 접근 | 자동 전략·주문 완료로 간주 | 읽기·QA 자동 진행 가능, DNS/정책 변경은 사용자 승인 필수 |
+| #56 접근 경로 | 적용 기록 있음 · 현재 재확인 필요 | Access/Caddy를 통한 비공개 UI·API 접근 | 자동 전략·주문 완료로 간주 | 후보 배포·DNS/정책 변경은 사용자 승인 필수, 승인 배포 뒤 GET-only QA 자동 가능 |
 | 안전 섀도 | 개발 대상 | 공식 데이터 읽기, 상태 평가, 주문 의도 계산, Java 대조, 증적 저장 | 브로커 주문 제출, Java 상태 변경 | C0 범위 승인 이후 자동 진행 가능 |
 | 미래 LIVE | 미구현 | 승인된 계좌에 제한 실행 | 승인 없는 주문·자동 확대 | 사용자 승인 필수 |
 
-현재 배포된 앱 본체는 #54 커밋 `66e374c`다. `master@8eb580b` 기준
+마지막 GitHub-controlled 앱 본체 배포는 #54 커밋 `66e374c`다. `master@8eb580b` 기준
 #55와 #56 사이에는 `v2/backend`, `v2/frontend` 변경이 없어 #54 배포본과
 같았다. 현재 작업 트리 변경은 미배포 상태다. #56은 앱
 바이너리 재배포가 아니라 공개 Host를 허용하도록 Access/Caddy 원본 경로를 수정한
-작업이다.
+작업이다. 현재 원격 release·PID·health는 host key 검증을 우회하지 않아 이번 작업에서
+재확인하지 못했다.
 
 ## 2. 목표 흐름
 
@@ -190,9 +191,10 @@ SCHEDULED → COLLECTING → VALIDATING → EVALUATING → COMPARING → COMPLET
 
 ### 3.7 Java 기준선 seed와 oracle
 
-- C2 최초 실행 전에 원격 Java의 코드 SHA, effective 설정, 최신 EOD 상태, 그 바로 전
+- C0-A 승인 뒤 C2 개발을 시작하기 전에 C0-B에서 원격 Java의 코드 SHA, effective 설정, 최신 EOD 상태, 그 바로 전
   EOD 기준 비중, 전략 on/off와 production provider·가격/시각 의미·신선도 계약을 읽기
-  전용으로 내보내 checksum과 함께 고정한다.
+  전용으로 내보내 checksum과 함께 고정하고 사용자가 C0-A diff와 최종 checksum을
+  재승인한다.
 - 수식 검증은 동일 normalized snapshot을 Java harness와 Python에 공급한다.
 - 운영 검증은 EOD 저장 결과와 09:45 read-only preview/export 결과를 캡처한다.
 - 운영 검증의 두 원문 checksum은 독립 무결성 증적으로 각각 보존한다. checksum 동일성이
@@ -202,6 +204,13 @@ SCHEDULED → COLLECTING → VALIDATING → EVALUATING → COMPARING → COMPLET
   테스트에서 실패한다.
 
 ## 4. 화면용 읽기 API (`V2-API-001`)
+
+현재 후속 후보의 `GET /api/v2/qa/deployed-read-only-snapshot`은 C1 배포 화면 인수만을
+위한 임시·전용 endpoint다. SPA 전에 exact health와 이 snapshot만 backend GET 2건으로
+읽고, 화면의 기존 5개 GET은 고정 snapshot으로 브라우저에서 local fulfill해 backend
+continue 0건을 강제한다. 이 endpoint의 존재는 아래 미래 shadow/QA 조회 API나
+`V2-API-001`이 구현됐다는 뜻이 아니다. 정적 SPA에도 빌드 SHA marker를 넣어 backend
+snapshot과 다른 릴리스 화면이면 캡처 전에 실패한다.
 
 모든 경로는 Cloudflare Access 뒤의 동일 출처 `GET` 전용이다. 응답에는
 `generated_at`, `source_updated_at`, `stale`, `stale_reasons`, `git_sha`를 포함하며
@@ -226,7 +235,8 @@ SCHEDULED → COLLECTING → VALIDATING → EVALUATING → COMPARING → COMPLET
 
 ## 5. LIVE 게이트 경계 (`V2-SAF-001`, `V2-APR-001`, `V2-LIV-001`)
 
-현재 v2는 다음 세 겹으로 주문을 막는다.
+현재 코드 후보의 v2는 다음 세 겹으로 주문을 막는다. 이 설명은
+재확인하지 못한 현재 원격 런타임 상태를 단언하지 않는다.
 
 1. `Settings.validate_execution_safety()`가 `execution_enabled=true` 또는 disabled가 아닌
    브로커로 시작하는 것을 거부한다.

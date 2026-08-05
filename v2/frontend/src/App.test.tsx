@@ -1,8 +1,12 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from './App';
 import { API_REQUEST_TIMEOUT_MS, loadSnapshot } from './api';
 import { parseMarketBarsCsv } from './csv';
+import {
+  deployedQaScreens,
+  requiredMaskedRegionsForScreen
+} from '../e2e-deployed/screenshot-masking';
 
 const status = {
   service: 'UP',
@@ -40,16 +44,38 @@ describe('Wall-Ant 콘솔', () => {
     vi.unstubAllGlobals();
   });
 
-  it('실주문 비활성 상태와 핵심 메뉴를 보여준다', async () => {
+  it('실주문 비활성 상태와 6개 화면별 fail-closed 마스킹 marker를 보여준다', async () => {
     const { container } = render(<App />);
     expect(await screen.findByText('전략은 검증을 통과한 뒤에만 실전 후보가 됩니다')).toBeInTheDocument();
     expect(screen.getByText('실주문 어댑터 비활성')).toBeInTheDocument();
+    expect(container.querySelector('[data-wallant-ui-build-sha]')).toHaveAttribute(
+      'data-wallant-ui-build-sha',
+      'development'
+    );
     expect(screen.getByRole('button', { name: /전략 빌더/ })).toBeInTheDocument();
-    expect(
-      Array.from(container.querySelectorAll('[data-qa-sensitive-region]'))
-        .map((element) => element.getAttribute('data-qa-sensitive-region'))
-        .sort()
-    ).toEqual(['recent-accounts', 'recent-strategies', 'summary-metrics']);
+    for (const qaScreen of deployedQaScreens) {
+      if (qaScreen.id !== 'overview') {
+        fireEvent.click(screen.getByRole('button', { name: qaScreen.label }));
+      }
+      const activeScreens = Array.from(container.querySelectorAll('[data-qa-screen]'));
+      expect(activeScreens).toHaveLength(1);
+      expect(activeScreens[0]).toHaveAttribute('data-qa-screen', qaScreen.id);
+      expect(
+        Array.from(container.querySelectorAll('[data-qa-sensitive-region]'))
+          .map((element) => element.getAttribute('data-qa-sensitive-region'))
+          .sort()
+      ).toEqual(requiredMaskedRegionsForScreen(qaScreen.id));
+      if (qaScreen.id === 'strategies') {
+        const region = container.querySelector('[data-qa-sensitive-region="strategy-catalog"]');
+        expect(region).not.toBeNull();
+        expect(within(region as HTMLElement).getByText('첫 전략을 만들어 보세요.')).toBeVisible();
+      }
+      if (qaScreen.id === 'accounts') {
+        const region = container.querySelector('[data-qa-sensitive-region="account-catalog"]');
+        expect(region).not.toBeNull();
+        expect(within(region as HTMLElement).getByText('계좌가 없습니다.')).toBeVisible();
+      }
+    }
   });
 
   it('안전 API를 읽지 못하면 안전하다고 표시하지 않고 변경 기능을 잠근다', async () => {

@@ -14,10 +14,15 @@ import type {
   TestCase,
   TestResult
 } from '@playwright/test/reporter';
-import { allowedApiRouteIds as requiredApiRouteIds } from './read-only-network-policy';
 import {
+  allowedApiRouteIds as requiredApiRouteIds,
+  deployedRequestPolicy
+} from './read-only-network-policy';
+import {
+  deployedQaScreens,
   deployedScreenshotMaskingPolicy,
-  requiredDeployedScreenshotMaskingRegions
+  requiredMaskedRegionsForScreen,
+  type DeployedQaScreenId
 } from './screenshot-masking';
 import {
   finalizeSanitizedEvidenceManifest,
@@ -43,10 +48,10 @@ type Observation = {
     width?: number;
     height?: number;
   };
-  maskedRegions?: string[];
-  verifiedScreens?: string[];
+  screens?: ObservationScreen[];
   expectedBuildSha?: string;
   observedBuildSha?: string;
+  observedUiBuildSha?: string;
   qaStartedAt?: string;
   observationFinishedAt?: string;
   operationsSafety?: {
@@ -59,13 +64,32 @@ type Observation = {
     resourceMutations?: unknown[];
   };
   network?: Record<string, unknown>;
+  excludedSecrets?: string[];
+  automaticPlaywrightCapture?: Record<string, unknown>;
+};
+
+type ObservationScreen = {
+  id?: string;
+  label?: string;
+  horizontalOverflowPx?: number;
+  maskedRegions?: string[];
   screenshot?: {
     fileName?: string;
     sha256?: string;
     masking?: string;
   };
-  excludedSecrets?: string[];
-  automaticPlaywrightCapture?: Record<string, unknown>;
+};
+
+type SafeScreen = {
+  id: DeployedQaScreenId;
+  label: string;
+  horizontalOverflowPx: number | null;
+  maskedRegions: string[];
+  screenshot: {
+    fileName: string | null;
+    sha256: string | null;
+    masking: string;
+  };
 };
 
 type SafeScenario = {
@@ -73,14 +97,14 @@ type SafeScenario = {
   project: string;
   browserName: string;
   viewport: { width: number; height: number } | null;
-  maskedRegions: string[];
+  screens: SafeScreen[];
   status: 'PASS' | 'FAIL';
   playwrightStatus: TestResult['status'];
   errorCategories: string[];
   observedBuildSha: string | null;
+  observedUiBuildSha: string | null;
   operationsSafety: Observation['operationsSafety'] | null;
   network: Record<string, unknown> | null;
-  verifiedScreens: string[];
   startedAt: string;
   finishedAt: string;
   evidence: Array<{ kind: string; path: string; sha256: string }>;
@@ -103,7 +127,6 @@ const expectedProjectRuntime = {
     viewport: { width: 360, height: 800 }
   }
 } as const;
-const requiredScreens = ['오늘의 운영', '전략 빌더', '연구·검증', '계좌·위험', '데이터', '안전·감사'];
 const expectedMasking = deployedScreenshotMaskingPolicy;
 const expectedExcludedSecrets = [
   'cookies',
@@ -123,23 +146,33 @@ const expectedObservationKeys = [
   'project',
   'browserName',
   'viewport',
-  'maskedRegions',
-  'verifiedScreens',
+  'screens',
   'expectedBuildSha',
   'observedBuildSha',
+  'observedUiBuildSha',
   'qaStartedAt',
   'observationFinishedAt',
   'operationsSafety',
   'harnessSafety',
   'network',
-  'screenshot',
   'excludedSecrets',
   'automaticPlaywrightCapture'
+];
+const expectedScreenKeys = [
+  'id',
+  'label',
+  'horizontalOverflowPx',
+  'maskedRegions',
+  'screenshot'
 ];
 const expectedNetworkKeys = [
   'allowedStaticRequestCount',
   'allowedApiRequestCount',
   'apiRequestCountByRouteId',
+  'preflightBackendGetCount',
+  'uiApiLocalFulfillCount',
+  'uiApiBackendContinueCount',
+  'unexpectedPageCount',
   'unsafeMethodCount',
   'externalRequestCount',
   'disallowedPathCount',
@@ -148,6 +181,8 @@ const expectedNetworkKeys = [
   'pageErrorCount'
 ];
 const zeroNetworkFields = [
+  'uiApiBackendContinueCount',
+  'unexpectedPageCount',
   'unsafeMethodCount',
   'externalRequestCount',
   'disallowedPathCount',
@@ -189,6 +224,10 @@ function sanitizedNetwork(value: Observation['network']): Record<string, unknown
     allowedStaticRequestCount: safeCount(value.allowedStaticRequestCount),
     allowedApiRequestCount: safeCount(value.allowedApiRequestCount),
     apiRequestCountByRouteId: safeRouteCounts,
+    preflightBackendGetCount: safeCount(value.preflightBackendGetCount),
+    uiApiLocalFulfillCount: safeCount(value.uiApiLocalFulfillCount),
+    uiApiBackendContinueCount: safeCount(value.uiApiBackendContinueCount),
+    unexpectedPageCount: safeCount(value.unexpectedPageCount),
     unsafeMethodCount: safeCount(value.unsafeMethodCount),
     externalRequestCount: safeCount(value.externalRequestCount),
     disallowedPathCount: safeCount(value.disallowedPathCount),
@@ -241,10 +280,13 @@ export default class DeployedEvidenceReporter implements Reporter {
     return sanitizedEvidenceFile(this.evidenceRoot, path, kind);
   }
 
-  private copyMaskedScreenshot(path: string, project: string) {
+  private copyMaskedScreenshot(path: string, project: string, screenId: DeployedQaScreenId) {
     const source = this.safeEvidence(path, 'masked-screenshot-source');
     if (!source) return null;
-    const destination = resolve(this.evidenceRoot, `QA-ACC-002-${project}-masked.png`);
+    const destination = resolve(
+      this.evidenceRoot,
+      `QA-ACC-002-${project}-${screenId}-masked.png`
+    );
     if (existsSync(destination)) return null;
     copyFileSync(
       resolve(this.evidenceRoot, source.path),
@@ -295,12 +337,14 @@ export default class DeployedEvidenceReporter implements Reporter {
       && (attachment.body || attachment.path)
     );
     const screenshotAttachments = result.attachments.filter((attachment) =>
-      attachment.name === 'masked-deployed-screenshot'
+      attachment.name.startsWith('masked-deployed-screenshot:')
       && attachment.contentType === 'image/png'
       && attachment.path
     );
     if (observationAttachments.length !== 1) errorCategories.push('OBSERVATION_ATTACHMENT_MISSING');
-    if (screenshotAttachments.length !== 1) errorCategories.push('MASKED_SCREENSHOT_MISSING');
+    if (screenshotAttachments.length !== deployedQaScreens.length) {
+      errorCategories.push('MASKED_SCREENSHOT_MATRIX_MISMATCH');
+    }
 
     let observation: Observation | null = null;
     let observationEvidencePath: string | null = null;
@@ -320,10 +364,15 @@ export default class DeployedEvidenceReporter implements Reporter {
       errorCategories.push('OBSERVATION_MUST_USE_IN_MEMORY_BODY');
     }
 
-    const screenshotAttachment = screenshotAttachments[0];
-    if (screenshotAttachment?.path) {
+    for (const screen of deployedQaScreens) {
+      const expectedName = `masked-deployed-screenshot:${screen.id}`;
+      const matching = screenshotAttachments.filter((attachment) => attachment.name === expectedName);
+      if (matching.length !== 1 || !matching[0]?.path) {
+        errorCategories.push('MASKED_SCREENSHOT_MISSING');
+        continue;
+      }
       try {
-        const item = this.copyMaskedScreenshot(screenshotAttachment.path, safeProject);
+        const item = this.copyMaskedScreenshot(matching[0].path, safeProject, screen.id);
         if (item) evidence.push(item);
         else errorCategories.push('EVIDENCE_OUTSIDE_OUTPUT_ROOT');
       } catch {
@@ -337,11 +386,15 @@ export default class DeployedEvidenceReporter implements Reporter {
         || !hasExactKeys(observation.operationsSafety, ['execution_enabled', 'broker_adapter'])
         || !hasExactKeys(observation.harnessSafety, ['realOrderSubmissionAllowed', 'requestPolicy', 'resourceMutations'])
         || !hasExactKeys(observation.network, expectedNetworkKeys)
-        || !hasExactKeys(observation.screenshot, ['fileName', 'sha256', 'masking'])
+        || !Array.isArray(observation.screens)
+        || observation.screens.some((screen) =>
+          !hasExactKeys(screen, expectedScreenKeys)
+          || !hasExactKeys(screen.screenshot, ['fileName', 'sha256', 'masking'])
+        )
         || !hasExactKeys(observation.automaticPlaywrightCapture, ['trace', 'screenshotOnFailure', 'video'])) {
         errorCategories.push('OBSERVATION_FIELD_SET_MISMATCH');
       }
-      if (observation.schemaVersion !== '2.0'
+      if (observation.schemaVersion !== '2.2'
         || observation.observationType !== 'DEPLOYED_READ_ONLY_UI_QA_OBSERVATION') {
         errorCategories.push('OBSERVATION_SCHEMA_MISMATCH');
       }
@@ -355,20 +408,30 @@ export default class DeployedEvidenceReporter implements Reporter {
       if (observation.baseUrlHost !== 'app.wall-ant.com') errorCategories.push('HOST_MISMATCH');
       if (observation.expectedBuildSha !== this.expectedBuildSha) errorCategories.push('EXPECTED_SHA_MISMATCH');
       if (observation.observedBuildSha !== this.expectedBuildSha) errorCategories.push('DEPLOYED_SHA_MISMATCH');
+      if (observation.observedUiBuildSha !== this.expectedBuildSha) {
+        errorCategories.push('DEPLOYED_STATIC_UI_SHA_MISMATCH');
+      }
       if (observation.operationsSafety?.execution_enabled !== false) errorCategories.push('EXECUTION_ENABLED');
       if (observation.operationsSafety?.broker_adapter !== 'disabled') errorCategories.push('BROKER_ADAPTER_ENABLED');
       if (observation.harnessSafety?.realOrderSubmissionAllowed !== false) errorCategories.push('ORDER_CAPABILITY_PRESENT');
-      if (observation.harnessSafety?.requestPolicy !== 'exact-origin allowlisted GET/HEAD only') {
+      if (observation.harnessSafety?.requestPolicy !== deployedRequestPolicy) {
         errorCategories.push('REQUEST_POLICY_MISMATCH');
       }
       if ((observation.harnessSafety?.resourceMutations?.length ?? -1) !== 0) errorCategories.push('RESOURCE_MUTATION_RECORDED');
-      if (JSON.stringify(observation.verifiedScreens) !== JSON.stringify(requiredScreens)) {
+      if (observation.screens?.length !== deployedQaScreens.length
+        || deployedQaScreens.some((expected, index) => {
+          const actual = observation.screens?.[index];
+          return actual?.id !== expected.id
+            || actual.label !== expected.label
+            || typeof actual.horizontalOverflowPx !== 'number'
+            || !Number.isFinite(actual.horizontalOverflowPx)
+            || actual.horizontalOverflowPx < 0
+            || actual.horizontalOverflowPx > 1
+            || JSON.stringify(actual.maskedRegions) !== JSON.stringify(
+              requiredMaskedRegionsForScreen(expected.id)
+            );
+        })) {
         errorCategories.push('SCREEN_MATRIX_MISMATCH');
-      }
-      if (JSON.stringify(observation.maskedRegions) !== JSON.stringify(
-        [...requiredDeployedScreenshotMaskingRegions].sort()
-      )) {
-        errorCategories.push('MASKING_REGION_MATRIX_MISMATCH');
       }
       if (typeof observation.network?.allowedStaticRequestCount !== 'number'
         || !Number.isInteger(observation.network.allowedStaticRequestCount)
@@ -379,6 +442,14 @@ export default class DeployedEvidenceReporter implements Reporter {
         || !Number.isInteger(observation.network.allowedApiRequestCount)
         || observation.network.allowedApiRequestCount <= 0) {
         errorCategories.push('NO_ALLOWED_API_REQUESTS');
+      }
+      if (observation.network?.preflightBackendGetCount !== 2) {
+        errorCategories.push('PREFLIGHT_BACKEND_GET_COUNT_MISMATCH');
+      }
+      if (typeof observation.network?.uiApiLocalFulfillCount !== 'number'
+        || !Number.isInteger(observation.network.uiApiLocalFulfillCount)
+        || observation.network.uiApiLocalFulfillCount <= 0) {
+        errorCategories.push('NO_LOCAL_UI_API_FULFILL');
       }
       const apiRequestCountByRouteId = observation.network?.apiRequestCountByRouteId;
       const apiRouteKeys = apiRequestCountByRouteId && typeof apiRequestCountByRouteId === 'object'
@@ -401,19 +472,31 @@ export default class DeployedEvidenceReporter implements Reporter {
         if (routeTotal !== observation.network?.allowedApiRequestCount) {
           errorCategories.push('API_ROUTE_COUNT_MISMATCH');
         }
+        const uiRouteTotal = requiredApiRouteIds
+          .filter((routeId) => !['health-safety-gate', 'deployed-read-only-snapshot'].includes(routeId))
+          .reduce((total, routeId) => total + (safeCount(routeCounts[routeId]) ?? -1), 0);
+        if (uiRouteTotal !== observation.network?.uiApiLocalFulfillCount) {
+          errorCategories.push('LOCAL_UI_API_FULFILL_COUNT_MISMATCH');
+        }
       }
       for (const field of zeroNetworkFields) {
         if (observation.network?.[field] !== 0) errorCategories.push(`NETWORK_${field.toUpperCase()}`);
       }
-      const screenshotEvidence = evidence.find((item) => item.kind === 'opaque-masked-screenshot');
-      if (!screenshotEvidence || observation.screenshot?.sha256 !== screenshotEvidence.sha256) {
-        errorCategories.push('SCREENSHOT_SHA256_MISMATCH');
-      }
-      if (observation.screenshot?.fileName !== `QA-ACC-002-${project}-masked.png`) {
-        errorCategories.push('SCREENSHOT_NAME_MISMATCH');
-      }
-      if (observation.screenshot?.masking !== expectedMasking) {
-        errorCategories.push('MASKING_POLICY_MISMATCH');
+      for (const screen of deployedQaScreens) {
+        const expectedFileName = `QA-ACC-002-${project}-${screen.id}-masked.png`;
+        const screenshotEvidence = evidence.find((item) =>
+          item.kind === 'opaque-masked-screenshot' && item.path === expectedFileName
+        );
+        const observedScreen = observation.screens?.find((item) => item.id === screen.id);
+        if (!screenshotEvidence || observedScreen?.screenshot?.sha256 !== screenshotEvidence.sha256) {
+          errorCategories.push('SCREENSHOT_SHA256_MISMATCH');
+        }
+        if (observedScreen?.screenshot?.fileName !== expectedFileName) {
+          errorCategories.push('SCREENSHOT_NAME_MISMATCH');
+        }
+        if (observedScreen?.screenshot?.masking !== expectedMasking) {
+          errorCategories.push('MASKING_POLICY_MISMATCH');
+        }
       }
       if (JSON.stringify(observation.excludedSecrets) !== JSON.stringify(expectedExcludedSecrets)) {
         errorCategories.push('SECRET_EXCLUSION_POLICY_MISMATCH');
@@ -433,6 +516,10 @@ export default class DeployedEvidenceReporter implements Reporter {
       && /^[0-9a-f]{40}$/.test(observation.observedBuildSha)
       ? observation.observedBuildSha
       : null;
+    const safeObservedUiBuildSha = typeof observation?.observedUiBuildSha === 'string'
+      && /^[0-9a-f]{40}$/.test(observation.observedUiBuildSha)
+      ? observation.observedUiBuildSha
+      : null;
     const safeOperationsSafety = observation?.operationsSafety
       && typeof observation.operationsSafety.execution_enabled === 'boolean'
       ? {
@@ -440,14 +527,33 @@ export default class DeployedEvidenceReporter implements Reporter {
           broker_adapter: observation.operationsSafety.broker_adapter === 'disabled' ? 'disabled' : 'invalid'
         }
       : null;
-    const safeVerifiedScreens = JSON.stringify(observation?.verifiedScreens) === JSON.stringify(requiredScreens)
-      ? [...requiredScreens]
-      : [];
-    const safeMaskedRegions = JSON.stringify(observation?.maskedRegions) === JSON.stringify(
-      [...requiredDeployedScreenshotMaskingRegions].sort()
-    )
-      ? [...requiredDeployedScreenshotMaskingRegions].sort()
-      : [];
+    const safeScreens: SafeScreen[] = deployedQaScreens.map((expected) => {
+      const observed = observation?.screens?.find((screen) => screen.id === expected.id);
+      const expectedFileName = `QA-ACC-002-${safeProject}-${expected.id}-masked.png`;
+      const screenshotEvidence = evidence.find((item) =>
+        item.kind === 'opaque-masked-screenshot' && item.path === expectedFileName
+      );
+      const requiredMaskedRegions = requiredMaskedRegionsForScreen(expected.id);
+      const horizontalOverflowPx = typeof observed?.horizontalOverflowPx === 'number'
+        && Number.isFinite(observed.horizontalOverflowPx)
+        && observed.horizontalOverflowPx >= 0
+        && observed.horizontalOverflowPx <= 1
+        ? observed.horizontalOverflowPx
+        : null;
+      return {
+        id: expected.id,
+        label: expected.label,
+        horizontalOverflowPx,
+        maskedRegions: JSON.stringify(observed?.maskedRegions) === JSON.stringify(requiredMaskedRegions)
+          ? requiredMaskedRegions
+          : [],
+        screenshot: {
+          fileName: screenshotEvidence?.path ?? null,
+          sha256: screenshotEvidence?.sha256 ?? null,
+          masking: observed?.screenshot?.masking === expectedMasking ? expectedMasking : 'invalid'
+        }
+      };
+    });
     const safeStartedAt = isExactIsoTimestamp(observation?.qaStartedAt)
       ? observation.qaStartedAt
       : result.startTime.toISOString();
@@ -456,9 +562,8 @@ export default class DeployedEvidenceReporter implements Reporter {
       : new Date(result.startTime.getTime() + result.duration).toISOString();
     if (observationEvidencePath) {
       try {
-        const screenshotEvidence = evidence.find((item) => item.kind === 'opaque-masked-screenshot');
         const sanitizedObservation = {
-          schemaVersion: '2.1',
+          schemaVersion: '2.3',
           observationType: 'DEPLOYED_READ_ONLY_UI_QA_SANITIZED_OBSERVATION',
           qaId: 'QA-ACC-002',
           environment: 'deployed',
@@ -466,10 +571,10 @@ export default class DeployedEvidenceReporter implements Reporter {
           project: safeProject,
           browserName: runtime.browserName,
           viewport: runtime.viewport,
-          maskedRegions: safeMaskedRegions,
-          verifiedScreens: safeVerifiedScreens,
+          screens: safeScreens,
           expectedBuildSha: this.expectedBuildSha,
           observedBuildSha: safeObservedBuildSha,
+          observedUiBuildSha: safeObservedUiBuildSha,
           qaStartedAt: safeStartedAt,
           observationFinishedAt: safeFinishedAt,
           operationsSafety: safeOperationsSafety,
@@ -479,19 +584,14 @@ export default class DeployedEvidenceReporter implements Reporter {
                 ? observation.harnessSafety.realOrderSubmissionAllowed
                 : null,
             requestPolicy:
-              observation?.harnessSafety?.requestPolicy === 'exact-origin allowlisted GET/HEAD only'
-                ? 'exact-origin allowlisted GET/HEAD only'
+              observation?.harnessSafety?.requestPolicy === deployedRequestPolicy
+                ? deployedRequestPolicy
                 : 'invalid',
             resourceMutationCount: Array.isArray(observation?.harnessSafety?.resourceMutations)
               ? observation.harnessSafety.resourceMutations.length
               : null
           },
           network: sanitizedNetwork(observation?.network),
-          screenshot: {
-            fileName: screenshotEvidence?.path.split('/').at(-1) ?? null,
-            sha256: screenshotEvidence?.sha256 ?? null,
-            masking: observation?.screenshot?.masking === expectedMasking ? expectedMasking : 'invalid'
-          },
           excludedSecretCategories: expectedExcludedSecrets,
           automaticPlaywrightCapture: {
             trace: observation?.automaticPlaywrightCapture?.trace === false ? false : null,
@@ -526,14 +626,14 @@ export default class DeployedEvidenceReporter implements Reporter {
       project: safeProject,
       browserName: runtime.browserName,
       viewport: runtime.viewport,
-      maskedRegions: safeMaskedRegions,
+      screens: safeScreens,
       status: errorCategories.length === 0 ? 'PASS' : 'FAIL',
       playwrightStatus: result.status,
       errorCategories: [...new Set(errorCategories)].sort(),
       observedBuildSha: safeObservedBuildSha,
+      observedUiBuildSha: safeObservedUiBuildSha,
       operationsSafety: safeOperationsSafety,
       network: sanitizedNetwork(observation?.network),
-      verifiedScreens: safeVerifiedScreens,
       startedAt: safeStartedAt,
       finishedAt: safeFinishedAt,
       evidence
@@ -571,7 +671,7 @@ export default class DeployedEvidenceReporter implements Reporter {
       ? 'PASS'
       : 'FAIL';
     const manifest = {
-      schemaVersion: '2.0',
+      schemaVersion: '2.2',
       evidenceType: 'DEPLOYED_READ_ONLY_UI_QA',
       qaId: 'QA-ACC-002',
       runStatus,
@@ -587,7 +687,7 @@ export default class DeployedEvidenceReporter implements Reporter {
       })),
       baseUrlHost: 'app.wall-ant.com',
       exactOrigin: 'https://app.wall-ant.com',
-      requestPolicy: 'exact-origin allowlisted GET/HEAD only',
+      requestPolicy: deployedRequestPolicy,
       automaticCapture: { trace: false, screenshotOnFailure: false, video: false },
       artifactRetention: {
         sanitizedArtifactsOnly,

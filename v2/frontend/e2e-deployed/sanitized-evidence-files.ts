@@ -120,7 +120,7 @@ export function finalizeSanitizedEvidenceManifest(
 
   if (validation === 'FAIL') {
     manifest = {
-      schemaVersion: '2.0',
+      schemaVersion: '2.2',
       evidenceType: 'DEPLOYED_READ_ONLY_UI_QA',
       qaId: 'QA-ACC-002',
       runStatus: 'FAIL',

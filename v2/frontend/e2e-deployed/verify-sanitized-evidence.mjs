@@ -21,9 +21,43 @@ const expectedRuntime = {
     viewport: { width: 360, height: 800 }
   }
 };
-const requiredScreens = ['오늘의 운영', '전략 빌더', '연구·검증', '계좌·위험', '데이터', '안전·감사'];
-const requiredMaskedRegions = ['recent-accounts', 'recent-strategies', 'summary-metrics'];
+const requiredScreens = [
+  {
+    id: 'overview',
+    label: '오늘의 운영',
+    maskedRegions: ['recent-accounts', 'recent-strategies', 'shell-environment', 'summary-metrics']
+  },
+  {
+    id: 'strategies',
+    label: '전략 빌더',
+    maskedRegions: ['shell-environment', 'strategy-catalog']
+  },
+  {
+    id: 'research',
+    label: '연구·검증',
+    maskedRegions: ['research-strategy-selector', 'shell-environment']
+  },
+  {
+    id: 'accounts',
+    label: '계좌·위험',
+    maskedRegions: ['account-catalog', 'shell-environment']
+  },
+  {
+    id: 'data',
+    label: '데이터',
+    maskedRegions: ['market-data-catalog', 'shell-environment']
+  },
+  {
+    id: 'operations',
+    label: '안전·감사',
+    maskedRegions: ['global-control-reason', 'operations-audit', 'shell-environment']
+  }
+];
+const expectedMasking =
+  'every deployed screen uses its exact registered sensitive-region set with opaque Playwright locator masks';
 const requiredApiRouteIds = [
+  'health-safety-gate',
+  'deployed-read-only-snapshot',
   'operations-status',
   'strategies',
   'accounts',
@@ -40,6 +74,8 @@ const expectedExcludedSecretCategories = [
   'query strings'
 ];
 const zeroNetworkFields = [
+  'uiApiBackendContinueCount',
+  'unexpectedPageCount',
   'unsafeMethodCount',
   'externalRequestCount',
   'disallowedPathCount',
@@ -51,6 +87,8 @@ const networkKeys = [
   'allowedStaticRequestCount',
   'allowedApiRequestCount',
   'apiRequestCountByRouteId',
+  'preflightBackendGetCount',
+  'uiApiLocalFulfillCount',
   ...zeroNetworkFields
 ];
 const manifestKeys = [
@@ -76,14 +114,14 @@ const scenarioKeys = [
   'project',
   'browserName',
   'viewport',
-  'maskedRegions',
+  'screens',
   'status',
   'playwrightStatus',
   'errorCategories',
   'observedBuildSha',
+  'observedUiBuildSha',
   'operationsSafety',
   'network',
-  'verifiedScreens',
   'startedAt',
   'finishedAt',
   'evidence'
@@ -97,20 +135,20 @@ const observationKeys = [
   'project',
   'browserName',
   'viewport',
-  'maskedRegions',
-  'verifiedScreens',
+  'screens',
   'expectedBuildSha',
   'observedBuildSha',
+  'observedUiBuildSha',
   'qaStartedAt',
   'observationFinishedAt',
   'operationsSafety',
   'harnessSafety',
   'network',
-  'screenshot',
   'excludedSecretCategories',
   'automaticPlaywrightCapture',
   'validation'
 ];
+const screenKeys = ['id', 'label', 'horizontalOverflowPx', 'maskedRegions', 'screenshot'];
 
 function check(condition, category) {
   if (!condition) throw new Error(category);
@@ -183,13 +221,35 @@ function secureRegularFile(root, fileName, maximumBytes) {
   check(metadata.isFile() && !metadata.isSymbolicLink(), 'EVIDENCE_NOT_REGULAR_FILE');
   check(metadata.uid === currentUserId, 'EVIDENCE_OWNER_INVALID');
   check(metadata.nlink === 1, 'EVIDENCE_LINK_COUNT_INVALID');
-  check((metadata.mode & 0o077) === 0, 'EVIDENCE_PERMISSIONS_TOO_OPEN');
+  check((metadata.mode & 0o7777) === 0o600, 'EVIDENCE_PERMISSIONS_NOT_600');
   check(noExtendedAcl(path, false), 'EVIDENCE_EXTENDED_ACL_PRESENT');
   check(metadata.size > 0 && metadata.size <= maximumBytes, 'EVIDENCE_SIZE_INVALID');
   const canonicalPath = realpathSync(path);
   const fromRoot = relative(root, canonicalPath);
   check(fromRoot === fileName && !fromRoot.startsWith('..') && !isAbsolute(fromRoot), 'EVIDENCE_OUTSIDE_ROOT');
   return path;
+}
+
+function verifyScreenMatrix(screens, project, screenshotEvidence) {
+  check(Array.isArray(screens) && screens.length === requiredScreens.length, 'SCREEN_MATRIX_INVALID');
+  const screenshotByPath = new Map(screenshotEvidence.map((item) => [item.path, item]));
+  for (let index = 0; index < requiredScreens.length; index += 1) {
+    const expected = requiredScreens[index];
+    const screen = screens[index];
+    check(exactKeys(screen, screenKeys), 'SCREEN_FIELD_SET_INVALID');
+    check(exactKeys(screen.screenshot, ['fileName', 'sha256', 'masking']), 'SCREEN_SCREENSHOT_FIELD_SET_INVALID');
+    check(screen.id === expected.id && screen.label === expected.label, 'SCREEN_IDENTITY_INVALID');
+    check(Number.isFinite(screen.horizontalOverflowPx)
+      && screen.horizontalOverflowPx >= 0
+      && screen.horizontalOverflowPx <= 1, 'SCREEN_OVERFLOW_INVALID');
+    check(exactJson(screen.maskedRegions, expected.maskedRegions), 'SCREEN_MASKING_REGIONS_INVALID');
+    const expectedPath = `QA-ACC-002-${project}-${expected.id}-masked.png`;
+    const evidence = screenshotByPath.get(expectedPath);
+    check(plainObject(evidence), 'SCREENSHOT_EVIDENCE_MISSING');
+    check(screen.screenshot.fileName === expectedPath, 'SCREENSHOT_PATH_INVALID');
+    check(screen.screenshot.sha256 === evidence.sha256, 'SCREENSHOT_HASH_INVALID');
+    check(screen.screenshot.masking === expectedMasking, 'SCREENSHOT_MASKING_INVALID');
+  }
 }
 
 function verifyObservation(path, scenario, screenshotEvidence, expectedBuildSha) {
@@ -199,23 +259,23 @@ function verifyObservation(path, scenario, screenshotEvidence, expectedBuildSha)
   check(exactKeys(observation.operationsSafety, ['execution_enabled', 'broker_adapter']), 'OBSERVATION_OPERATIONS_FIELD_SET_INVALID');
   check(exactKeys(observation.harnessSafety, ['realOrderSubmissionAllowed', 'requestPolicy', 'resourceMutationCount']), 'OBSERVATION_HARNESS_FIELD_SET_INVALID');
   check(exactKeys(observation.network, networkKeys), 'OBSERVATION_NETWORK_FIELD_SET_INVALID');
-  check(exactKeys(observation.screenshot, ['fileName', 'sha256', 'masking']), 'OBSERVATION_SCREENSHOT_FIELD_SET_INVALID');
   check(exactKeys(observation.automaticPlaywrightCapture, ['trace', 'screenshotOnFailure', 'video']), 'OBSERVATION_CAPTURE_FIELD_SET_INVALID');
   check(exactKeys(observation.validation, ['status', 'errorCategories']), 'OBSERVATION_VALIDATION_FIELD_SET_INVALID');
-  check(observation.schemaVersion === '2.1', 'OBSERVATION_SCHEMA_INVALID');
+  check(observation.schemaVersion === '2.3', 'OBSERVATION_SCHEMA_INVALID');
   check(observation.observationType === 'DEPLOYED_READ_ONLY_UI_QA_SANITIZED_OBSERVATION', 'OBSERVATION_TYPE_INVALID');
   check(observation.qaId === 'QA-ACC-002', 'OBSERVATION_QA_ID_INVALID');
   check(observation.environment === 'deployed' && observation.baseUrlHost === 'app.wall-ant.com', 'OBSERVATION_ENVIRONMENT_INVALID');
   check(observation.project === scenario.project, 'OBSERVATION_PROJECT_INVALID');
   check(observation.browserName === scenario.browserName, 'OBSERVATION_BROWSER_INVALID');
   check(exactJson(observation.viewport, scenario.viewport), 'OBSERVATION_VIEWPORT_INVALID');
-  check(exactJson(observation.maskedRegions, requiredMaskedRegions), 'OBSERVATION_MASKING_REGIONS_INVALID');
-  check(exactJson(observation.verifiedScreens, requiredScreens), 'OBSERVATION_SCREEN_MATRIX_INVALID');
+  verifyScreenMatrix(observation.screens, scenario.project, screenshotEvidence);
+  check(exactJson(observation.screens, scenario.screens), 'OBSERVATION_SCREEN_MATRIX_INVALID');
   check(observation.expectedBuildSha === expectedBuildSha && observation.observedBuildSha === expectedBuildSha, 'OBSERVATION_SHA_INVALID');
+  check(observation.observedUiBuildSha === expectedBuildSha, 'OBSERVATION_STATIC_UI_SHA_INVALID');
   check(observation.operationsSafety?.execution_enabled === false, 'OBSERVATION_EXECUTION_ENABLED');
   check(observation.operationsSafety?.broker_adapter === 'disabled', 'OBSERVATION_BROKER_ENABLED');
   check(observation.harnessSafety?.realOrderSubmissionAllowed === false, 'OBSERVATION_ORDER_CAPABILITY_PRESENT');
-  check(observation.harnessSafety?.requestPolicy === 'exact-origin allowlisted GET/HEAD only', 'OBSERVATION_REQUEST_POLICY_INVALID');
+  check(observation.harnessSafety?.requestPolicy === 'candidate-only snapshot; allowlisted UI GET fulfilled locally; exact-origin static GET/HEAD only', 'OBSERVATION_REQUEST_POLICY_INVALID');
   check(observation.harnessSafety?.resourceMutationCount === 0, 'OBSERVATION_RESOURCE_MUTATION_PRESENT');
   check(exactIsoTimestamp(observation.qaStartedAt), 'OBSERVATION_STARTED_AT_INVALID');
   check(exactIsoTimestamp(observation.observationFinishedAt), 'OBSERVATION_FINISHED_AT_INVALID');
@@ -223,6 +283,8 @@ function verifyObservation(path, scenario, screenshotEvidence, expectedBuildSha)
   check(exactJson(observation.validation?.errorCategories, []), 'OBSERVATION_ERROR_CATEGORY_PRESENT');
   check(Number.isInteger(observation.network?.allowedStaticRequestCount) && observation.network.allowedStaticRequestCount > 0, 'OBSERVATION_STATIC_REQUESTS_MISSING');
   check(Number.isInteger(observation.network?.allowedApiRequestCount) && observation.network.allowedApiRequestCount > 0, 'OBSERVATION_API_REQUESTS_MISSING');
+  check(observation.network?.preflightBackendGetCount === 2, 'OBSERVATION_PREFLIGHT_BACKEND_GET_COUNT_INVALID');
+  check(Number.isInteger(observation.network?.uiApiLocalFulfillCount) && observation.network.uiApiLocalFulfillCount > 0, 'OBSERVATION_LOCAL_UI_FULFILL_MISSING');
   check(plainObject(observation.network?.apiRequestCountByRouteId), 'OBSERVATION_API_ROUTE_COUNTS_INVALID');
   check(exactJson(Object.keys(observation.network.apiRequestCountByRouteId).sort(), [...requiredApiRouteIds].sort()), 'OBSERVATION_API_ROUTE_MATRIX_INVALID');
   let apiRouteTotal = 0;
@@ -232,13 +294,14 @@ function verifyObservation(path, scenario, screenshotEvidence, expectedBuildSha)
     apiRouteTotal += count;
   }
   check(apiRouteTotal === observation.network.allowedApiRequestCount, 'OBSERVATION_API_ROUTE_TOTAL_INVALID');
+  const uiRouteTotal = requiredApiRouteIds
+    .filter((routeId) => !['health-safety-gate', 'deployed-read-only-snapshot'].includes(routeId))
+    .reduce((total, routeId) => total + observation.network.apiRequestCountByRouteId[routeId], 0);
+  check(uiRouteTotal === observation.network.uiApiLocalFulfillCount, 'OBSERVATION_LOCAL_UI_FULFILL_TOTAL_INVALID');
   for (const field of zeroNetworkFields) {
     check(observation.network?.[field] === 0, `OBSERVATION_NETWORK_${field.toUpperCase()}`);
   }
   check(exactJson(scenario.network, observation.network), 'SCENARIO_NETWORK_MISMATCH');
-  check(observation.screenshot?.fileName === screenshotEvidence.path, 'OBSERVATION_SCREENSHOT_NAME_INVALID');
-  check(observation.screenshot?.sha256 === screenshotEvidence.sha256, 'OBSERVATION_SCREENSHOT_HASH_INVALID');
-  check(observation.screenshot?.masking === 'required overview summary-metrics, recent-strategies, and recent-accounts covered by opaque Playwright locator masks', 'OBSERVATION_MASKING_INVALID');
   check(exactJson(observation.excludedSecretCategories, expectedExcludedSecretCategories), 'OBSERVATION_SECRET_EXCLUSION_INVALID');
   check(observation.automaticPlaywrightCapture?.trace === false, 'OBSERVATION_TRACE_ENABLED');
   check(observation.automaticPlaywrightCapture?.screenshotOnFailure === false, 'OBSERVATION_AUTO_SCREENSHOT_ENABLED');
@@ -254,7 +317,7 @@ function verify() {
   const rootMetadata = lstatSync(evidenceRootInput);
   check(rootMetadata.isDirectory() && !rootMetadata.isSymbolicLink(), 'OUTPUT_ROOT_NOT_DIRECTORY');
   check(rootMetadata.uid === currentUserId, 'OUTPUT_ROOT_OWNER_INVALID');
-  check((rootMetadata.mode & 0o077) === 0, 'OUTPUT_ROOT_PERMISSIONS_TOO_OPEN');
+  check((rootMetadata.mode & 0o7777) === 0o700, 'OUTPUT_ROOT_PERMISSIONS_NOT_700');
   check(noExtendedAcl(evidenceRootInput, true), 'OUTPUT_ROOT_EXTENDED_ACL_PRESENT');
   const root = realpathSync(evidenceRootInput);
   const manifestPath = secureRegularFile(root, 'manifest.json', 1_048_576);
@@ -266,7 +329,7 @@ function verify() {
   check(exactKeys(manifest.artifactRetention, ['sanitizedArtifactsOnly', 'rawRunnerOutputRetained', 'finalExitExactTreeRequired', 'finalExitValidation']), 'RETENTION_FIELD_SET_INVALID');
   check(exactKeys(manifest.safety, ['realOrderSubmissionAllowed', 'resourceMutations']), 'SAFETY_FIELD_SET_INVALID');
   check(exactKeys(manifest.summary, ['expectedScenarios', 'actualScenarios', 'passed', 'failed', 'matrixValid']), 'SUMMARY_FIELD_SET_INVALID');
-  check(manifest.schemaVersion === '2.0', 'MANIFEST_SCHEMA_INVALID');
+  check(manifest.schemaVersion === '2.2', 'MANIFEST_SCHEMA_INVALID');
   check(manifest.evidenceType === 'DEPLOYED_READ_ONLY_UI_QA', 'MANIFEST_TYPE_INVALID');
   check(manifest.qaId === 'QA-ACC-002' && manifest.runStatus === 'PASS', 'MANIFEST_RUN_FAILED');
   check(manifest.expectedBuildSha === expectedBuildSha, 'MANIFEST_SHA_INVALID');
@@ -275,7 +338,7 @@ function verify() {
   check(manifest.harnessGit?.matchesDeployedSha === true, 'HARNESS_DEPLOYED_SHA_MISMATCH');
   check(manifest.baseUrlHost === 'app.wall-ant.com', 'MANIFEST_HOST_INVALID');
   check(manifest.exactOrigin === 'https://app.wall-ant.com', 'MANIFEST_ORIGIN_INVALID');
-  check(manifest.requestPolicy === 'exact-origin allowlisted GET/HEAD only', 'MANIFEST_REQUEST_POLICY_INVALID');
+  check(manifest.requestPolicy === 'candidate-only snapshot; allowlisted UI GET fulfilled locally; exact-origin static GET/HEAD only', 'MANIFEST_REQUEST_POLICY_INVALID');
   check(manifest.automaticCapture?.trace === false, 'MANIFEST_TRACE_ENABLED');
   check(manifest.automaticCapture?.screenshotOnFailure === false, 'MANIFEST_AUTO_SCREENSHOT_ENABLED');
   check(manifest.automaticCapture?.video === false, 'MANIFEST_VIDEO_ENABLED');
@@ -311,25 +374,24 @@ function verify() {
     check(exactJson(scenario.errorCategories, []), 'SCENARIO_ERROR_CATEGORY_PRESENT');
     check(scenario.browserName === expectedRuntime[project].browserName, 'SCENARIO_BROWSER_INVALID');
     check(exactJson(scenario.viewport, expectedRuntime[project].viewport), 'SCENARIO_VIEWPORT_INVALID');
-    check(exactJson(scenario.maskedRegions, requiredMaskedRegions), 'SCENARIO_MASKING_REGIONS_INVALID');
     check(scenario.observedBuildSha === expectedBuildSha, 'SCENARIO_SHA_INVALID');
+    check(scenario.observedUiBuildSha === expectedBuildSha, 'SCENARIO_STATIC_UI_SHA_INVALID');
     check(scenario.operationsSafety?.execution_enabled === false, 'SCENARIO_EXECUTION_ENABLED');
     check(scenario.operationsSafety?.broker_adapter === 'disabled', 'SCENARIO_BROKER_ENABLED');
-    check(exactJson(scenario.verifiedScreens, requiredScreens), 'SCENARIO_SCREEN_MATRIX_INVALID');
     check(exactIsoTimestamp(scenario.startedAt) && exactIsoTimestamp(scenario.finishedAt), 'SCENARIO_TIMESTAMP_INVALID');
-    check(Array.isArray(scenario.evidence) && scenario.evidence.length === 2, 'SCENARIO_EVIDENCE_COUNT_INVALID');
+    check(Array.isArray(scenario.evidence) && scenario.evidence.length === 7, 'SCENARIO_EVIDENCE_COUNT_INVALID');
 
-    const screenshot = scenario.evidence.find((item) => item?.kind === 'opaque-masked-screenshot');
+    const screenshots = scenario.evidence.filter((item) => item?.kind === 'opaque-masked-screenshot');
     const observation = scenario.evidence.find((item) => item?.kind === 'sanitized-observation');
-    check(plainObject(screenshot) && plainObject(observation), 'SCENARIO_EVIDENCE_KIND_INVALID');
-    for (const item of [screenshot, observation]) {
+    check(screenshots.length === requiredScreens.length && plainObject(observation), 'SCENARIO_EVIDENCE_KIND_INVALID');
+    for (const item of [...screenshots, observation]) {
       check(exactKeys(item, ['kind', 'path', 'sha256']), 'EVIDENCE_FIELD_SET_INVALID');
       check(typeof item.path === 'string' && typeof item.sha256 === 'string', 'EVIDENCE_METADATA_INVALID');
       check(/^[0-9a-f]{64}$/.test(item.sha256), 'EVIDENCE_HASH_FORMAT_INVALID');
       check(!evidenceByPath.has(item.path), 'EVIDENCE_PATH_DUPLICATE');
       evidenceByPath.set(item.path, item);
     }
-    check(screenshot.path === `QA-ACC-002-${project}-masked.png`, 'SCREENSHOT_PATH_INVALID');
+    verifyScreenMatrix(scenario.screens, project, screenshots);
     check(observation.path === `QA-ACC-002-${project}-sanitized-observation.json`, 'OBSERVATION_PATH_INVALID');
   }
 
@@ -350,9 +412,9 @@ function verify() {
   }
 
   for (const scenario of manifest.scenarios) {
-    const screenshot = scenario.evidence.find((item) => item.kind === 'opaque-masked-screenshot');
+    const screenshots = scenario.evidence.filter((item) => item.kind === 'opaque-masked-screenshot');
     const observation = scenario.evidence.find((item) => item.kind === 'sanitized-observation');
-    verifyObservation(resolve(root, observation.path), scenario, screenshot, expectedBuildSha);
+    verifyObservation(resolve(root, observation.path), scenario, screenshots, expectedBuildSha);
   }
   check(statSync(manifestPath).size <= 1_048_576, 'MANIFEST_SIZE_INVALID');
 }

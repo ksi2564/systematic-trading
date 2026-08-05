@@ -8,13 +8,15 @@
 - 실제 주문이 없는 화면 QA만 자동 진행한다.
 - 섀도 개발·섀도 테스트·스테이징 테스트 데이터 생성은 **C0 범위 승인 이후**
   승인된 종류·건수 안에서만 자동 진행한다.
-- LIVE 주문, Java 중단, DNS·트래픽 전환, 공유 staging/운영 롤백 확정은 사용자 승인 필수다.
+- 후보 배포·공유 환경 서비스 재시작·릴리스 링크 변경과 LIVE 주문, Java 중단,
+  DNS·트래픽 전환, 공유 staging/운영 롤백 확정은 사용자 승인 필수다. 승인된 후보가
+  배포된 뒤의 비변경 GET-only 화면 QA만 자동 진행할 수 있다.
 
 ## 2. 요구사항 → 구현 → 검증
 
 | 요구사항 | 현재 구현 근거 | 자동 검증 근거 | 남은 증적·개발 | 판정 |
 | --- | --- | --- | --- | --- |
-| `V2-ACC-001` | Access workflow, `Caddyfile.staging.example`, 운영 API Access 이메일 검사 | `test_api_security.py`; #56 run `30937893445`의 원본 `401`·서비스 확인; 외부 UI/API 미인증 리디렉션 [`QA-ACC-001`](evidence/2026-08-05-QA-ACC-001.md) | 허용 이메일 로그인, 비허용 계정 거부, 동일 출처 UI/API 화면 증적 | 부분 |
+| `V2-ACC-001` | Access workflow, `Caddyfile.staging.example`, 운영 API Access 이메일 검사 | `test_api_security.py`; #56 run `30937893445`의 원본 `401`·서비스 확인; 외부 UI/API 미인증 리디렉션 [`QA-ACC-001`](evidence/2026-08-05-QA-ACC-001.md); 기존 세션 없는 브라우저 재확인 [`QA-ACC-002 BLOCKED`](evidence/2026-08-05-QA-ACC-002-BLOCKED.md) | 사용자 승인 뒤 harness·`build_sha` 포함 동일 SHA 배포, 허용 이메일 로그인, 비허용 계정 거부, 동일 출처 UI/API 화면 증적 | 부분 |
 | `V2-CUT-001` | `/opt/trading`과 `/opt/wallant`, 8080과 8000, 별도 systemd/DB | deploy/access workflow의 Java PID·서비스 보호; #56 run에서 Java/v2 모두 active | 섀도 기간 연속성 지표, Java 종료 없는 장애 훈련 | 부분 |
 | `V2-CUT-002` | v2 실행 차단 문구와 별도 staging workflow; 전략 문구를 “Python 후보”로 정정 | 문구 회귀 단위 테스트, 이 문서 묶음의 단계 표 | 자동 섀도·전환 상태 카드 | 부분 |
 | `V2-STR-001` | `domain/defaults.py`, `domain/evaluator.py`, 고정 종목군 검증 | `test_qqqm_evaluator.py`, `test_order_planner.py` | 사용자 규칙 승인, Java 실결과 fixture | 부분 |
@@ -26,7 +28,7 @@
 | `V2-OPS-001` | operations status/audit API, 오늘의 운영·안전 화면 | `test_api.py`, `App.test.tsx` 일부 | 스케줄·데이터·Java diff·마지막 성공 카드 | 부분 |
 | `V2-API-001` | 요구·기능·화면 문서의 GET-only API 계약 | 문서 링크·경로 정적 검사 대상 | shadow/QA/cutover 조회 API·권한·cursor·마스킹·신선도 테스트 | 미구현 |
 | `V2-UI-001` | React 6개 메뉴와 반응형 CSS; 안전 API 미확인·부분/전체 불일치 시 위험 증가 조작 잠금과 중복 전송 없는 비상 제출 차단 유지; Playwright 읽기 전용 QA | `App.test.tsx` 13건(10초 timeout·겹친 새로고침의 stale-safe 차단·부분 안전 플래그 불일치·보호 정지 성공/실패 포함); 기능 후보 `15201660c009cfbd57da0ff4637d0d33da46b20f`에서 확장된 `QA-RWD-001`을 포함한 로컬 clean-tree mock-only 26/26과 같은 SHA의 [push CI `30959376884`](https://github.com/ksi2564/systematic-trading/actions/runs/30959376884) `ui-qa` 통과. base `8eb580b`와 기능 후보를 합친 당시 test-merge `5fca72e`의 [PR CI `30959379072`](https://github.com/ksi2564/systematic-trading/actions/runs/30959379072)도 통과 | 실제 배포의 인증 브라우저·동일 출처 API, 섀도 화면 | 부분 |
-| `V2-QA-001` | Playwright 스크린샷·network evidence, manifest 안전 검증과 CI artifact 업로드; 인증 배포 GET-only 별도 harness | 기능 후보 `15201660c009cfbd57da0ff4637d0d33da46b20f`에서 로컬 26/26, 마지막 attempt 증적 참조 78개 SHA-256 자기검증, 리소스 변경 0; 같은 SHA의 [push CI `30959376884`](https://github.com/ksi2564/systematic-trading/actions/runs/30959376884) artifact와 당시 test-merge `5fca72ec8ba5167bcbbf3bf99ffad1f4273a6cb7`의 [PR CI `30959379072`](https://github.com/ksi2564/systematic-trading/actions/runs/30959379072) artifact `v2-ui-qa-local-mock-1` 통과. 배포 harness exact 경로/query·출처·메서드 1건, outside/symlink/hardlink/raw/tamper·reporter 실패·독립 verifier·추가 필드 거부 증적 경계 9건, opaque mask pixel sentinel 1건도 통과 | 실제 RC 성공 run, 배포 SHA manifest, 인증된 외부 화면 증적 | 부분 |
+| `V2-QA-001` | Playwright 스크린샷·network evidence, manifest 안전 검증과 CI artifact 업로드; 인증 배포 GET-only 별도 harness | 기능 후보 `15201660c009cfbd57da0ff4637d0d33da46b20f`에서 로컬 26/26, 마지막 attempt 증적 참조 78개 SHA-256 자기검증, 리소스 변경 0; 같은 SHA의 [push CI `30959376884`](https://github.com/ksi2564/systematic-trading/actions/runs/30959376884) artifact와 당시 test-merge `5fca72ec8ba5167bcbbf3bf99ffad1f4273a6cb7`의 [PR CI `30959379072`](https://github.com/ksi2564/systematic-trading/actions/runs/30959379072) artifact `v2-ui-qa-local-mock-1` 통과. PR #57 후속 후보는 exact health 뒤 후보 전용 무변경 snapshot을 고정하고 화면의 5개 논리 GET을 서버 전송 없이 로컬 응답하며, 6화면×2 viewport의 PNG 12개·관찰 JSON 2개·manifest 1개만 허용하도록 보강했지만 아직 미배포 | 새 후속 SHA의 CI·사용자 승인 RC 배포, 동일 SHA의 `build_sha`, 인증된 외부 화면 증적 | 부분 |
 | `V2-APR-001` | LIVE 후보·재개 확인, 감사 로그, 현재 LIVE 설정 시작 거부 | `test_lifecycle_and_paper.py`, `test_api.py` | DNS/트래픽·Java 소유권·롤백 승인 모델 | 부분 |
 | `V2-LIV-001` | 자동 제출·접수·미체결/부분체결·대조 완료 계약만 문서화 | 없음 | C3·C4·사용자 실행 승인 후 별도 설계·canary·인수 QA | 미구현 |
 | `V2-REL-001` | C0/CUTOVER 문서의 세 독립 20거래일 레인과 C5-A/C5-B/C6 계약 | 없음 | 연속 섀도 집계, 승인 게이트, 단건 canary, 예약 5주기, 전체 전환·안정화 | 미구현 |
@@ -48,8 +50,9 @@ PR #57 기능 후보의 push run과 base/기능 후보 당시 test-merge의 PR r
   않았으므로 #54 배포본과 동일했음. 현재 작업 트리 변경은 미배포 상태임
 - #56: 커밋 `8eb580b`, access-configure run `30937893445` 성공. 공개 Host를 허용한
   Access/Caddy 원본 수정이며 앱 바이너리 배포가 아님
-- 확인된 원격 사실: v2 API·cloudflared·Java·Caddy 서비스 active,
-  `execution_enabled=false`, `broker_adapter=disabled`, 원본 API 무인증 `401`
+- #56 run 당시 확인된 원격 사실: v2 API·cloudflared·Java·Caddy 서비스 active,
+  `execution_enabled=false`, `broker_adapter=disabled`, 원본 API 무인증 `401`. 현재
+  런타임은 이번 작업에서 재확인하지 못했다
 - 확인된 외부 사실: 미인증 UI/API는 Cloudflare Access 로그인으로 `302` 이동함
 - 확인되지 않은 사실: 허용 계정 로그인과 동일 출처 UI/API 성공, 비허용 계정 거부,
   Java 런타임 운영 모드, v2 자동 섀도, 실주문 대체
@@ -62,14 +65,15 @@ PR #57 기능 후보의 push run과 base/기능 후보 당시 test-merge의 PR r
 모든 자동 시나리오의 선행 조건은 v2 API 응답이
 `execution_enabled=false`, `broker_adapter=disabled`인 것이다. 다르면 즉시 중단한다.
 
-현재 작업트리의 Playwright 후보는 mock API만 사용하고 위험 요청·미mock 요청이 0건인지
-검사한다. 이는 화면 상태를 결정적으로 검증하는 자동 증적이며, 외부 배포와 실제 API를
-검증했다는 뜻은 아니다.
+현재 작업트리의 **로컬 가상 UI suite**는 mock API만 사용하고 위험 요청·미mock 요청이
+0건인지 검사한다. 이는 화면 상태를 결정적으로 검증하는 자동 증적이며, 외부 배포와
+실제 API를 검증했다는 뜻은 아니다. 별도의 deployed suite도 현재는 안전 계약만 로컬
+검증했으며 사용자 승인 배포·인증 세션이 없어 실제 배포 화면 결과는 `BLOCKED`다.
 
 | QA ID | 화면·행동 | 기대 결과 | 데이터 변경 | 권한 |
 | --- | --- | --- | --- | --- |
 | `QA-ACC-001` | 로그아웃 브라우저로 외부 URL 접근 | Access 로그인 또는 거부. 앱 HTML 직접 노출 없음 | 없음 | 자동 진행 가능 |
-| `QA-ACC-002` | 허용된 기존 세션으로 로그인 | UI 로드, API 200, 이메일 외 비밀값 노출 없음 | 없음 | 자동 진행 가능; OTP 입력이 필요하면 사용자에게 남김 |
+| `QA-ACC-002` | 허용된 기존 세션으로 로그인 | UI 로드, 고정 snapshot 기반 화면 API 200, 이메일 외 비밀값 노출 없음 | 없음 | 사용자 승인 배포 뒤 자동 진행 가능; 로그인·OTP 입력은 사용자에게 남김 |
 | `QA-SAF-001` | 오늘의 운영과 안전·감사 열기 | false/disabled가 화면·API에서 일치할 때만 안전 표시; API 401/오류·true/어댑터 불일치면 “안전 상태 확인 불가” 또는 불안전 표시와 변경 잠금 | 없음 | 자동 진행 가능 |
 | `QA-NAV-001` | 6개 메뉴 이동·새로고침 | 오류 없이 각 빈 상태/데이터 표시 | 없음 | 자동 진행 가능 |
 | `QA-STR-001` | QQQM 기준선 조회, 없을 때만 1회 생성 | 종목군 QQQM/QLD/TQQQ, 신호 QQQM, 새 버전/감사 기록 | 전략 1건 가능 | C0에서 테스트 전략 생성 여부·종류·건수 승인 후, 승인된 범위 내 자동 생성 가능 |
@@ -79,7 +83,7 @@ PR #57 기능 후보의 push run과 base/기능 후보 당시 test-merge의 PR r
 | `QA-ERR-001` | 필수 CSV 열 누락 | 실행 전 이해 가능한 오류, 다른 화면 정상 | 없음 | 자동 진행 가능 |
 | `QA-ACCNT-001` | 고유 이름의 QA 계좌 생성 | 필수 위험 한도와 `PAUSED` 상태, 주문 없음 | 테스트 계좌 1건 | C0에서 테스트 계좌 생성 여부·종류·건수 승인 후, 승인된 범위 내 자동 생성 가능 |
 | `QA-OPS-001` | 이미 전체 정지된 가상 화면에서 상태 확인 후 해제 확인창을 취소 | 정지 상태·안전 설정을 표시하고 변경 요청 0건 | 없음 | 로컬 가상 데이터로 자동 진행 가능 |
-| `QA-OPS-002` | 공유 시험 서버에서 v2 전체 정지 후 해제 | v2 상태와 감사 기록 변경, Java에는 영향 없음 | 제어·감사 기록 | C0에서 v2 제어 변경 범위 승인 후에만 진행 가능; 현재 미실행 |
+| `QA-OPS-002` | 공유 시험 서버에서 v2 전체 정지 후 해제 | v2 상태와 감사 기록 변경, Java에는 영향 없음 | 제어·감사 기록 | 공유 환경 변경이므로 실행 직전 사용자 승인 후에만 진행 가능; 현재 미실행 |
 | `QA-AUD-001` | 최근 감사 기록 확인 | 행위자·동작·대상·KST 시각 표시, 비밀값 없음 | 없음 | 자동 진행 가능 |
 | `QA-RWD-001` | 1440px·360px에서 키보드로 주요 메뉴를 열고 핵심 흐름 확인 | 가로 잘림 1px 이하, 포커스 순서와 선택 화면 결과 확인 | 없음 | 자동 진행 가능 |
 | `QA-PLN-001` | 비개발자용 v2 전환 검토 보드에서 D-01~D-10·S-01/S-04/S-08/S-09·단일 추적표 이동 | desktop/mobile에서 가로 잘림 없음, 검토 메모는 저장·전송 안 됨, 위험 버튼 비활성, 동일 origin GET만 발생 | 없음 | 자동 진행 가능 |
@@ -115,27 +119,49 @@ PR #57 기능 후보의 push run과 base/기능 후보 당시 test-merge의 PR r
   `/api/v2/operations/status` 모두 앱 본문을 직접 반환하지 않고 Cloudflare Access
   로그인으로 `302` 이동했다. 상세 근거는
   [`evidence/2026-08-05-QA-ACC-001.md`](evidence/2026-08-05-QA-ACC-001.md)에 있다.
-- `QA-ACC-002`: 인증 세션·OTP를 사용하지 않았으므로 `BLOCKED`. 사용자가 로그인할
-  때까지 실제 v2 UI와 동일 출처 API를 통과로 판정하지 않는다. 사용자가 로그인해 직접
-  제공한 임시 storage-state가 있을 때만 별도 `DEPLOYED_READ_ONLY_UI_QA`를 실행한다.
-  이 harness는 정확한 origin에서 query 없는 정적 GET/HEAD와 exact 경로/query의 5개
-  API GET만 허용하고 POST/PUT/PATCH/DELETE, WebSocket, 외부·미등록 경로를 발생 즉시
-  실패시킨다. 감사 API의 유일한 query는 `?limit=30`이며 증적에는 query 대신 고정
-  route ID만 남긴다. 프로젝트 이름뿐 아니라 실제 Chromium과
-  1440×1000·360×800 viewport를 고정 검증·기록한다. 서버가 직접 반환한
-  `build_sha`와 기대 SHA도 비교한다. 상태
-  파일과 증적은 저장소 밖의 분리된 제한 권한 경로만 허용하며 상태 파일은 증적에
-  첨부·커밋하지 않고 실행 후 폐기한다. 현재 사용자 소유·단일 link·확장 ACL 없음도
-  강제한다. overview의 동적 요약·최근 전략·최근 계좌 세 영역은 필수 opaque locator
-  mask로 덮고, marker가 빠지면 캡처 전에 실패한다. reporter 다음의 독립 verifier가
-  PASS 상태, 파일 목록·권한·SHA-256과 정제 관찰값을 다시 통과해야만 전체 명령이
+- `QA-ACC-002`: 2026-08-05 08:49 KST 빈 인앱 브라우저로 실제 URL을 다시 열었으나
+  Cloudflare Access 로그인 화면에서 멈췄고, 재사용할 연결 브라우저 세션도 없어서
+  `BLOCKED`다. 비밀번호·OTP·쿠키를 입력·저장하지 않았다. 상세 근거는
+  [`QA-ACC-002 차단 증적`](evidence/2026-08-05-QA-ACC-002-BLOCKED.md)에 있다. 마지막
+  GitHub-controlled 배포 #54에는 harness와 서버 `build_sha`가 없고 status GET도 행 부재 시 기본 행을 만들 수
+  있어, 로그인 세션만 생겨도 #54 배포본을 통과로 판정하지 않는다. 이 결함을 제거한
+  harness·`build_sha` 포함 새 후보의 **배포를 사용자가 승인한 뒤**, 그 동일 SHA를
+  checkout하고 사용자가 직접 로그인해 만든 임시 storage-state가 있을 때만 별도
+  `DEPLOYED_READ_ONLY_UI_QA`를 실행한다.
+
+  인증 상태 capture helper는 clean HEAD와 기대 SHA가 같은지 먼저 확인한 뒤 정확한
+  `/health`에서만 Access 로그인을 받는다. SPA `/`는 열지 않고 browser context 전체에서
+  앱 origin의 exact `/health` GET/HEAD 외 모든 경로를 차단한다. 로그인 뒤 exact health를 확인하고 앱 범위의
+  Secure·HttpOnly `CF_Authorization` cookie 정확히 1개만 남기며 `origins=[]`로 정제한 다음, 새 context에서
+  health를 다시 통과한 상태만 mode `600` 파일로 저장한다.
+
+  배포 QA는 리디렉션 없는 exact `/health` GET과 현재 후보에만 존재하는
+  `/api/v2/qa/deployed-read-only-snapshot` GET을 SPA보다 먼저 실행한다. 두 응답의
+  `build_sha`, `execution_enabled=false`, `broker_adapter=disabled`가 모두 맞아야 한다.
+  구 배포로 바뀌면 후보 전용 endpoint가 `404`가 되어 SPA 전에 중단된다. snapshot에는
+  정확히 5개 화면 조회 응답이 들어가며, SPA가 요청하는 이 5개 논리 GET은 브라우저에서
+  고정 snapshot으로 `fulfill`하고 backend로 `continue`한 횟수는 반드시 0이어야 한다.
+  서버로 직접 나가는 것은 위 두 preflight GET뿐이다. query 없는 동일 origin 정적
+  GET/HEAD 외의 POST/PUT/PATCH/DELETE, WebSocket, 외부·미등록 경로와 popup/new page는
+  browser context 전체에서 즉시 차단한다. RC 정적 UI에 삽입한 빌드 SHA marker도 기대
+  SHA와 같아야 캡처하므로 snapshot 뒤 다른 릴리스의 SPA가 반환되면 실패한다.
+  감사 조회의 논리 route ID는 `operations-audit-limit-30`이며 원래 query는 증적에 남기지
+  않는다.
+
+  실제 Chromium과 1440×1000·360×800 viewport 각각에서 오늘의 운영·전략 빌더·연구·검증·
+  계좌·위험·데이터·안전·감사 6개 화면을 모두 캡처한다. 화면별 등록 민감 영역은 정확한
+  집합·1회·visible·비영(非零) 크기여야 하고 미등록 민감 marker가 하나라도 있으면 PNG
+  생성 전에 실패한다. 성공 bundle은 opaque mask PNG 12개, viewport별 정제 관찰 JSON
+  2개, `manifest.json` 1개의 정확한 15파일이다. 상태 파일과 증적은 저장소 밖의 서로
+  다른 사용자 소유 mode `700`·확장 ACL 없는 디렉터리만 허용하며, 상태 파일은 증적에
+  첨부·커밋하지 않고 사용자가 실행 후 폐기한다. reporter 뒤 독립 verifier가 PASS,
+  exact tree·파일 권한·SHA-256·화면 순서·marker·정제 관찰값을 다시 통과해야 전체 명령이
   성공한다.
 - 배포 read-only harness preflight: 전체 SHA·storage-state·빈 증적 디렉터리가 없으면
   브라우저나 네트워크를 시작하기 전에 명시적으로 실패한다. harness checkout HEAD가
   배포 SHA와 정확히 같고 Git 작업 트리가 clean인 경우만 허용하며 이 SHA·dirty=false를
-  manifest에 기록한다. 안전한 dummy 상태로는 데스크톱·모바일 2개 시나리오가 정확히
-  등록됨을 확인했다. 인증 세션을 제공하지 않았으므로 실제 배포 검증 결과는 여전히
-  `BLOCKED`다.
+  manifest에 기록한다. 성공 시에만 2개 viewport 시나리오·15개 파일을 남긴다. 사용자
+  승인 배포와 인증 세션을 제공하지 않았으므로 실제 배포 검증 결과는 여전히 `BLOCKED`다.
 
 현재 UI에는 자동 paper 세션 시작·일별 step·완료 흐름이 없다. API 테스트가 있더라도
 사용자가 화면에서 검증할 수 없으므로 `V2-UI-001` 완료로 판정하지 않는다.
@@ -157,6 +183,11 @@ PR #57 기능 후보의 push run과 base/기능 후보 당시 test-merge의 PR r
 | `QA-MAN-009` | C6 전체 전환·20거래일 안정화 | v2 단일 소유권, 범위 확대, 일별 reconciliation·롤백 트리거 | 전체 운영·자금 영향 |
 
 ## 5. 증적 묶음 규격
+
+아래 tree는 향후 섀도·상태변경 QA의 일반 규격이다. `QA-ACC-002` 배포 read-only 성공
+bundle에는 적용하지 않는다. 해당 bundle은 앞서 정한 opaque mask PNG 12개, 정제 관찰
+JSON 2개, `manifest.json` 1개의 정확한 15파일만 허용하며 raw trace·HTML·JUnit·로그·
+Markdown 파일을 추가하지 않는다.
 
 권장 경로:
 

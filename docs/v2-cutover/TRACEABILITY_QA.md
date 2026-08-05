@@ -33,7 +33,7 @@
 | `V2-LIV-001` | 자동 제출·접수·미체결/부분체결·대조 완료 계약만 문서화 | 없음 | C3·C4·사용자 실행 승인 후 별도 설계·canary·인수 QA | 미구현 |
 | `V2-REL-001` | C0/CUTOVER 문서의 세 독립 20거래일 레인과 C5-A/C5-B/C6 계약 | 없음 | 연속 섀도 집계, 승인 게이트, 단건 canary, 예약 5주기, 전체 전환·안정화 | 미구현 |
 | `V2-RBK-001` | SHA+attempt 불변 릴리스 경로와 심볼릭 링크 복구, 첫 배포 실패 시 서비스 정지, 검증 실패 release 보존과 current/rollback/latest-3 보존, host 동시 배포 잠금 | active/stale host lock fail-closed; HUP/TERM→129/143; modern·#54 legacy·same-SHA 복구; health transport·안전값·SHA 오류; 안전 env 중복·기존 비정상 서비스 stop 실패의 pre-switch 거부; rollback 경로/SHA 불일치; systemd restart 오류; rollback health/restart 실패 시 새 bytes 보존; 최초 배포 stop 성공/실패·상태 조회 오류; lock cleanup 실패 non-green을 whole-script 격리 fault test로 검증. workflow의 기존 Java active·nonzero·동일 PID wrapper를 실제 shell matrix로 실행하고 배포 후 SHA·false/disabled 계약을 검사. 통합 안전 head `a6a7174`의 로컬 matrix·[push CI `30965407547`](https://github.com/ksi2564/systematic-trading/actions/runs/30965407547)와 test-merge `41fc46b`의 [PR CI `30965409423`](https://github.com/ksi2564/systematic-trading/actions/runs/30965409423) `infra` 통과 | 실제 staging retention warning·DB 복구·systemd/health 장애·미확정 주문·Java 복귀 훈련과 사용자 확정 | 부분 |
-| `V2-DOC-001` | `docs/v2-cutover/` 문서 묶음, 단일 `DELIVERY_TRACE`, 기능 제안·선택형 PR 템플릿, 비개발자용 review board | D-01~D-10·핵심 화면·요구사항 ID 계약 검사; 통합 안전 head `a6a7174`에서 review board desktop/mobile 2/2와 local-only GET 요청·무저장 메모·가로 overflow·비활성 위험 버튼을 검증했다. 원본 [push CI `30965407547`](https://github.com/ksi2564/systematic-trading/actions/runs/30965407547)와 test-merge `41fc46b`의 [PR CI `30965409423`](https://github.com/ksi2564/systematic-trading/actions/runs/30965409423)에서 artifact `v2-planning-board-qa-1` 생성 | 사용자 D-01~D-10 검토·승인과 이후 PR별 승인 SHA 연결 | 부분 |
+| `V2-DOC-001` | `docs/v2-cutover/` 문서 묶음, 단일 `DELIVERY_TRACE`, 기능 제안·선택형 PR 템플릿, 비개발자용 review board | D-01~D-10·핵심 화면·요구사항 ID 계약 검사; 통합 안전 head `a6a7174`에서 review board desktop/mobile 2/2와 local-only GET 요청·무저장 메모·가로 overflow·비활성 위험 버튼을 검증했다. 원본 [push CI `30965407547`](https://github.com/ksi2564/systematic-trading/actions/runs/30965407547)와 test-merge `41fc46b`의 [PR CI `30965409423`](https://github.com/ksi2564/systematic-trading/actions/runs/30965409423)에서 artifact `v2-planning-board-qa-1` 생성. 현재 후속 후보는 문서와 1:1인 실제 선택지 35개·필수 수정/설명 메모·무저장 검토안 복사와 C0-A/B 12개 정제 원천·차이 파일 digest, snapshot/diff 상호참조, 동일 최종 승인 SHA, 시간 순서, C2 보호 tree gate의 51개 양성/음성 테스트를 로컬 통과했다. 이 변경의 CI는 PR #57 checks에서 확인한다 | 사용자 D-01~D-10 검토·승인과 이후 PR별 승인 SHA 연결 | 부분 |
 
 역할은 다음과 같이 나눈다. `v2 CI`는 PR·push의 빠른 피드백을 위한 동일 테스트이며
 PR #57 통합 안전 head `a6a7174`의 원본 push run과 base `8eb580b`에 합친 test-merge
@@ -85,7 +85,7 @@ PR #57 통합 안전 head `a6a7174`의 원본 push run과 base `8eb580b`에 합�
 | `QA-OPS-002` | 공유 시험 서버에서 v2 전체 정지 후 해제 | v2 상태와 감사 기록 변경, Java에는 영향 없음 | 제어·감사 기록 | 공유 환경 변경이므로 실행 직전 사용자 승인 후에만 진행 가능; 현재 미실행 |
 | `QA-AUD-001` | 최근 감사 기록 확인 | 행위자·동작·대상·KST 시각 표시, 비밀값 없음 | 없음 | 자동 진행 가능 |
 | `QA-RWD-001` | 1440px·360px에서 키보드로 주요 메뉴를 열고 핵심 흐름 확인 | 가로 잘림 1px 이하, 포커스 순서와 선택 화면 결과 확인 | 없음 | 자동 진행 가능 |
-| `QA-PLN-001` | 비개발자용 v2 전환 검토 보드에서 D-01~D-10·S-01/S-04/S-08/S-09·단일 추적표 이동 | desktop/mobile에서 가로 잘림 없음, 검토 메모는 저장·전송 안 됨, 위험 버튼 비활성, 동일 origin GET만 발생 | 없음 | 자동 진행 가능 |
+| `QA-PLN-001` | 비개발자용 v2 전환 검토 보드에서 D-01~D-10 실제 선택·수정/설명 메모·검토안 복사와 S-01/S-04/S-08/S-10/S-09·단일 추적표 이동 | 문서와 1:1인 선택지 35개, 필수 메모 누락 시 복사 잠금, 10개 완성 시 안전 경계가 포함된 검토안 복사, C0-B 12개 마스킹 요약 화면 기획, 새로고침 뒤 초기화, local/session storage 0, desktop/mobile 가로 잘림 없음, 위험 버튼 비활성, 동일 origin GET만 발생 | 클립보드에 사용자가 누른 검토안만 복사·서버 전송 없음 | 자동 진행 가능 |
 | `QA-PAR-001` | 같은 정규화 입력을 Java/Python 후보에 공급 | 낙폭·회복·VIX·200MA·5% 게이트와 주문 종목·매수/매도 방향 일치. Java/Python 수량, 실제 운영 입력·설정·DB·스케줄 성공은 범위 밖 | 없음 | 공통 fixture 회귀는 자동 진행 가능, 수량·운영 대조는 C0-B 이후 |
 | `QA-CUT-001` | 배포 workflow의 Java 연속성 wrapper 격리 실행 | 배포 전 active·nonzero PID, 배포 뒤 active·동일 PID. 전략 on/off·최근 16:15/09:45 성공은 범위 밖 | 없음 | 격리 테스트 자동 진행 가능, 운영 snapshot은 C0-B 이후 |
 | `QA-INF-001` | 임시 경로에서 배포 스크립트 전체 fault matrix 실행 | modern/legacy/same-SHA 복구, systemd·health·signal·lock·안전 env·rollback 검증 실패를 fail-closed 처리. 실제 staging DB/systemd 훈련은 범위 밖 | 임시 파일만 생성·자동 정리 | 격리 테스트 자동 진행 가능, 공유 환경 훈련은 사용자 승인 필수 |
@@ -110,9 +110,12 @@ PR #57 통합 안전 head `a6a7174`의 원본 push run과 base `8eb580b`에 합�
   `QA-RWD-001`의 1440/360 가로 넘침
   단언도 이 26/26 범위에 포함한다. `MANUAL` 9건·`BLOCKED` 2건·`OUT_OF_SCOPE` 1건은
   통과로 올리지 않았다.
-- `QA-PLN-001`: review board desktop/mobile 2/2 `PASS`. D-01~D-10 10개, 실제 대안
-  30개, 핵심 화면 기획 4개, 추적 행 13개를 확인했고 GET 이외 네트워크·저장·승인 제출·활성 위험 버튼과
-  문서 전체 가로 overflow는 0건이다. CI와 RC에서 별도 screenshot/HTML/JUnit artifact로
+- `QA-PLN-001`: 현재 review board desktop/mobile 2/2 로컬 `PASS`. D-01~D-10 10개,
+  문서와 1:1인 실제 대안 35개, native 단일 선택, 필수 수정/설명 메모, 안전 경계를 포함한
+  검토안 복사 성공·수동 복사 대체 경로, 새로고침 초기화, 핵심 화면 기획 5개, 추적 행 14개,
+  320px의 미완성·완성·복사 실패 상태를 확인했다. GET 이외 네트워크·브라우저
+  저장·승인 제출·활성 위험 버튼과 문서 전체 가로 overflow는 0건이다. 이 변경의 CI는
+  PR #57 checks에서 확인한다. CI와 RC에서 별도 screenshot/HTML/JUnit artifact로
   남기며, 이 결과는 기획 화면의 사용성 증적이지 v2 기능 구현·배포 증적이 아니다.
 - `QA-ACC-001`: 2026-08-05 KST 읽기 전용 외부 검증 `PASS`. `/`와
   `/api/v2/operations/status` 모두 앱 본문을 직접 반환하지 않고 Cloudflare Access

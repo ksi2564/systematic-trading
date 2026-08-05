@@ -1,5 +1,10 @@
 "use strict";
 
+const planningState = Object.freeze({
+  c0A: "승인 대기",
+  c2: "미시작",
+});
+
 const decisionGroups = [
   {
     label: "1 · 기준과 데이터",
@@ -14,9 +19,9 @@ const decisionGroups = [
         impact: "C0-B에서 Java 실행 버전·실제 설정·전략 상태·주문 모드를 읽기 전용으로 확인합니다.",
         keyConditions: "확정할 것 · Java 실행 버전 식별값(SHA), 실제 설정, 저장된 전략 상태(DB), 주문 모드의 변경 확인값(해시)",
         options: [
-          { name: "A · 권장", detail: "승인한 제품 규칙을 최종 기준으로 삼아요.", consequence: "Java와 다르면 개발을 멈추고 차이를 다시 승인받아요." },
-          { name: "수정안", detail: "Java 동작 또는 새 규칙을 최종 기준으로 직접 지정해요.", consequence: "기준 문서와 비교용 입력을 다시 만들고 승인 전에는 개발하지 않아요." },
-          { name: "설명 먼저", detail: "수식 차이 예시와 C0-B에서 읽을 항목을 더 설명받아요.", consequence: "C0-A와 Python 자동 병행 비교 개발이 함께 대기해요." },
+          { name: "A · 권장", reply: "A 승인", detail: "승인한 제품 규칙을 최종 기준으로 삼아요.", consequence: "Java와 다르면 개발을 멈추고 차이를 다시 승인받아요." },
+          { name: "수정 요청", reply: "수정 요청", noteLabel: "원하는 최종 기준", notePlaceholder: "예: Java의 현재 동작을 최종 기준으로 사용", detail: "Java 동작 또는 새 규칙을 최종 기준으로 직접 지정해요.", consequence: "기준 문서와 비교용 입력을 다시 만들고 승인 전에는 개발하지 않아요." },
+          { name: "설명 요청", reply: "설명 요청", noteLabel: "먼저 확인할 내용", notePlaceholder: "예: 수식 차이가 생기는 사례를 설명해 주세요", detail: "수식 차이 예시와 C0-B에서 읽을 항목을 더 설명받아요.", consequence: "C0-A와 Python 자동 병행 비교 개발이 함께 대기해요." },
         ],
       },
       {
@@ -28,9 +33,9 @@ const decisionGroups = [
         impact: "기존 결과와 다른 이유가 전략 때문인지 데이터 개선 때문인지 분리할 수 있습니다.",
         keyConditions: "확정할 것 · 증권사 기준값의 실제 기준일 · 변동성지수 관측 시각 · 200일선에 당일 진행값과 조정주가를 넣는지",
         options: [
-          { name: "A · 권장", detail: "첫 전환은 Java가 실제 쓴 데이터 의미를 보존해요.", consequence: "동등성 확인이 쉬워지고 데이터 개선은 별도 버전으로 검토해요." },
-          { name: "처음부터 수정", detail: "공식 종가·캘린더 등 더 나은 의미로 바로 바꿔요.", consequence: "Java와의 차이를 허용할 새 기준과 과거 재검증이 필요해요." },
-          { name: "설명 먼저", detail: "코드에서 확인한 필드 의미와 C0-B 수집 범위를 더 봐요.", consequence: "C0-A 전에는 실제 응답 수집이나 데이터 어댑터 개발을 하지 않아요." },
+          { name: "A · 권장", reply: "A 승인", detail: "첫 전환은 Java가 실제 쓴 데이터 의미를 보존해요.", consequence: "동등성 확인이 쉬워지고 데이터 개선은 별도 버전으로 검토해요." },
+          { name: "처음부터 데이터 의미 수정", reply: "처음부터 데이터 의미 수정", noteLabel: "바꿀 데이터 의미", notePlaceholder: "예: 당일 확정 종가와 공식 거래일 캘린더 사용", detail: "공식 종가·캘린더 등 더 나은 의미로 바로 바꿔요.", consequence: "Java와의 차이를 허용할 새 기준과 과거 재검증이 필요해요." },
+          { name: "설명 요청", reply: "설명 요청", noteLabel: "먼저 확인할 데이터", notePlaceholder: "예: KIS 기준값이 어느 시장일 가격인지 설명해 주세요", detail: "코드에서 확인한 필드 의미와 C0-B 수집 범위를 더 봐요.", consequence: "C0-A 전에는 실제 응답 수집이나 데이터 어댑터 개발을 하지 않아요." },
         ],
       },
     ],
@@ -48,9 +53,9 @@ const decisionGroups = [
         impact: "재기동 뒤에도 중복 없이 이어지는 자동 실행기의 시간 계약이 생깁니다.",
         keyConditions: "제안 숫자 · 장 마감 상태 저장은 미국 동부시간 17:00까지 · 아침 판단은 10:30까지 · 실시간 입력 60초 이내 · 재시도 +5/+15/+30분",
         options: [
-          { name: "권장안", detail: "16:15/09:45와 제안 재시도·마감·60초 신선도를 승인해요.", consequence: "마감 뒤에는 계산하지 않고 입력 대기 상태와 알림을 남겨요." },
-          { name: "시각·신선도 수정", detail: "실행 시각, 마감, 재시도, 60초 기준을 바꿔요.", consequence: "공급자 가용 시각을 확인하고 가상 시계 인수 기준도 함께 바꿔요." },
-          { name: "설명 먼저", detail: "조기 종료일·휴장·재기동 사례를 더 확인해요.", consequence: "자동 실행기 개발은 보류돼요." },
+          { name: "권장안", reply: "권장안 승인", detail: "16:15/09:45와 제안 재시도·마감·60초 신선도를 승인해요.", consequence: "마감 뒤에는 계산하지 않고 입력 대기 상태와 알림을 남겨요." },
+          { name: "시각·신선도 수정", reply: "시각/신선도 수정", noteLabel: "원하는 시각·신선도", notePlaceholder: "예: 실시간 입력 신선도를 90초로 변경", detail: "실행 시각, 마감, 재시도, 60초 기준을 바꿔요.", consequence: "공급자 가용 시각을 확인하고 가상 시계 인수 기준도 함께 바꿔요." },
+          { name: "설명 요청", reply: "설명 요청", noteLabel: "먼저 확인할 일정 사례", notePlaceholder: "예: 미국 조기 종료일에는 언제 실행되는지 설명해 주세요", detail: "조기 종료일·휴장·재기동 사례를 더 확인해요.", consequence: "자동 실행기 개발은 보류돼요." },
         ],
       },
       {
@@ -62,9 +67,9 @@ const decisionGroups = [
         impact: "20거래일 통계가 실제 안전성과 동등성을 과장하지 않습니다.",
         keyConditions: "화면 용어 · 수식 차이 / 입력 차이 / 안전을 위한 중단 / 기존 결과 없음으로 나눠 표시",
         options: [
-          { name: "A · 권장", detail: "필수 입력이 없으면 계산을 차단해요.", consequence: "관찰 기간은 늘어날 수 있지만 잘못된 판단을 자동으로 만들지 않아요." },
-          { name: "기존 방식 유지", detail: "일부 지표가 없을 때 보호 규칙을 건너뛰어요.", consequence: "계속 실행되지만 위험을 낮추는 규칙이 빠질 수 있어 권장하지 않아요." },
-          { name: "설명 먼저", detail: "어떤 입력을 필수로 볼지 더 확인해요.", consequence: "데이터 계약과 자동 병행 비교 개발이 대기해요." },
+          { name: "A · 권장", reply: "A 승인", detail: "필수 입력이 없으면 계산을 차단해요.", consequence: "관찰 기간은 늘어날 수 있지만 잘못된 판단을 자동으로 만들지 않아요." },
+          { name: "기존 방식 유지", reply: "기존 방식 유지", noteLabel: "유지할 범위와 종료 조건", notePlaceholder: "예: 첫 5거래일만 유지한 뒤 차단 방식으로 전환", detail: "일부 지표가 없을 때 보호 규칙을 건너뛰어요.", consequence: "관련 안전 명세를 먼저 고치고 다시 승인해야 해요." },
+          { name: "설명 요청", reply: "설명 요청", noteLabel: "먼저 확인할 입력", notePlaceholder: "예: 필수로 보는 가격·지표 목록을 설명해 주세요", detail: "어떤 입력을 필수로 볼지 더 확인해요.", consequence: "데이터 계약과 자동 병행 비교 개발이 대기해요." },
         ],
       },
     ],
@@ -82,9 +87,10 @@ const decisionGroups = [
         impact: "각 주문 의도 수량이 왜 나왔는지 설명하며 비교할 수 있습니다.",
         keyConditions: "제안 숫자 · 가격 2자리 반올림 · 수량 정수 내림 · 수수료 0.25% · 매도대금 99.5%만 사용",
         options: [
-          { name: "A · 권장", detail: "관리 밖 종목이 있으면 멈추고 Java 후보 수량 규칙을 써요.", consequence: "임의 매매를 막고 C0-B 실제 설정과 다르면 다시 승인해요." },
-          { name: "종목 정책 수정", detail: "관리 밖 종목이 있을 때의 허용·제외 규칙을 정해요.", consequence: "포트폴리오 영향과 수동 확인 절차를 추가해야 해요." },
-          { name: "수량 규칙 수정", detail: "호가·수수료·반올림·현금 여유를 바꿔요.", consequence: "Java 비교용 입력과 예상 체결 금액을 다시 검증해야 해요." },
+          { name: "A · 권장", reply: "A 승인", detail: "관리 밖 종목이 있으면 멈추고 Java 후보 수량 규칙을 써요.", consequence: "임의 매매를 막고 C0-B 실제 설정과 다르면 다시 승인해요." },
+          { name: "관리 밖 종목 정책 수정", reply: "관리 밖 종목 정책 수정", noteLabel: "원하는 관리 밖 종목 정책", notePlaceholder: "예: QQQ는 보유 허용, 그 외 종목은 자동 진행 중단", detail: "관리 밖 종목이 있을 때의 허용·제외 규칙을 정해요.", consequence: "포트폴리오 영향과 수동 확인 절차를 추가해야 해요." },
+          { name: "수량 규칙 수정", reply: "수량 규칙 수정", noteLabel: "원하는 수량 규칙", notePlaceholder: "예: 수수료 여유를 0.30%로 변경", detail: "호가·수수료·반올림·현금 여유를 바꿔요.", consequence: "Java 비교용 입력과 예상 체결 금액을 다시 검증해야 해요." },
+          { name: "설명 요청", reply: "설명 요청", noteLabel: "먼저 확인할 수량 사례", notePlaceholder: "예: 매도 뒤 매수 가능 수량 계산 예시를 보여 주세요", detail: "관리 밖 종목과 수량 계산 사례를 더 확인해요.", consequence: "수량·보유 종목 정책 개발은 대기해요." },
         ],
       },
       {
@@ -96,9 +102,9 @@ const decisionGroups = [
         impact: "같은 시장일·가격 의미·관측 기준을 만족한 날만 운영 비교에 포함합니다.",
         keyConditions: "두 증명 · ① 같은 입력 수식 비교 ② 실제 Java/Python 운영 결과 비교",
         options: [
-          { name: "A · 권장", detail: "수식 비교와 실제 운영 결과 비교를 둘 다 해요.", consequence: "개발 오류와 운영 데이터 차이를 각각 설명할 수 있어요." },
-          { name: "공통 입력만", detail: "같은 비교용 입력의 수식 비교만 해요.", consequence: "실제 시각·공급자·계좌 차이를 증명하지 못해 운영 대체 근거가 부족해요." },
-          { name: "설명 먼저", detail: "Java 결과를 읽기 전용으로 내보낼 범위를 더 확인해요.", consequence: "운영 비교 개발은 C0-B까지 대기해요." },
+          { name: "A · 권장", reply: "A 승인", detail: "수식 비교와 실제 운영 결과 비교를 둘 다 해요.", consequence: "개발 오류와 운영 데이터 차이를 각각 설명할 수 있어요." },
+          { name: "공통 입력 비교만", reply: "공통 입력 비교만 사용", noteLabel: "운영 결과 비교를 제외할 이유와 대체 검증", notePlaceholder: "예: 운영 결과 비교 대신 승인할 별도 검증 기준", detail: "같은 비교용 입력의 수식 비교만 해요.", consequence: "관련 동등성 명세를 먼저 고치고 다시 승인해야 해요." },
+          { name: "설명 요청", reply: "설명 요청", noteLabel: "먼저 확인할 비교 범위", notePlaceholder: "예: 실제 Java에서 어떤 결과를 읽는지 설명해 주세요", detail: "Java 결과를 읽기 전용으로 내보낼 범위를 더 확인해요.", consequence: "운영 비교 개발은 C0-B까지 대기해요." },
         ],
       },
     ],
@@ -116,9 +122,10 @@ const decisionGroups = [
         impact: "화면 QA가 무엇을 만들고 언제 지우는지 사전에 알 수 있습니다.",
         keyConditions: "제안 범위 · 전략 1 · 정지 계좌 1 · 연구 각 1 · 구독 1 · 전역 변경 0 / 정리 24시간 · 화면 증적 30일 · 감사 90일",
         options: [
-          { name: "권장 범위", detail: "위 최소 자원만 만들고 정지·정리 결과를 남겨요.", consequence: "상태변경 화면까지 검증할 수 있지만 승인 범위 안에서 데이터가 생겨요." },
-          { name: "전부 읽기 전용", detail: "어떤 QA 자원도 만들거나 바꾸지 않아요.", consequence: "조회 화면은 검증하지만 생성·정지·정리 흐름은 수동으로 남아요." },
-          { name: "범위·보존 수정", detail: "종류·건수·보존 기간을 직접 바꿔요.", consequence: "QA 기록 묶음과 자동 정리 기준을 함께 다시 확정해요." },
+          { name: "권장 범위·보존", reply: "권장 범위·보존 승인", detail: "위 최소 자원만 만들고 정지·정리 결과를 남겨요.", consequence: "상태변경 화면까지 검증할 수 있지만 승인 범위 안에서 데이터가 생겨요." },
+          { name: "전부 읽기 전용", reply: "전부 읽기 전용", noteLabel: "상태 변경 QA를 제외할 범위와 대체 검증", notePlaceholder: "예: 사용자가 직접 실행할 상태 변경 시나리오와 증적", detail: "어떤 QA 자원도 만들거나 바꾸지 않아요.", consequence: "관련 QA 명세를 먼저 고치고 다시 승인해야 해요." },
+          { name: "범위·보존 수정", reply: "범위/보존 수정", noteLabel: "원하는 시험 범위·보존 기간", notePlaceholder: "예: 자원 생성 없이 조회만, 화면 증적은 14일 보존", detail: "종류·건수·보존 기간을 직접 바꿔요.", consequence: "QA 기록 묶음과 자동 정리 기준을 함께 다시 확정해요." },
+          { name: "설명 요청", reply: "설명 요청", noteLabel: "먼저 확인할 QA 범위", notePlaceholder: "예: 시험 서버에서 생성되는 데이터 목록을 설명해 주세요", detail: "생성 대상과 정리·보존 방식을 더 확인해요.", consequence: "상태변경 QA 범위 승인은 대기해요." },
         ],
       },
       {
@@ -130,9 +137,9 @@ const decisionGroups = [
         impact: "한 가지 성공만으로 실전 준비를 과장하지 않습니다.",
         keyConditions: "통과 숫자 · 세 가지 비교 각각 20/20 · 실제 주문 제출 0건 · 중복 0건 · Java 영향 0건 · 핵심 변경 시 처음부터 재시작",
         options: [
-          { name: "A · 권장", detail: "세 레인을 각각 연속 20거래일 통과해요.", consequence: "시간은 걸리지만 수식·운영·데이터 준비를 독립 증명해요." },
-          { name: "기간·기준 수정", detail: "20일, 제외일, 재시작 조건을 바꿔요.", consequence: "오탐·미탐 위험과 실전 전환 기준을 다시 검토해야 해요." },
-          { name: "설명 먼저", detail: "세 레인의 차이와 분모 계산 예시를 더 봐요.", consequence: "C3 관찰은 시작하지 않아요." },
+          { name: "A · 권장", reply: "A 승인", detail: "세 레인을 각각 연속 20거래일 통과해요.", consequence: "시간은 걸리지만 수식·운영·데이터 준비를 독립 증명해요." },
+          { name: "기간·기준 수정", reply: "관찰 기간/기준 수정", noteLabel: "원하는 기간·통과 기준", notePlaceholder: "예: 연속 30거래일로 변경", detail: "20일, 제외일, 재시작 조건을 바꿔요.", consequence: "오탐·미탐 위험과 실전 전환 기준을 다시 검토해야 해요." },
+          { name: "설명 요청", reply: "설명 요청", noteLabel: "먼저 확인할 통과 기준", notePlaceholder: "예: 입력이 빠진 날의 분모 계산을 설명해 주세요", detail: "세 레인의 차이와 분모 계산 예시를 더 봐요.", consequence: "C3 관찰은 시작하지 않아요." },
         ],
       },
     ],
@@ -150,9 +157,10 @@ const decisionGroups = [
         impact: "자동화의 편의가 복구 결정권을 대신하지 않습니다.",
         keyConditions: "제안 목표 · 병행 비교 복구 30분/최대 1거래일 데이터 · 제한 시험과 실전 복구 15분 · 주문·감사 손실 0",
         options: [
-          { name: "A · 권장", detail: "격리 훈련만 자동, 공유 환경 명령은 직전 승인해요.", consequence: "안전하지만 실제 목표값은 승인된 리허설에서 따로 증명해야 해요." },
-          { name: "목표·명령 수정", detail: "복구 시간·보존 목표 또는 자동 허용 명령을 지정해요.", consequence: "영향 범위와 실패 시 수동 복구 절차를 다시 검토해요." },
-          { name: "설명 먼저", detail: "강제 종료·부분체결·데이터베이스 복구 사례를 더 봐요.", consequence: "공유 환경 리허설은 실행하지 않아요." },
+          { name: "A · 권장", reply: "A 승인", detail: "격리 훈련만 자동, 공유 환경 명령은 직전 승인해요.", consequence: "안전하지만 실제 목표값은 승인된 리허설에서 따로 증명해야 해요." },
+          { name: "복구 목표 수정", reply: "복구 목표 수정", noteLabel: "원하는 복구 목표", notePlaceholder: "예: 병행 비교 복구 20분, 데이터 손실 허용 0일", detail: "복구 시간·데이터 보존 목표를 바꿔요.", consequence: "실제 훈련 방법과 통과 기준을 다시 검토해요." },
+          { name: "허용 명령 지정", reply: "허용 명령 지정", noteLabel: "자동 허용할 명령과 환경", notePlaceholder: "예: 일회용 시험 환경의 서비스 재시작만 허용", detail: "자동화가 실행해도 되는 명령과 환경을 직접 정해요.", consequence: "대상·영향·실패 시 수동 복구 절차를 함께 확정해야 해요." },
+          { name: "설명 요청", reply: "설명 요청", noteLabel: "먼저 확인할 복구 사례", notePlaceholder: "예: 부분체결 직후 중단되면 어떻게 복원하는지 설명해 주세요", detail: "강제 종료·부분체결·데이터베이스 복구 사례를 더 봐요.", consequence: "공유 환경 리허설은 실행하지 않아요." },
         ],
       },
       {
@@ -164,9 +172,11 @@ const decisionGroups = [
         impact: "주문마다 승인받는 구조가 아니라, 검증된 범위 안의 자동운용을 단계적으로 여는 계약입니다.",
         keyConditions: "단계 숫자 · C5-A 실제 1건 · C5-B 연속 5주기(자동 제출·대조 최소 1회) · C6 전환 · 이후 20거래일 안정화 전 Java 퇴역 금지",
         options: [
-          { name: "A · 권장", detail: "단건과 제한 5주기를 따로 승인한 뒤 전체 자동운용으로 넓혀요.", consequence: "승인 범위 안에서는 자동으로 돌고, 재개·범위 확대는 다시 승인해요." },
-          { name: "순서·횟수 수정", detail: "주문 직렬 처리, 중단 기준, 제한 시험 횟수를 바꿔요.", consequence: "가상 브로커 시험기와 복구·대조 인수 기준도 함께 바꿔야 해요." },
-          { name: "자동 제출 제외", detail: "Python은 판단만 하고 실제 제출은 계속 수동으로 남겨요.", consequence: "사용자 목표인 ‘완전한 자동 대체’는 달성되지 않아요." },
+          { name: "A · 권장", reply: "A를 미래 실전 명세로 승인", detail: "단건과 제한 5주기를 따로 승인한 뒤 전체 자동운용으로 넓혀요.", consequence: "승인 범위 안에서는 자동으로 돌고, 재개·범위 확대는 다시 승인해요." },
+          { name: "주문 연속·중단 정책 수정", reply: "주문 연속/중단 정책 수정", noteLabel: "원하는 주문 순서·중단 정책", notePlaceholder: "예: 접수 불명 시 계좌 정지와 즉시 알림", detail: "주문 직렬 처리와 중단·재개 기준을 바꿔요.", consequence: "가상 브로커 시험기와 복구·대조 기준도 함께 바꿔야 해요." },
+          { name: "제한 시험 횟수 수정", reply: "제한 시험 횟수 수정", noteLabel: "원하는 제한 시험 횟수", notePlaceholder: "예: 단건 뒤 연속 10주기", detail: "단건 뒤 자동운용 주기 수와 최소 체결 확인 횟수를 바꿔요.", consequence: "실전 전환까지 필요한 기간과 승인 범위를 다시 계산해요." },
+          { name: "자동 제출 제외", reply: "자동 제출 제외", noteLabel: "자동 제출을 제외한 운영 방식", notePlaceholder: "예: 판단 알림 뒤 사용자가 수동 제출", detail: "Python은 판단만 하고 실제 제출은 계속 수동으로 남겨요.", consequence: "자동 대체 목표와 관련 명세를 먼저 바꾸고 다시 승인해야 해요." },
+          { name: "설명 요청", reply: "설명 요청", noteLabel: "먼저 확인할 자동운용 단계", notePlaceholder: "예: 단건 승인 뒤 5주기 동안 무엇이 자동인지 설명해 주세요", detail: "단건·제한 자동운용·전체 전환의 차이를 더 확인해요.", consequence: "실제 주문 기능과 전환은 계속 잠겨 있어요." },
         ],
       },
     ],
@@ -183,7 +193,7 @@ const screens = [
         <article class="mock-card"><span>기존 시스템</span><strong>마지막 제어 작업에서 미중단</strong><p>현재 서비스·전략 켜짐/꺼짐·최근 성공·주문 모드는 C0-B 확인 대기예요.</p></article>
         <article class="mock-card"><span>v2 주문 안전 예시</span><strong>후보 코드상 제출 차단</strong><p>검토 중인 화면 예시예요. 현재 원격 값은 다시 확인해야 해요.</p></article>
         <article class="mock-card"><span>오늘의 다음 일정</span><strong>기획 확정 대기</strong><p>자동 실행기는 C0-B 뒤 개발해요.</p></article>
-        <article class="mock-card full"><span>오늘 확인할 일</span><ul class="gate-list"><li><strong>C0-A D-01~D-10</strong><small>사용자 검토</small></li><li><strong>C0-B 운영 상태 복사본</strong><small>아직 수집 안 함</small></li><li><strong>인증된 화면 검증</strong><small>사용자 승인 검증 SHA 배포·로그인 세션 대기</small></li></ul></article>
+        <article class="mock-card full"><span>오늘 확인할 일</span><ul class="gate-list"><li><strong>C0-A D-01~D-10</strong><small>사용자 검토</small></li><li><strong>C0-B 운영 상태 복사본</strong><small>아직 수집 안 함</small></li><li><strong>인증된 화면 검증</strong><small>후보 배포 승인·사용자 직접 로그인 대기</small></li></ul></article>
       </div>`,
   },
   {
@@ -203,10 +213,23 @@ const screens = [
     description: "누가 언제 무엇을 검증했는지",
     content: `
       <div class="mock-grid">
-        <article class="mock-card full"><span>검증 단계</span><ul class="evidence-list"><li><strong>로컬 가상 화면 검증</strong><small>통합 안전 코드 a6a7174 · 26 / 26 통과</small></li><li><strong>내 작업 버전 자동 검사</strong><small>브랜치 CI 30965407547 · 5개 작업 통과</small></li><li><strong>기준 버전과 합친 상태 검사</strong><small>PR CI 30965409423 · 5개 작업 통과</small></li><li><strong>증적 참조 무결성</strong><small>78개 참조 · 모두 해시 검증 통과</small></li><li><strong>운영 배포·인증 화면 검증</strong><small>차단 확인 · 사용자 승인 배포와 로그인 세션 대기</small></li><li><strong>성공 증적 계약</strong><small>6개 화면 × 2크기 · 그림 12 + 관찰 2 + 검증 목록 1</small></li></ul></article>
+        <article class="mock-card full"><span>검증 단계</span><ul class="evidence-list"><li><strong>로컬 가상 화면 검증</strong><small>통합 안전 코드 a6a7174 · 26 / 26 통과</small></li><li><strong>내 작업 버전 자동 검사</strong><small>브랜치 CI 30965407547 · 5개 작업 통과</small></li><li><strong>기준 버전과 합친 상태 검사</strong><small>PR CI 30965409423 · 5개 작업 통과</small></li><li><strong>증적 참조 무결성</strong><small>78개 참조 · 모두 해시 검증 통과</small></li><li><strong>운영 배포·인증 화면 검증</strong><small>차단 확인 · 후보 배포 승인과 사용자 직접 로그인 대기</small></li><li><strong>성공 증적 계약</strong><small>6개 화면 × 2크기 · 그림 12 + 관찰 2 + 검증 목록 1</small></li></ul></article>
         <article class="mock-card wide"><span>읽기 전용 방식</span><strong>안전 확인 1 + 고정 조회 1</strong><p>화면의 5개 조회는 고정 조회 묶음으로 응답해 서버에 다시 보내지 않아요.</p></article>
         <article class="mock-card wide"><span>민감정보 처리</span><strong>정제·마스킹 뒤 증적</strong><p>로그인 상태는 저장소 밖 별도 경로에 두고 증적에는 넣지 않아요.</p></article>
         <article class="mock-card"><span>이번 화면 QA의 주문 제출</span><strong>0건</strong><p>화면 조회 이외 앱 요청은 차단해요.</p></article>
+      </div>`,
+  },
+  {
+    id: "S-10",
+    name: "운영값 재확인",
+    description: "C0-B의 마스킹된 12개 값과 차이를 한눈에",
+    content: `
+      <div class="mock-grid">
+        <article class="mock-card full"><span>C0-B 재확인 진행</span><strong>0 / 12 · 아직 수집하지 않았어요</strong><p>C0-A가 끝난 뒤 읽기 전용으로 수집하고, 값과 차이를 사람이 읽을 문장으로 보여줘요.</p></article>
+        <article class="mock-card wide"><span>기존 시스템·전략</span><ul class="evidence-list"><li><strong>실행 버전·실제 설정</strong><small>수집 대기</small></li><li><strong>QQQM/QLD/TQQQ 켜짐·파라미터</strong><small>수집 대기</small></li><li><strong>최근 두 번의 상태</strong><small>수집 대기</small></li></ul></article>
+        <article class="mock-card"><span>주문 안전</span><strong>모드·소유권 확인 대기</strong><p>계좌번호와 자격증명은 표시하지 않아요.</p></article>
+        <article class="mock-card wide"><span>데이터 의미·비교 기준</span><strong>가격 기준일·관측 시각·허용 차이 확인 대기</strong><p>원문 대신 정제된 요약과 파일 해시를 연결해요.</p></article>
+        <article class="mock-card"><span>최종 재승인</span><strong>잠김</strong><p>12개 값·차이·문서 버전이 모두 맞아야 열려요.</p></article>
       </div>`,
   },
   {
@@ -223,19 +246,20 @@ const screens = [
 ];
 
 const traceRows = [
-  ["D-01~02", "V2-STR-001 · V2-STR-002 · V2-DAT-001", "S-02 · S-04 · S-06", "QA-PAR-001", "저장소 Java 후보와 공통 시험값의 수식·주문 방향 비교 통과 · 운영값 미수집", "부분", "C0-A/B"],
+  ["D-01~02", "V2-STR-001 · V2-STR-002 · V2-DAT-001", "S-02 · S-04 · S-06 · S-10", "QA-PAR-001", "저장소 Java 후보와 공통 시험값의 수식·주문 방향 비교 통과 · 운영값 미수집", "부분", "C0-A/B"],
   ["D-03", "V2-AUT-001 · V2-DAT-001", "S-01 · S-04 · S-06", "QA-SHD-001/002", "계획만 있음 · 실행·증적 파일 없음", "미구현", "C0-B"],
   ["D-04", "V2-DAT-001 · V2-SAF-001", "S-01 · S-07", "QA-SAF-001", "현재 UI 잠금만 통과 · 운영 입력 미검증", "부분", "C0-B"],
   ["D-05~06", "V2-STR-002 · V2-PER-001", "S-04 · S-05", "QA-PAR-001", "Python 후보 수량·저장만 통과 · Java/Python 수량 비교와 실제 주문 미리보기 없음", "부분", "C0-B"],
-  ["D-07", "V2-QA-001", "S-03 · S-08", "QA-NAV-001 · QA-OPS-001 · QA-RWD-001 · QA-SAF-001", "통합 안전 코드 a6a7174 · 로컬 가상 화면 26/26·브랜치 CI 30965407547·PR 병합 CI 30965409423·증적 참조 78개 해시 검증 통과 · 배포 증적 계약은 6화면×2, 정확히 15파일 · QA-OPS-002와 QA-MAN-001~009 위험 작업 미실행", "부분", "배포 승인·로그인"],
+  ["D-07", "V2-QA-001", "S-03 · S-08", "QA-NAV-001 · QA-OPS-001 · QA-RWD-001 · QA-SAF-001", "통합 안전 코드 a6a7174 · 로컬 가상 화면 26/26·브랜치 CI 30965407547·기준 버전 합본 PR CI 30965409423·증적 참조 78개 해시 검증 통과 · 배포 증적 계약은 6화면×2, 정확히 15파일 · QA-OPS-002와 QA-MAN-001~009 위험 작업 미실행", "부분", "배포 승인·로그인"],
   ["D-08", "V2-REL-001", "S-04 · S-09", "QA-SHD-001/002", "세 가지 비교 모두 0/20", "미구현", "C3 진입"],
   ["D-09", "V2-RBK-001", "S-07 · S-09", "QA-INF-001", "격리 장애 시험 통과 · 실제 공유 시험 서버 훈련 없음", "부분", "C4 실행 승인"],
   ["D-10", "V2-LIV-001 · V2-APR-001", "S-05 · S-09", "C5-A/B 계획", "QA-ACC-002 시도가 제출한 실제 주문 0건 · 실운영 전체 주문 여부 미확인 · 제한 시험 없음", "미구현", "단건→범위→전환 승인"],
-  ["C1 접근", "V2-ACC-001", "S-00", "QA-ACC-001/002", "미인증 경계 통과 · 마지막 GitHub-controlled #54는 버전 표시 없음 · 사용자 승인 새 검증 SHA와 로그인 세션 대기", "부분", "배포 승인 뒤 로그인 검증"],
+  ["C1 접근", "V2-ACC-001", "S-00", "QA-ACC-001/002", "미인증 경계 통과 · 마지막 GitHub-controlled #54는 버전 표시 없음 · 사용자 승인 새 검증 SHA와 직접 로그인 대기", "부분", "배포 승인 뒤 로그인 검증"],
   ["C1 격리", "V2-CUT-001 · V2-CUT-002", "S-01 · S-09", "QA-CUT-001", "서비스·프로세스 번호 연속성 시험 통과 · 실제 운용 미확인", "부분", "C0-B"],
-  ["현재 UI", "V2-UI-001 · V2-OPS-001", "현재 콘솔(S-01 일부 · S-02 · S-03 · S-05 · S-06 · S-07)", "QA-NAV-001 · QA-OPS-001 · QA-SAF-001 · QA-RWD-001", "통합 안전 코드 a6a7174 · 로컬 가상 화면 26/26·브랜치 CI 30965407547·PR 병합 CI 30965409423 통과 · 운영 배포·인증 화면 미실행", "부분", "사용자 승인 배포 뒤 인증 QA"],
+  ["현재 UI", "V2-UI-001 · V2-OPS-001", "현재 콘솔(S-01 일부 · S-02 · S-03 · S-05 · S-06 · S-07)", "QA-NAV-001 · QA-OPS-001 · QA-SAF-001 · QA-RWD-001", "통합 안전 코드 a6a7174 · 로컬 가상 화면 26/26·브랜치 CI 30965407547·기준 버전 합본 PR CI 30965409423 통과 · 운영 배포·인증 화면 미실행", "부분", "사용자 승인 배포 뒤 인증 QA"],
   ["C2 미래 화면", "V2-OPS-001 · V2-API-001", "S-01 · S-04 · S-08", "QA-SHD-001/002", "자동 병행 비교의 실행·조회 기능·화면 모두 미구현", "미구현", "C0-B"],
-  ["공통 명세", "V2-DOC-001", "기획 미리보기 S-01 · S-04 · S-08 · S-09", "QA-PLN-001", "보드 탐색 2/2 · 기능 구현 증적 아님", "부분", "D-01~10"],
+  ["C2 종합", "V2-AUT-001 · V2-DAT-001 · V2-PER-001 · V2-OPS-001 · V2-API-001", "S-01 · S-04 · S-08", "QA-SHD-001/002 · QA-PAR-001", "자동 실행기·운영 데이터·Java 결과 비교·저장·조회·화면의 종합 진행 상태 · 현재 모두 미구현", "미구현", "C0-B"],
+  ["공통 명세", "V2-DOC-001", "기획 미리보기 S-01 · S-04 · S-08 · S-10 · S-09", "QA-PLN-001", "실제 선택 35개·검토안 복사 2/2와 C0 기록 검사 51/51 로컬 통과 · 이 변경의 CI는 PR #57에서 확인 · 기능 구현 증적 아님", "부분", "D-01~10"],
 ];
 
 const decisionContainer = document.getElementById("decision-groups");
@@ -243,7 +267,14 @@ const reviewedCount = document.getElementById("reviewed-count");
 const screenSelector = document.getElementById("screen-selector");
 const screenPreview = document.getElementById("screen-preview");
 const traceBody = document.getElementById("trace-body");
+const reviewDraft = document.getElementById("review-draft");
+const copyReviewDraftButton = document.getElementById("copy-review-draft");
+const draftReadiness = document.getElementById("draft-readiness");
+const planningStatus = document.getElementById("planning-status");
+const c2Status = document.getElementById("c2-status");
 const draftReviews = new Map();
+const decisionIds = decisionGroups.flatMap((group) => group.decisions.map((decision) => decision.id));
+const reviewBoundary = "범위 확인: 이 답변은 C0-A 제품 기획 검토입니다. 후보 배포, 시험 서버 변경, 자격증명 전달·사용, 실제 주문, Java 중단, 접속 경로 변경을 승인하지 않습니다. C0-B 운영값과 차이는 별도로 다시 확인하겠습니다.";
 
 function escapeText(value) {
   return String(value)
@@ -261,7 +292,7 @@ function renderDecisionGroups() {
         <section class="decision-group" aria-labelledby="decision-group-${groupIndex}">
           <header class="decision-group-head">
             <div><p>${escapeText(group.label)}</p><h3 id="decision-group-${groupIndex}">${escapeText(group.title)}</h3></div>
-            <span class="mini-status">승인 대기</span>
+            <span class="mini-status">${escapeText(planningState.c0A)}</span>
           </header>
           ${group.decisions
             .map(
@@ -276,23 +307,20 @@ function renderDecisionGroups() {
                     <div class="recommendation"><span>권장안 A</span><strong>${escapeText(decision.recommendation)}</strong><p>${escapeText(decision.reason)}</p></div>
                     <div class="decision-impact"><span>승인하면 달라지는 것</span><p>${escapeText(decision.impact)}</p></div>
                     <div class="key-conditions"><span>꼭 확인할 숫자·조건</span><strong>${escapeText(decision.keyConditions)}</strong></div>
-                    <div class="decision-options" aria-label="${escapeText(decision.id)} 실제 선택지와 영향">
-                      <span>실제 선택지와 영향</span>
+                    <fieldset class="decision-options" role="radiogroup">
+                      <legend>${escapeText(decision.id)} 실제 선택지 · 하나를 골라 주세요</legend>
                       <div class="option-grid">
                         ${decision.options
                           .map(
-                            (option) => `<article class="option-card"><strong>${escapeText(option.name)}</strong><p>${escapeText(option.detail)}</p><small>${escapeText(option.consequence)}</small></article>`,
+                            (option) => `<label class="option-card"><input type="radio" class="draft-choice" name="review-${escapeText(decision.id)}" data-decision="${escapeText(decision.id)}" data-reply="${escapeText(option.reply)}" data-note-label="${escapeText(option.noteLabel ?? "")}" data-note-placeholder="${escapeText(option.notePlaceholder ?? "")}" /><span class="option-card-copy"><strong>${escapeText(option.name)}</strong><span>${escapeText(option.detail)}</span><small>${escapeText(option.consequence)}</small></span></label>`,
                           )
                           .join("")}
                       </div>
-                    </div>
-                    <div class="draft-review" aria-label="${escapeText(decision.id)} 검토 메모">
-                      <span>내 검토 메모 · 저장 안 됨</span>
-                      ${["괜찮음", "수정 필요", "설명 필요"]
-                        .map(
-                          (choice) => `<button class="draft-choice" type="button" data-decision="${escapeText(decision.id)}" data-choice="${choice}" aria-pressed="false">${choice}</button>`,
-                        )
-                        .join("")}
+                    </fieldset>
+                    <div id="draft-note-${escapeText(decision.id)}-wrap" class="draft-note" data-note-wrap="${escapeText(decision.id)}" role="group" hidden>
+                      <label for="draft-note-${escapeText(decision.id)}" data-note-label></label>
+                      <textarea id="draft-note-${escapeText(decision.id)}" class="draft-note-input" data-decision="${escapeText(decision.id)}" rows="2" maxlength="500"></textarea>
+                      <small id="draft-note-${escapeText(decision.id)}-hint">수정·설명 선택은 이 내용을 반드시 적어야 하며, 저장·전송되지 않고 검토안에만 반영돼요.</small>
                     </div>
                   </div>
                 </details>`,
@@ -303,15 +331,93 @@ function renderDecisionGroups() {
     .join("");
 }
 
-function updateDraftReview(button) {
-  const decisionId = button.dataset.decision;
-  const choice = button.dataset.choice;
-  if (!decisionId || !choice) return;
-  draftReviews.set(decisionId, choice);
-  document.querySelectorAll(`[data-decision="${decisionId}"]`).forEach((candidate) => {
-    candidate.setAttribute("aria-pressed", String(candidate === button));
+function updateDraftReview(input) {
+  const decisionId = input.dataset.decision;
+  const reply = input.dataset.reply;
+  if (!decisionId || !reply) return;
+
+  const previousReview = draftReviews.get(decisionId);
+  const noteLabel = input.dataset.noteLabel ?? "";
+  const note = previousReview?.reply === reply ? previousReview.note : "";
+  draftReviews.set(decisionId, { reply, noteLabel, note });
+  const noteWrap = decisionContainer.querySelector(`[data-note-wrap="${decisionId}"]`);
+  const noteInput = noteWrap?.querySelector(".draft-note-input");
+  const noteLabelElement = noteWrap?.querySelector("[data-note-label]");
+  if (noteWrap && noteInput && noteLabelElement) {
+    decisionContainer
+      .querySelectorAll(`[data-decision="${decisionId}"].draft-choice`)
+      .forEach((candidate) => {
+        candidate.removeAttribute("aria-describedby");
+        if (candidate === input && noteLabel) {
+          candidate.setAttribute("aria-describedby", `draft-note-${decisionId}-hint`);
+        }
+      });
+    noteWrap.hidden = !noteLabel;
+    noteLabelElement.textContent = noteLabel ? `${noteLabel} (필수)` : "";
+    noteInput.placeholder = input.dataset.notePlaceholder ?? "";
+    noteInput.value = note;
+    noteInput.required = Boolean(noteLabel);
+    noteInput.setAttribute("aria-required", String(Boolean(noteLabel)));
+  }
+  updateDraftSummary();
+}
+
+function updateDraftNote(input) {
+  const decisionId = input.dataset.decision;
+  const review = decisionId ? draftReviews.get(decisionId) : null;
+  if (!decisionId || !review) return;
+  review.note = input.value;
+  updateDraftSummary();
+}
+
+function updateDraftSummary() {
+  const lines = decisionIds.map((decisionId) => {
+    const review = draftReviews.get(decisionId);
+    if (!review) return `${decisionId} 미응답`;
+    const note = review.note.trim();
+    if (review.noteLabel) {
+      return `${decisionId} ${review.reply}: ${note || "[내용을 적어 주세요]"}`;
+    }
+    return `${decisionId} ${review.reply}`;
   });
+  reviewDraft.value = ["Wall-Ant v2 C0-A 검토안", "", ...lines, "", reviewBoundary].join("\n");
+  resizeReviewDraft();
   reviewedCount.textContent = String(draftReviews.size);
+
+  const remaining = decisionIds.length - draftReviews.size;
+  const missingNotes = [...draftReviews.values()].filter(
+    (review) => review.noteLabel && !review.note.trim(),
+  ).length;
+  const ready = remaining === 0 && missingNotes === 0;
+  copyReviewDraftButton.disabled = !ready;
+  if (remaining > 0) {
+    draftReadiness.textContent = `${remaining}개 응답이 남았어요.`;
+    copyReviewDraftButton.textContent = `${remaining}개 응답 후 복사`;
+  } else if (missingNotes > 0) {
+    draftReadiness.textContent = `수정·설명 메모 ${missingNotes}개를 적어 주세요.`;
+    copyReviewDraftButton.textContent = `메모 ${missingNotes}개 작성 후 복사`;
+  } else {
+    draftReadiness.textContent = "검토안이 준비됐어요.";
+    copyReviewDraftButton.textContent = "검토안 복사";
+  }
+}
+
+function resizeReviewDraft() {
+  if (reviewDraft.closest("[hidden]")) return;
+  reviewDraft.style.height = "auto";
+  reviewDraft.style.height = `${reviewDraft.scrollHeight + 2}px`;
+}
+
+async function copyReviewDraft() {
+  if (copyReviewDraftButton.disabled) return;
+  try {
+    await navigator.clipboard.writeText(reviewDraft.value);
+    draftReadiness.textContent = "복사했어요. 이 대화에 붙여넣어야 전달돼요.";
+  } catch {
+    reviewDraft.focus();
+    reviewDraft.select();
+    draftReadiness.textContent = "자동 복사가 차단됐어요. 선택된 내용을 직접 복사해 주세요.";
+  }
 }
 
 function renderScreenSelector() {
@@ -356,18 +462,28 @@ document.querySelectorAll(".view-tab").forEach((button) => {
     document.querySelectorAll(".view-tab").forEach((tab) => {
       const active = tab === button;
       tab.classList.toggle("is-active", active);
-      tab.setAttribute("aria-selected", String(active));
+      tab.setAttribute("aria-pressed", String(active));
     });
     document.querySelectorAll(".view-panel").forEach((panel) => {
       panel.hidden = panel.dataset.panel !== selectedView;
     });
+    if (selectedView === "decisions") {
+      resizeReviewDraft();
+      window.requestAnimationFrame(resizeReviewDraft);
+    }
   });
 });
 
-decisionContainer.addEventListener("click", (event) => {
-  const button = event.target.closest(".draft-choice");
-  if (button) updateDraftReview(button);
+decisionContainer.addEventListener("change", (event) => {
+  if (event.target.classList.contains("draft-choice")) updateDraftReview(event.target);
 });
+
+decisionContainer.addEventListener("input", (event) => {
+  if (event.target.classList.contains("draft-note-input")) updateDraftNote(event.target);
+});
+
+copyReviewDraftButton.addEventListener("click", copyReviewDraft);
+window.addEventListener("resize", resizeReviewDraft);
 
 screenSelector.addEventListener("click", (event) => {
   const button = event.target.closest(".screen-select");
@@ -377,3 +493,6 @@ screenSelector.addEventListener("click", (event) => {
 renderDecisionGroups();
 renderScreenSelector();
 renderTraceRows();
+planningStatus.textContent = `기획안 · ${planningState.c0A}`;
+c2Status.textContent = planningState.c2 === "미시작" ? "아직 미구현" : "개발 진행 중";
+updateDraftSummary();

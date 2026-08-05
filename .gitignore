@@ -53,6 +53,8 @@ v2/backend/.coverage
 v2/backend/htmlcov/
 v2/backend/**/*.pyc
 v2/backend/**/__pycache__/
+v2/infra/tests/**/*.pyc
+v2/infra/tests/**/__pycache__/
 v2/backend/*.db
 v2/backend/data/
 v2/frontend/node_modules/

@@ -15,7 +15,7 @@
         <span class="brand-mark" aria-hidden="true">W</span>
         <span>Wall-Ant v2</span>
       </a>
-      <span class="status-pill status-waiting">기획안 · 승인 대기</span>
+      <span id="planning-status" class="status-pill status-waiting">기획안 · 승인 대기</span>
     </header>
 
     <main id="main-content">
@@ -28,8 +28,13 @@
         </p>
         <div class="safety-strip" aria-label="현재 안전 상태">
           <div><span>기존 시스템</span><strong>마지막 제어 작업에서 미중단 · C0-B 재확인 대기</strong></div>
-          <div><span>Python 자동 병행 비교</span><strong>아직 미구현</strong></div>
+          <div><span>Python 자동 병행 비교</span><strong id="c2-status">아직 미구현</strong></div>
           <div><span>v2 주문</span><strong>코드 후보는 차단 · 원격 재확인 대기</strong></div>
+        </div>
+        <div class="version-proof" aria-label="배포와 검증 버전 구분">
+          <div><span>마지막 앱 배포 기록</span><strong>#54 · 66e374c</strong><small>현재 서버가 이 버전인지 원격 재확인 전</small></div>
+          <div><span>기능 안전 검증 기준</span><strong>a6a7174</strong><small>브랜치·PR CI 5개 작업 통과 · 미배포</small></div>
+          <div><span>현재 검토 작업</span><strong>PR #57 · Draft</strong><small>이 보드 보강의 반영 여부·최신 SHA·CI는 PR에서 확인</small></div>
         </div>
       </section>
 
@@ -61,21 +66,21 @@
         <aside class="parallel-lane" aria-label="병렬로 진행할 배포 화면 검증">
           <span class="parallel-badge">병렬</span>
           <div>
-            <strong>C1 인증 화면 읽기 검증은 C0-A와 동시에 진행할 수 있어요.</strong>
-            <p>비밀번호·일회용 인증번호는 저장하지 않아요. 마지막 GitHub-controlled #54에는 검증용 버전 표시가 없어 사용자가 승인한 새 후보 배포가 먼저 필요해요. 그 뒤 사용자가 제공한 임시 로그인 세션은 저장소 밖 소유자 전용 경로에서 조회 검증에만 사용하고 바로 폐기해요.</p>
+            <strong>C1 인증 화면 읽기 검증은 C0-A와 병렬로 준비할 수 있어요.</strong>
+            <p>먼저 사용자가 별도 후보 배포를 승인해야 해요. 배포 뒤 사용자가 브라우저에서 직접 로그인하면 GET 조회만 검증해요. 비밀번호·일회용 인증번호·토큰·쿠키는 보내지 마세요.</p>
           </div>
-          <span class="parallel-status">사용자 로그인 필요</span>
+          <span class="parallel-status">후보 배포 승인 + 직접 로그인 필요</span>
         </aside>
       </section>
 
       <nav class="view-tabs" aria-label="검토 보드 보기 선택">
-        <button type="button" class="view-tab is-active" data-view="decisions" aria-selected="true">
+        <button type="button" class="view-tab is-active" data-view="decisions" aria-pressed="true">
           결정 10가지
         </button>
-        <button type="button" class="view-tab" data-view="screens" aria-selected="false">
+        <button type="button" class="view-tab" data-view="screens" aria-pressed="false">
           화면 미리보기
         </button>
-        <button type="button" class="view-tab" data-view="trace" aria-selected="false">
+        <button type="button" class="view-tab" data-view="trace" aria-pressed="false">
           개발 추적표
         </button>
       </nav>
@@ -87,14 +92,33 @@
             <h2 id="decision-title">위에서부터 차례로 확인해 주세요</h2>
           </div>
           <div class="review-counter" aria-live="polite">
-            <strong id="reviewed-count">0</strong><span>/ 10 살펴봄</span>
+            <strong id="reviewed-count">0</strong><span>/ 10 응답 작성</span>
           </div>
         </div>
         <div class="notice-card">
           <strong>이 화면의 표시는 검토 메모일 뿐이에요.</strong>
-          <span>저장·전송·승인되지 않으며 실제 승인은 문서 또는 대화로 확정합니다.</span>
+          <span>브라우저나 서버에 저장·전송·승인되지 않고, 새로고침하면 사라져요.</span>
+        </div>
+        <div class="scope-boundary" role="note" aria-label="C0-A 검토 권한 경계">
+          <strong>C0-A 답변은 기능 기준만 정해요.</strong>
+          <span>후보 배포·시험 서버 변경·자격증명 사용·실제 주문·Java 중단·접속 경로 변경은 각각 별도 승인 전까지 하지 않아요. C0-B 운영값도 다시 확인받아요.</span>
         </div>
         <div class="decision-groups" id="decision-groups"></div>
+        <section class="review-handoff" aria-labelledby="review-handoff-title">
+          <div class="handoff-heading">
+            <div>
+              <p class="eyebrow">검토 결과 전달</p>
+              <h3 id="review-handoff-title">10개 응답을 한 번에 보내세요</h3>
+            </div>
+            <span class="handoff-status" id="draft-readiness" role="status" aria-live="polite">10개 응답이 남았어요.</span>
+          </div>
+          <label class="review-draft-label" for="review-draft">대화에 붙여넣을 검토안</label>
+          <textarea id="review-draft" class="review-draft" rows="17" readonly></textarea>
+          <div class="handoff-actions">
+            <p>모든 선택과 필요한 메모를 채우면 복사할 수 있어요. 복사만으로는 전송되거나 승인되지 않아요.</p>
+            <button id="copy-review-draft" type="button" disabled>10개 응답 후 복사</button>
+          </div>
+        </section>
       </section>
 
       <section class="view-panel" data-panel="screens" aria-labelledby="screen-title" hidden>
@@ -138,8 +162,8 @@
       <section class="next-step" aria-labelledby="next-title">
         <div>
           <p class="eyebrow">다음 행동</p>
-          <h2 id="next-title">개발 기준은 D-01~D-10부터, 화면 검증은 지금 병렬로</h2>
-          <p>각 카드의 대안과 숫자를 검토해 주세요. 인증 화면은 사용자가 로그인할 수 있을 때 조회 전용으로 따로 확인합니다.</p>
+          <h2 id="next-title">개발 기준은 D-01~D-10부터, 인증 QA는 별도 승인 뒤</h2>
+          <p>검토안을 이 대화에 붙여넣어 주세요. 인증 화면은 후보 배포를 따로 승인하고 사용자가 직접 로그인한 뒤 조회 전용으로 확인합니다.</p>
         </div>
         <div class="next-links">
           <a href="../C0_DECISIONS.md">상세 결정 문서</a>

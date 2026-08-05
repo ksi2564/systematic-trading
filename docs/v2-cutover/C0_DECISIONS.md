@@ -3,17 +3,26 @@
 기준일: 2026-08-05 KST
 상태: **사용자 검토 대기**
 적용 범위: Python v2 자동 섀도, 화면 QA, 단계적 LIVE 전환
+C2 개발 상태: `미시작`
 
 이 문서는 구현자가 임의로 정하면 결과가 달라지는 항목만 모은 승인판이다. 각 항목의
 `권장안`은 자동 승인된 값이 아니다. C0는 두 번 확인한다.
 
-1. **C0-A 제품 결정:** 사용자가 D-01~D-10의 권장안 또는 수정안을 조건부 승인한다.
+1. **C0-A 제품 결정:** 사용자가 D-01~D-10의 권장안을 조건부 승인하거나 수정·설명을
+   요청한다. 수정 요청은 정본 문서와 선택지에 반영한 뒤 새 권장안으로 다시 승인한다.
 2. **C0-B 운영 기준선 재확인:** 기존 Java의 코드 SHA, effective 설정, DB 전략 상태,
    바로 전/최신 상태 checksum과 production 공급자·가격/시각 의미를 읽기 전용으로
    캡처해 C0-A와 비교한다. 차이와 최종 checksum을 사용자가 다시 승인한다.
 
 C0-A만 끝난 상태를 C0 통과라고 부르지 않는다. C0-B 승인 기록까지 있어야 C2 개발
 기준이 된다.
+
+`C2 개발 상태`는 현재 `미시작`, `진행 중` 두 값만 사용한다. runner·운영 데이터
+어댑터·Java 운영 비교·미래 섀도 API/화면 중 하나라도 개발을 시작하면 `C2 종합`
+추적 행과 함께 `진행 중`으로 바꾼다. `완료`는 자동 실행기·운영 데이터·Java 결과
+비교·저장·조회·화면 전체를 검사하는 종합 종료 gate를 추가하기 전에는 사용할 수 없다.
+CI는 기록 구조와 순서를 검사하지만 사용자의 실제 승인 여부나 임의의 40자 SHA가
+실제 Git commit인지는 인증하지 못한다.
 
 ## 먼저 보는 현재 상태
 
@@ -119,7 +128,7 @@ C0-A만 끝난 상태를 C0 통과라고 부르지 않는다. C0-B 승인 기록
 - Java 결과가 없으면 `LEGACY_UNAVAILABLE`이며 20일 통과 분모에서 성공으로 세지
   않는다.
 
-선택: `[ ] A 승인` `[ ] legacy fail-open 유지` `[ ] 설명 요청`
+선택: `[ ] A 승인` `[ ] 기존 방식 유지` `[ ] 설명 요청`
 결정 상태: `승인 대기`
 
 ## D-05. OFF·다른 종목·수량 계산은 어떻게 맞출까요?
@@ -135,7 +144,7 @@ C0-A만 끝난 상태를 C0 통과라고 부르지 않는다. C0-B 승인 기록
 - 환율은 주문 수량에 섞지 않고 KIS의 USD 주문 가능 금액을 사용한다.
 - 위 수치는 runtime effective 설정을 읽은 C0-B에서 checksum과 함께 다시 고정한다.
 
-선택: `[ ] A 승인` `[ ] unmanaged 종목 정책 수정` `[ ] 수량 규칙 수정` `[ ] 설명 요청`
+선택: `[ ] A 승인` `[ ] 관리 밖 종목 정책 수정` `[ ] 수량 규칙 수정` `[ ] 설명 요청`
 결정 상태: `승인 대기`
 
 ## D-06. Java와 무엇을 비교할까요?
@@ -152,7 +161,7 @@ C0-A만 끝난 상태를 C0 통과라고 부르지 않는다. C0-B 승인 기록
    전략 on/off를 checksum과 함께 immutable seed로 가져온다.
 4. exporter가 운영 DB·Java 상태를 변경하거나 주문 함수를 호출하면 실패한다.
 
-선택: `[ ] A 승인` `[ ] 공통 snapshot harness만 사용` `[ ] 설명 요청`
+선택: `[ ] A 승인` `[ ] 공통 입력 비교만 사용` `[ ] 설명 요청`
 결정 상태: `승인 대기`
 
 ## D-07. 스테이징에서 무엇을 만들거나 바꿔도 될까요?
@@ -229,7 +238,7 @@ C0-A만 끝난 상태를 C0 통과라고 부르지 않는다. C0-B 승인 기록
 - 리허설 실행·복구 결정 책임자는 사용자, 자동화 책임은 명령 전 대상/영향/복구값 표시와
   증적 수집으로 둔다. C6 뒤 연속 미국 거래일 20일 안정화가 끝나기 전 Java를 퇴역하지 않는다.
 
-선택: `[ ] A 승인` `[ ] RTO/RPO 수정` `[ ] 허용 명령 지정` `[ ] 설명 요청`
+선택: `[ ] A 승인` `[ ] 복구 목표 수정` `[ ] 허용 명령 지정` `[ ] 설명 요청`
 결정 상태: `승인 대기`
 
 ## D-10. Java를 대체한 뒤에도 무엇이 자동이어야 할까요?
@@ -267,7 +276,7 @@ C0-A만 끝난 상태를 C0 통과라고 부르지 않는다. C0-B 승인 기록
 - 제한 계좌·금액·기간 canary와 reconciliation을 통과한 뒤에만 범위를 넓힌다.
 - QA 단계에서는 위 submit adapter를 설치하거나 호출하지 않는다.
 
-선택: `[ ] A를 미래 LIVE 명세로 승인` `[ ] 주문 연속/중단 정책 수정` `[ ] canary 횟수 수정` `[ ] 자동 제출 제외` `[ ] 설명 요청`
+선택: `[ ] A를 미래 실전 명세로 승인` `[ ] 주문 연속/중단 정책 수정` `[ ] 제한 시험 횟수 수정` `[ ] 자동 제출 제외` `[ ] 설명 요청`
 결정 상태: `승인 대기`
 
 ## C0-A 제품 결정 기록
@@ -301,7 +310,89 @@ C0-A만 끝난 상태를 C0 통과라고 부르지 않는다. C0-B 승인 기록
 | operational 비교 시간창·필드별 값 허용 기준·반올림 | - | - | 승인 대기 | - | - |
 | 승인 당시 요구사항·명세 문서/v2 코드 SHA | - | - | 캡처 대기 | - | - |
 | C0-A 대비 diff 요약 | - | - | 재확인 대기 | - | - |
+| C0-B 최종 bundle | - | - | 재승인 대기 | - | - |
+
+기록 형식은 다음처럼 고정한다.
+
+- C0-A 대기 행은 나머지 값이 모두 `-`이고, 승인 행은 상태를 `조건부 승인`으로 쓴다.
+  승인 시각은 ISO 8601 KST(`+09:00`), 마지막 셀은
+  `문서=<40자리 git SHA>; 코드=<40자리 git SHA>` 형식이다.
+- 현재 각 결정에서 즉시 승인 가능한 값은 첫 번째 권장안뿐이다. `수정`, `설명 요청`,
+  `기존 방식 유지`, `전부 읽기 전용`, `자동 제출 제외`처럼 메모가 필요한 대안은 기존
+  요구사항·기능·QA 계약과 충돌할 수 있으므로 승인으로 취급하지 않는다. 메모를 반영해 관련
+  정본 문서와 선택지를 고친 뒤, 구체적인 새 선택지를 다시 골라야 `조건부 승인`으로 기록할 수 있다.
+- C0-B의 개별 확인이 끝난 12개 행은 상태를 `확인 완료`로 쓴다. 캡처 셀은
+  `항목=<item_id>; sha256=<64자>`로 쓰되 Java SHA 행은
+  `git=<40자>; 항목=java_code_sha; sha256=<64자>`, 승인 문서/코드 행은
+  `문서=<40자>; 코드=<40자>; 항목=approval_document_code_sha; sha256=<64자>`로 쓴다.
+- 개별 행의 차이 셀은 `결과=NO_DIFF|DIFF; sha256=<64자>`로 쓴다. `NO_DIFF`에도
+  항목별 비교 세부 내용의 checksum이 필요하다.
+- 마지막 행의 캡처 값은 저장소 안 snapshot manifest, 차이 값은 저장소 안 diff JSON을
+  각각 `경로#sha256=<64자리 SHA-256>`으로 기록한다. 두 파일은 다른 JSON이어야 하며 심볼릭
+  링크 및 `docs/v2-cutover/evidence/c0b/` 밖의 경로를 허용하지 않는다.
+- snapshot manifest의 최상위 키는 정확히
+  `schema_version`, `kind`, `captured_at`, `document_sha`, `code_sha`, `items`다.
+  `schema_version=1`, `kind=c0b_snapshot_manifest`이고, `items`는 아래 12개 ID를 표
+  순서대로 모두 담아야 한다. 각 항목의 키는 정확히
+  `id`, `label`, `source`, `captured_at`, `sha256`다.
+  C0-A 완료 시 10개 결정은 모두 같은 최종 문서/코드 SHA를 사용해야 하며,
+  `document_sha`와 `code_sha`는 그 두 SHA 및 C0-B 표의 승인 문서/코드 행과 정확히
+  같아야 한다.
+- snapshot item의 `source`는
+  `docs/v2-cutover/evidence/c0b/items/<item_id>.json#sha256=<64자>` 형식이다. 실제
+  파일 digest는 item과 표의 `sha256`과 같아야 한다. 파일의 최상위 키는 정확히
+  `schema_version`, `kind`, `id`, `captured_at`, `collector`, `sanitized`, `data`다.
+  `schema_version=1`, `kind=c0b_capture`, `sanitized=true`이며 `data`는 비개발자가
+  읽을 `summary`와 1~50개의 `{name, value}` facts만 담는다.
+- diff JSON의 최상위 키는 정확히
+  `schema_version`, `kind`, `snapshot_manifest_sha256`, `compared_at`, `result`, `items`다.
+  `schema_version=1`, `kind=c0b_diff`이고 snapshot 파일의 checksum을 정확히 참조한다.
+  `items`는 같은 12개 ID 순서이며 각 항목 키는
+  `id`, `result`, `details_source`, `details_sha256`다.
+- `details_source`는
+  `docs/v2-cutover/evidence/c0b/diff-items/<item_id>.json#sha256=<64자>` 형식이다.
+  실제 파일 digest는 item과 표의 `details_sha256`과 같아야 한다. 파일은
+  최상위 키가 정확히 `schema_version`, `kind`, `id`, `captured_at`, `collector`,
+  `sanitized`, `result`, `summary`이고 `schema_version=1`, `kind=c0b_diff_detail`,
+  같은 ID·시각·result, `sanitized=true`, 사람이 읽을 `summary`를 가져야 한다.
+- capture/diff의 collector·summary·facts에는 비밀번호·token·cookie·인증 header·
+  API/private/client key·PEM·JWT·전자우편·마스킹되지 않은 8~16자리 식별값을 허용하지
+  않는다. 식별값은 공백·하이픈 구분도 숫자로 합쳐 검사하되, 시장 기준일에 필요한
+  ISO `YYYY-MM-DD`와 ISO date-time은 허용한다. 원문 비밀값은 이 저장소 증적에 넣지 않는다.
+- 시각은 `가장 늦은 C0-A 승인 ≤ 각 항목 캡처 ≤ snapshot 완성 ≤ diff 완성 ≤ C0-B 최종
+  재승인` 순서를 지켜야 한다.
+
+C0-B item ID는 다음 순서로 고정한다.
+
+| 확인 항목 | item_id |
+| --- | --- |
+| Java 실행 코드 SHA | `java_code_sha` |
+| effective 런타임 설정 | `effective_runtime_config` |
+| DB 전략 on/off·파라미터 | `db_strategy_state` |
+| 최신/바로 전 EOD 상태 | `eod_state_pair` |
+| 주문 모드·소유권·수량 설정 | `order_mode_ownership_quantity` |
+| production provider·조회 계약/version | `production_provider_contract` |
+| 가격 종류·시장 기준일·observed/available 시각 의미 | `price_market_time_semantics` |
+| KIS base 실제 기준일·VIX spot·MA200 세션/adjustment | `kis_vix_ma200_semantics` |
+| 신선도·재시도·deadline 최종값 | `freshness_retry_deadline` |
+| operational 비교 시간창·필드별 값 허용 기준·반올림 | `operational_comparison_tolerances` |
+| 승인 당시 요구사항·명세 문서/v2 코드 SHA | `approval_document_code_sha` |
+| C0-A 대비 diff 요약 | `c0a_diff_summary` |
+
+이 gate는 문서에 선언된 상태·형식·체크섬·시간 순서를 검사한다. 또한 `v2/backend`,
+`v2/frontend`, `v2/infra` 아래의 추적·미추적 파일 경로, 실행 권한, 내용 SHA-256을
+합친 기준 tree digest
+`8665c89d83c2db8c412a4aa1cdd3e6c2e0aaad6fd904adb328fb0569e80bd275`와 현재 tree를
+비교해 `미시작` 상태의 C2 변경을 거부한다. 이 방식은 특정 branch commit 보존이나 전체
+Git history에 의존하지 않는다. gate 자체를 고칠 수 있도록 제외하는 파일은 정확히
+`v2/infra/tests/verify_c0_gate.py`, `test_verify_c0_gate.py`,
+`documentation_contract_test.sh` 세 개뿐이다. `.venv`, cache, build·QA 결과처럼
+명시한 생성물만 추가로 무시하며, 그 밖의 ignored 파일과 생성물 경로 안 코드형·실행 파일,
+Git worktree가 아닌 일반 실행은 fail-closed한다. 승인자 신원과 C0 표에 입력한 Git SHA의 실제 object 존재는 인증하지
+못한다. C2 코드를 바꾸기 전에 작성자가 `C2 개발 상태`, `C2 종합` 행, PR 설명을 함께
+갱신해야 하며, C0-B가 완전하지 않으면 `진행 중`도 거부된다.
 
 D-01~D-10의 C0-A 승인, 운영 snapshot과 diff, C0-B 사용자 재확인, 당시 문서/코드 SHA가
 모두 기록돼야 C0를 통과한다. 대화에서 `D-01 A, D-02 A ...`처럼 답하면 먼저 C0-A
-표와 관련 명세를 갱신한다. 그 답만으로 C2를 시작하지 않고 C0-B 결과를 다시 검토받는다.
+표와 관련 명세를 갱신한다. 그 답만으로 C2를 시작하지 않고 C0-B 결과를
+`S-10 운영값 재확인`의 마스킹된 12개 요약과 차이로 다시 검토받는다.

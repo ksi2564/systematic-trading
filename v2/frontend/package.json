@@ -11,6 +11,7 @@
     "test:e2e": "npm run build && playwright test",
     "test:e2e:masking": "playwright test --config playwright.masking.config.ts",
     "test:e2e:planning": "playwright test --config playwright.planning.config.ts",
+    "review:planning": "python3 -m http.server 4181 --bind 127.0.0.1 --directory ../../docs/v2-cutover",
     "test:capture-state": "node --test ./scripts/capture-deployed-access-state.test.mjs",
     "capture:deployed:access-state": "node ./scripts/capture-deployed-access-state.mjs",
     "test:e2e:deployed:readonly": "npm run build && playwright test --config playwright.deployed.config.ts && node ./e2e-deployed/verify-sanitized-evidence.mjs",

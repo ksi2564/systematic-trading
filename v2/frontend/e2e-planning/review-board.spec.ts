@@ -105,11 +105,11 @@ async function attachPngEvidence(
 
 const expectedDecisionReplies = [
   ['A 승인', '수정 요청', '설명 요청'],
-  ['A 승인', '처음부터 데이터 의미 수정', '설명 요청'],
+  ['A 승인', '처음부터 데이터 의미 수정', '확정 원가격 종가·완료 거래일 200개 MA200 적용', '설명 요청'],
   ['권장안 승인', '시각/신선도 수정', '설명 요청'],
   ['A 승인', '기존 방식 유지', '설명 요청'],
   ['A 승인', '관리 밖 종목 정책 수정', '수량 규칙 수정', '설명 요청'],
-  ['A 승인', '공통 입력 비교만 사용', '설명 요청'],
+  ['A 승인', '공통 입력 비교만 사용', '공통 입력 정확 비교 + 승인된 데이터 개선 차이 검토', '설명 요청'],
   ['향후 QA 범위·보존 기준 동의', '전부 읽기 전용', '범위/보존 수정', '설명 요청'],
   ['A 승인', '관찰 기간/기준 수정', '설명 요청'],
   ['A 승인', '복구 목표 수정', '허용 명령 지정', '설명 요청'],
@@ -166,10 +166,10 @@ test('[QA-PLN-001] C0 결정·화면·추적 보드를 주문 없이 검토한�
   await expect(page.locator('.view-tabs')).toHaveCSS('position', 'static');
   await expect(page.locator('.view-tab').first()).toHaveAttribute('aria-pressed', 'true');
   await expect(page.locator('[role="radiogroup"]')).toHaveCount(10);
-  await expect(page.locator('input[type="radio"]')).toHaveCount(35);
+  await expect(page.locator('input[type="radio"]')).toHaveCount(37);
   await expect(page.getByRole('radiogroup')).toHaveCount(1);
   await expect(page.locator('.key-conditions')).toHaveCount(10);
-  await expect(page.locator('.option-card')).toHaveCount(35);
+  await expect(page.locator('.option-card')).toHaveCount(37);
   const decisionCards = page.locator('.decision-card');
   await expect(page.locator('.decision-card[open]')).toHaveCount(1);
   await expect(page.locator('.decision-execution-boundary')).toHaveCount(3);
@@ -204,7 +204,9 @@ test('[QA-PLN-001] C0 결정·화면·추적 보드를 주문 없이 검토한�
       await inputs.evaluateAll((elements) =>
         elements.map((element) => Boolean((element as HTMLInputElement).dataset.noteLabel))
       )
-    ).toEqual(expectedDecisionReplies[index].map((_, optionIndex) => optionIndex > 0));
+    ).toEqual(expectedDecisionReplies[index].map((_, optionIndex) => (
+      optionIndex > 0 && !((index === 1 || index === 5) && optionIndex === 2)
+    )));
   }
   await expect(page.locator('#reviewed-count')).toHaveText('0');
   await expect(page.locator('#review-draft')).toHaveValue(/D-01 미응답/);
@@ -636,7 +638,7 @@ test('[QA-PLN-001] C0 결정·화면·추적 보드를 주문 없이 검토한�
   await expect(commonSpecRow).toContainText('직전 정본 화면 검사 2/2');
   await expect(commonSpecRow).toContainText('C0 문서·기록 검사 51/51');
   await expect(commonSpecRow).toContainText('현재 보강본 반복 화면 검사 10/10');
-  await expect(commonSpecRow).toContainText('C0 문서·기록 검사 55/55 로컬 통과');
+  await expect(commonSpecRow).toContainText('C0 문서·기록 검사 57/57 로컬 통과');
   await expect(commonSpecRow).toContainText('새 코드 버전·자동검사·증적 묶음 확인 대기');
   for (const rowLabel of ['D-07', '현재 UI']) {
     const evidenceRow = page.locator('#trace-body tr').filter({

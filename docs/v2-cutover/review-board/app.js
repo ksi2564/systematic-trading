@@ -27,14 +27,15 @@ const decisionGroups = [
       {
         id: "D-02",
         title: "숨은 데이터 의미",
-        summary: "첫 전환은 같은 의미를 보존하고, 개선은 새 버전으로 나눠요",
-        recommendation: "Java가 실제 사용한 가격·기준일·관측 시점을 먼저 보존",
-        reason: "증권사 응답의 기준값(KIS base), 변동성지수(VIX) 관측 시각, 200일선 포함 범위를 확인하기 전에는 ‘공식 종가’라고 부르지 않습니다.",
-        impact: "기존 결과와 다른 이유가 전략 때문인지 데이터 개선 때문인지 분리할 수 있습니다.",
-        keyConditions: "확정할 것 · 증권사 기준값의 실제 기준일 · 변동성지수 관측 시각 · 200일선에 당일 진행값과 조정주가를 넣는지",
+        summary: "확정 원가격 종가와 완료 거래일 200개로 처음부터 계산해요",
+        recommendation: "해당 미국 거래일의 확정 원가격 종가와 완료 거래일 MA200 사용",
+        reason: "KIS base처럼 기준일이 불명확한 값은 쓰지 않고, 공급자·확정 시각·corporate action 계약은 C0-B에서 읽기 전용으로 다시 확인합니다.",
+        impact: "Java와 다른 결과가 나면 데이터 개선 차이인지 수식·위험 규칙 차이인지 분리해 검토할 수 있습니다.",
+        keyConditions: "승인값 · 확정 원가격 종가 · 완료된 미국 거래일 200개 · 공급자·확정 시각·corporate action은 C0-B 재승인",
         options: [
-          { name: "A · 권장", reply: "A 승인", detail: "첫 전환은 Java가 실제 쓴 데이터 의미를 보존해요.", consequence: "동등성 확인이 쉬워지고 데이터 개선은 별도 버전으로 검토해요." },
+          { name: "A · 이전 권장", reply: "A 승인", detail: "Java가 실제 쓴 데이터 의미를 먼저 보존해요.", consequence: "데이터 개선은 별도 버전으로 다시 검토해야 해요." },
           { name: "처음부터 데이터 의미 수정", reply: "처음부터 데이터 의미 수정", noteLabel: "바꿀 데이터 의미", notePlaceholder: "예: 당일 확정 종가와 공식 거래일 캘린더 사용", detail: "공식 종가·캘린더 등 더 나은 의미로 바로 바꿔요.", consequence: "Java와의 차이를 허용할 새 기준과 과거 재검증이 필요해요." },
+          { name: "확정 원가격 종가 · 승인", reply: "확정 원가격 종가·완료 거래일 200개 MA200 적용", detail: "해당 미국 거래일의 확정 원가격 종가와 완료 거래일 200개로 MA200을 계산해요.", consequence: "실제 공급자 계약은 C0-B에서 읽고 결과를 다시 승인하기 전에는 구현하지 않아요." },
           { name: "설명 요청", reply: "설명 요청", noteLabel: "먼저 확인할 데이터", notePlaceholder: "예: KIS 기준값이 어느 시장일 가격인지 설명해 주세요", detail: "코드에서 확인한 필드 의미와 C0-B 수집 범위를 더 봐요.", consequence: "C0-B 수집 승인 전에는 실제 응답을 읽지 않고, 결과 재승인 전에는 데이터 어댑터를 개발하지 않아요." },
         ],
       },
@@ -96,14 +97,15 @@ const decisionGroups = [
       {
         id: "D-06",
         title: "Java 비교 방식",
-        summary: "같은 입력의 수식 비교와 실제 운영 결과 비교를 따로 봐요",
-        recommendation: "두 비교를 독립 운영하고 둘 다 통과",
-        reason: "각 시스템이 따로 수집한 원문이 다르다는 사실과 실제 전략 결과 차이를 구분합니다.",
-        impact: "같은 시장일·가격 의미·관측 기준을 만족한 날만 운영 비교에 포함합니다.",
-        keyConditions: "두 증명 · ① 같은 입력 수식 비교 ② 실제 Java/Python 운영 결과 비교",
+        summary: "같은 입력은 정확 비교하고, 데이터 개선 차이는 따로 검토해요",
+        recommendation: "공통 입력 정확 비교 + 승인된 데이터 개선 차이 검토",
+        reason: "Java와 완전히 같은 결과만 정답으로 보지 않고, 승인된 데이터 의미 차이와 수식·위험 규칙 차이를 구분합니다.",
+        impact: "방향·수량·위험 규칙에 영향 있는 개선 차이는 사용자 확인 전 통과로 세지 않습니다.",
+        keyConditions: "두 판정 · ① 같은 입력의 정확 비교 ② 데이터 contract/version·영향 필드·사용자 확인",
         options: [
-          { name: "A · 권장", reply: "A 승인", detail: "수식 비교와 실제 운영 결과 비교를 둘 다 해요.", consequence: "개발 오류와 운영 데이터 차이를 각각 설명할 수 있어요." },
+          { name: "A · 이전 권장", reply: "A 승인", detail: "수식 비교와 실제 운영 결과 비교를 둘 다 해요.", consequence: "개발 오류와 운영 데이터 차이를 각각 설명할 수 있어요." },
           { name: "공통 입력 비교만", reply: "공통 입력 비교만 사용", noteLabel: "운영 결과 비교를 제외할 이유와 대체 검증", notePlaceholder: "예: 운영 결과 비교 대신 승인할 별도 검증 기준", detail: "같은 비교용 입력의 수식 비교만 해요.", consequence: "관련 동등성 명세를 먼저 고치고 다시 승인해야 해요." },
+          { name: "공통 비교 + 개선 차이 검토 · 승인", reply: "공통 입력 정확 비교 + 승인된 데이터 개선 차이 검토", detail: "같은 입력은 정확 비교하고 승인된 데이터 개선 차이는 별도 기록·검토해요.", consequence: "방향·수량·위험 규칙 영향은 사용자가 확인하기 전까지 통과로 세지 않아요." },
           { name: "설명 요청", reply: "설명 요청", noteLabel: "먼저 확인할 비교 범위", notePlaceholder: "예: 실제 Java에서 어떤 결과를 읽는지 설명해 주세요", detail: "Java 결과를 읽기 전용으로 내보낼 범위를 더 확인해요.", consequence: "운영 비교 개발은 C0-B 결과 재승인까지 대기해요." },
         ],
       },
@@ -133,12 +135,12 @@ const decisionGroups = [
         id: "D-08",
         title: "병행 비교 종료 기준",
         summary: "서로 대신할 수 없는 세 가지 20거래일 검증",
-        recommendation: "수식·실제 운영 결과·운영 준비를 각각 연속 20일 검증",
+        recommendation: "공통 입력 정확 비교·데이터 개선 차이 검토·운영 준비를 각각 연속 20일 검증",
         reason: "중대 차이, 중복, 실제 주문 제출, Java 영향은 모두 0건이어야 합니다.",
         impact: "한 가지 성공만으로 실전 준비를 과장하지 않습니다.",
-        keyConditions: "통과 숫자 · 세 가지 비교 각각 20/20 · 실제 주문 제출 0건 · 중복 0건 · Java 영향 0건 · 핵심 변경 시 처음부터 재시작",
+        keyConditions: "통과 숫자 · 정확 비교·개선 차이 검토·운영 준비 각각 20/20 · 영향 있는 개선 차이는 사용자 확인 · 실제 주문 제출 0건 · 중복 0건 · Java 영향 0건 · 핵심 변경 시 처음부터 재시작",
         options: [
-          { name: "A · 권장", reply: "A 승인", detail: "세 레인을 각각 연속 20거래일 통과해요.", consequence: "시간은 걸리지만 수식·운영·데이터 준비를 독립 증명해요." },
+          { name: "A · 권장", reply: "A 승인", detail: "세 레인을 각각 연속 20거래일 통과해요.", consequence: "같은 입력은 정확 비교하고, 데이터 개선 차이의 영향은 사용자가 확인해요." },
           { name: "기간·기준 수정", reply: "관찰 기간/기준 수정", noteLabel: "원하는 기간·통과 기준", notePlaceholder: "예: 연속 30거래일로 변경", detail: "20일, 제외일, 재시작 조건을 바꿔요.", consequence: "오탐·미탐 위험과 실전 전환 기준을 다시 검토해야 해요." },
           { name: "설명 요청", reply: "설명 요청", noteLabel: "먼저 확인할 통과 기준", notePlaceholder: "예: 입력이 빠진 날의 분모 계산을 설명해 주세요", detail: "세 레인의 차이와 분모 계산 예시를 더 봐요.", consequence: "C3 관찰은 시작하지 않아요." },
         ],
@@ -216,7 +218,7 @@ const screens = [
     description: "누가 언제 무엇을 검증했는지",
     content: `
       <div class="mock-grid">
-        <article class="mock-card full"><span>검증 단계</span><ul class="evidence-list"><li><strong>직전 독립 검증</strong><small>46a34ea · v2 가상 운영 화면 기능 검사 26 / 26 · C0 문서·기록 검사 51 / 51</small><em class="history-note">역사적 명칭 · 기능 전체 검사가 아님</em></li><li><strong>브랜치 자동 검사</strong><small>CI 30975237262 · 5개 작업 통과</small></li><li><strong>기준 버전과 합본 검사</strong><small>PR CI 30975239146 · 5개 작업 통과</small></li><li><strong>증적 참조 무결성</strong><small>78개 참조 · 모두 해시 검증 통과</small></li><li><strong>현재 보강본</strong><small>현재 검토 보드 화면 검사 10 / 10 · C0 문서·기록 검사 55 / 55 통과 · PR 자동검사 확인 대기 · 운영 미배포</small><em class="history-note">역사적 캡처 문구 · 최신 판정 아님</em></li><li><strong>기능·안전 최신 정본</strong><small>b2037f3 · 6개 화면 탐색·안전 잠금·반응형 검사 26 / 26 · C0 문서·기록 검사 55 / 55 · 위 두 묶음은 역사적 기록</small></li><li><strong>이 검토 보드</strong><small>최신 화면 검사·source·증적은 상단 안내 문서와 전체 개발 추적표에서 확인 · 운영 미배포</small></li><li><strong>운영 배포·인증 화면 검증</strong><small>차단 확인 · 후보 배포 승인과 사용자 직접 로그인 대기</small></li></ul></article>
+        <article class="mock-card full"><span>검증 단계</span><ul class="evidence-list"><li><strong>직전 독립 검증</strong><small>46a34ea · v2 가상 운영 화면 기능 검사 26 / 26 · C0 문서·기록 검사 51 / 51</small><em class="history-note">역사적 명칭 · 기능 전체 검사가 아님</em></li><li><strong>브랜치 자동 검사</strong><small>CI 30975237262 · 5개 작업 통과</small></li><li><strong>기준 버전과 합본 검사</strong><small>PR CI 30975239146 · 5개 작업 통과</small></li><li><strong>증적 참조 무결성</strong><small>78개 참조 · 모두 해시 검증 통과</small></li><li><strong>현재 보강본</strong><small>현재 검토 보드 화면 검사 10 / 10 · C0 문서·기록 검사 57 / 57 통과 · PR 자동검사 확인 대기 · 운영 미배포</small><em class="history-note">역사적 캡처 문구 · 최신 판정 아님</em></li><li><strong>기능·안전 최신 정본</strong><small>b2037f3 · 6개 화면 탐색·안전 잠금·반응형 검사 26 / 26 · C0 문서·기록 검사 55 / 55 · 위 두 묶음은 역사적 기록</small></li><li><strong>이 검토 보드</strong><small>최신 화면 검사·source·증적은 상단 안내 문서와 전체 개발 추적표에서 확인 · 운영 미배포</small></li><li><strong>운영 배포·인증 화면 검증</strong><small>차단 확인 · 후보 배포 승인과 사용자 직접 로그인 대기</small></li></ul></article>
         <article class="mock-card wide"><span>읽기 전용 방식</span><strong>안전 확인 1 + 고정 조회 1</strong><p>화면의 5개 조회는 고정 조회 묶음으로 응답해 서버에 다시 보내지 않아요.</p></article>
         <article class="mock-card wide"><span>민감정보 처리</span><strong>정제·마스킹 뒤 증적</strong><p>로그인 상태는 저장소 밖 별도 경로에 두고 증적에는 넣지 않아요.</p></article>
         <article class="mock-card"><span>이번 화면 QA의 주문 제출</span><strong>0건</strong><p>화면 조회 이외 앱 요청은 차단해요.</p></article>
@@ -262,7 +264,7 @@ const traceRows = [
   ["현재 UI", "V2-UI-001 · V2-OPS-001", "현재 콘솔(S-01 일부 · S-02 · S-03 · S-05 · S-06 · S-07)", "QA-NAV-001 · QA-OPS-001 · QA-SAF-001 · QA-RWD-001", "역사적 기록: 직전 독립 검증 46a34ea · v2 가상 운영 화면 기능 검사 26/26·브랜치 자동검사 30975237262·기준 버전 합본 자동검사 30975239146. 기능·안전 최신 정본 b2037f3의 실제 범위는 6개 화면 탐색·안전 잠금·반응형 26/26 · 기능 시나리오 QA와 운영 배포·인증 화면은 미실행", "부분", "사용자 승인 배포 뒤 인증 QA"],
   ["C2 미래 화면", "V2-OPS-001 · V2-API-001", "S-01 · S-04 · S-08", "QA-SHD-001/002", "자동 병행 비교의 실행·조회 기능·화면 모두 미구현", "미구현", "② 결과 재승인"],
   ["C2 종합", "V2-AUT-001 · V2-DAT-001 · V2-PER-001 · V2-OPS-001 · V2-API-001", "S-01 · S-04 · S-08", "QA-SHD-001/002 · QA-PAR-001", "자동 실행기·운영 데이터·Java 결과 비교·저장·조회·화면의 종합 진행 상태 · 현재 모두 미구현", "미구현", "② 결과 재승인"],
-  ["공통 명세", "V2-DOC-001", "실행 로드맵 · 기획 미리보기 S-01 · S-04 · S-08 · S-10 · S-09", "QA-PLN-001 · QA-RWY-001", "역사적 기록: 직전 정본 46a34ea · 직전 정본 화면 검사 2/2·C0 문서·기록 검사 51/51. 기능·안전 정본 b2037f3은 현재 보강본 반복 화면 검사 10/10·C0 문서·기록 검사 55/55 로컬 통과·브랜치/PR 자동검사 통과. 실행 로드맵의 최신 source·화면 검사·증적은 상단 안내 문서와 전체 개발 추적표에서 확인 · 새 코드 버전·자동검사·증적 묶음 확인 대기 · 기능 구현 증적 아님", "부분", "D-01~10"],
+  ["공통 명세", "V2-DOC-001", "실행 로드맵 · 기획 미리보기 S-01 · S-04 · S-08 · S-10 · S-09", "QA-PLN-001 · QA-RWY-001", "역사적 기록: 직전 정본 46a34ea · 직전 정본 화면 검사 2/2·C0 문서·기록 검사 51/51. 기능·안전 정본 b2037f3은 현재 보강본 반복 화면 검사 10/10·C0 문서·기록 검사 57/57 로컬 통과·브랜치/PR 자동검사 통과. 실행 로드맵의 최신 source·화면 검사·증적은 상단 안내 문서와 전체 개발 추적표에서 확인 · 새 코드 버전·자동검사·증적 묶음 확인 대기 · 기능 구현 증적 아님", "부분", "D-01~10"],
 ];
 
 const decisionContainer = document.getElementById("decision-groups");

@@ -118,12 +118,12 @@ PYTHONDONTWRITEBYTECODE=1 python3 "${c0_gate_verifier}" "${repository_root}"
 PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover \
   -s "${documentation_test_dir}" \
   -p 'test_verify_c0_gate.py'
-[[ "$(grep -Ec '^    def test_' "${c0_gate_tests}")" -eq 55 ]]
-grep -F 'C0 gate 양성/음성 55건' "${cutover_root}/DELIVERY_TRACE.md" >/dev/null
-grep -F 'C0 문서·기록 검사 55/55 로컬 통과' "${board_root}/app.js" >/dev/null
+[[ "$(grep -Ec '^    def test_' "${c0_gate_tests}")" -eq 57 ]]
+grep -F 'C0 gate 양성/음성 57건' "${cutover_root}/DELIVERY_TRACE.md" >/dev/null
+grep -F 'C0 문서·기록 검사 57/57 로컬 통과' "${board_root}/app.js" >/dev/null
 grep -F 'C0 gate는 51/51이며 이후 추가된 C0-B 수집 승인 검사는 포함하지 않는다.' \
   "${cutover_root}/DELIVERY_TRACE.md" >/dev/null
-grep -F '현재 C0-B 승인 경계 보강본: 로컬 planning 10/10과 C0 gate 55/55' \
+grep -F '현재 C0-B 승인 경계 보강본: 로컬 planning 10/10과 C0 gate 57/57' \
   "${cutover_root}/DELIVERY_TRACE.md" >/dev/null
 
 for decision_number in 01 02 03 04 05 06 07 08 09 10; do
@@ -188,8 +188,8 @@ grep -F 'id="trace-col-decision"' "${board_root}/index.html" >/dev/null
 grep -F 'id="trace-col-approval"' "${board_root}/index.html" >/dev/null
 grep -F 'id="review-handoff-title" tabindex="-1"' "${board_root}/index.html" >/dev/null
 [[ "$(grep -c 'keyConditions:' "${board_root}/app.js")" -eq 10 ]]
-[[ "$(grep -c '{ name:' "${board_root}/app.js")" -eq 35 ]]
-[[ "$(grep -c 'reply:' "${board_root}/app.js")" -eq 35 ]]
+[[ "$(grep -c '{ name:' "${board_root}/app.js")" -eq 37 ]]
+[[ "$(grep -c 'reply:' "${board_root}/app.js")" -eq 37 ]]
 [[ "$(grep -c 'executionBoundary:' "${board_root}/app.js")" -eq 3 ]]
 grep -F '향후 QA 범위·보존 기준 동의' "${board_root}/app.js" >/dev/null
 grep -F '이 선택만으로 시험 서버 자원을 만들거나 바꾸지 않아요.' \

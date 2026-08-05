@@ -77,8 +77,17 @@ CI는 기록 구조와 순서를 검사하지만 사용자의 실제 승인 여�
    만들고 사용자 승인을 다시 받는다.
 4. 확인 전에는 화면이나 문서에서 “당일 공식 종가·365거래일”이라고 표현하지 않는다.
 
-선택: `[ ] A 승인` `[ ] 처음부터 데이터 의미 수정` `[ ] 설명 요청`
+선택: `[ ] A 승인` `[ ] 처음부터 데이터 의미 수정` `[ ] 확정 원가격 종가·완료 거래일 200개 MA200 적용` `[ ] 설명 요청`
 결정 상태: `승인 대기`
+
+**승인된 수정안 — 확정 원가격 종가와 완료 거래일 MA200**
+
+1. v2의 EOD 기준 가격은 해당 미국 거래일에 확정된 **원가격 종가**만 사용한다.
+2. MA200은 평가 시점보다 앞선 완료된 미국 거래일 200개의 같은 원가격 종가로만 계산한다.
+3. 공급자 계약, 공식 확정 시각, corporate action 처리와 원가격 시계열의 기준은 C0-B
+   읽기 전용 수집에서 확인하고, 결과와 C0-A 차이를 사용자가 다시 승인할 때까지 구현값으로
+   고정하지 않는다.
+
 
 ## D-03. 하루 두 실행과 재시도는 어떻게 할까요?
 
@@ -164,8 +173,21 @@ CI는 기록 구조와 순서를 검사하지만 사용자의 실제 승인 여�
    전략 on/off를 checksum과 함께 immutable seed로 가져온다.
 4. exporter가 운영 DB·Java 상태를 변경하거나 주문 함수를 호출하면 실패한다.
 
-선택: `[ ] A 승인` `[ ] 공통 입력 비교만 사용` `[ ] 설명 요청`
+선택: `[ ] A 승인` `[ ] 공통 입력 비교만 사용` `[ ] 공통 입력 정확 비교 + 승인된 데이터 개선 차이 검토` `[ ] 설명 요청`
 결정 상태: `승인 대기`
+
+**승인된 수정안 — 공통 입력 정확 비교와 데이터 개선 차이 검토**
+
+1. 동일 normalized snapshot을 소비한 Java/Python의 수식·수량은 정확히 비교한다.
+2. D-02의 확정 원가격 종가·완료 거래일 MA200처럼 승인된 데이터 의미 차이로 결과가
+   달라지면 `APPROVED_DATA_IMPROVEMENT`로 분류한다. 이 분류에는 데이터 계약/version,
+   달라진 입력 필드와 결과 영향이 함께 남아야 한다.
+3. `APPROVED_DATA_IMPROVEMENT`가 방향·수량·위험 규칙에 영향을 주면 사용자 확인 전에는
+   관찰 통과에 집계하지 않는다. `CRITICAL_DIFF`, `EXECUTION_DIFF`, `INPUT_DIFF`,
+   `SAFETY_DIVERGENCE`와 `LEGACY_UNAVAILABLE`은 기존 차단·제외 규칙을 유지한다.
+4. Java의 EOD 상태·09:45 read-only preview는 계속 읽기 전용으로 비교·증적화하되,
+   Java와 완전히 같은 결과만을 정답으로 보지 않는다.
+
 
 ## D-07. 스테이징에서 무엇을 만들거나 바꿔도 될까요?
 
@@ -207,15 +229,13 @@ CI는 기록 구조와 순서를 검사하지만 사용자의 실제 승인 여�
   `COMPARABLE` 미국 거래일을 연속 20일 확보한다. `INPUT_DIFF`,
   `SAFETY_DIVERGENCE`, `LEGACY_UNAVAILABLE`는 분자·분모에서 제외하며 관찰을
   연장한다. 20/20 모두 `CRITICAL_DIFF=0`, 설명되지 않은 수량·방향 차이 0이어야 한다.
-- **운영 결과 동등성 레인:** Java의 실제 EOD 저장 상태·09:45 read-only preview와
-  Python production run이 모두 있는 `OPERATIONALLY_COMPARABLE` 미국 거래일을 연속
-  20일 확보한다. 각 시스템의 실제 입력 provenance/checksum은 독립 무결성 증적으로 함께
-  보존한다. 같은 시장일·참조 EOD·가격 의미, 승인된 관측 시간창·신선도와 필드별 값 허용
-  기준을 모두 만족하면 checksum과 실제 관측 시각이 서로 달라도 비교 가능하다. 허용 범위
-  안의 값 차이는 `INPUT_VARIANCE`로 남기고, 범위를 벗어난 `INPUT_DIFF`나
-  `SAFETY_DIVERGENCE`·`LEGACY_UNAVAILABLE`는 성공으로 세지 않고 관찰을 연장한다. 20/20에서
-  상태·기준/최종 비중·방향·종목 순서·수량의 설명되지 않은 차이와 `CRITICAL_DIFF`가
-  0이어야 한다.
+- **운영 비교·개선 차이 검토 레인:** Java의 실제 EOD 저장 상태·09:45 read-only preview와
+  Python production run이 모두 있는 미국 거래일을 연속 20일 확보한다. 같은 입력이면
+  정확 비교하고, D-02의 승인된 데이터 의미 차이로 생긴 결과는
+  `APPROVED_DATA_IMPROVEMENT`로 남긴다. 이 차이가 방향·수량·위험 규칙에 영향을 주면
+  사용자가 확인할 때까지 해당 일자는 통과로 세지 않는다. `CRITICAL_DIFF`,
+  `EXECUTION_DIFF`, `INPUT_DIFF`, `SAFETY_DIVERGENCE`, `LEGACY_UNAVAILABLE`는 통과로
+  세지 않고 관찰을 연장한다.
 - **운영 준비 레인:** C0-B에서 승인한 production provider로 연속 미국 거래일 20일의
   EOD/09:45를 각각 100% 완료한다. 휴장만 분모에서 제외하며 `INPUT_BLOCKED`·실패가
   생기면 해결 후 연속 기간을 처음부터 다시 시작한다.
@@ -403,11 +423,11 @@ C0-B item ID는 다음 순서로 고정한다.
 이 gate는 문서에 선언된 상태·형식·체크섬·시간 순서를 검사한다. 또한 `v2/backend`,
 `v2/frontend`, `v2/infra` 아래의 추적·미추적 파일 경로, 실행 권한, 내용 SHA-256을
 합친 기준 tree digest
-`39e1f896720ba8b4a7e33d3148ceb96b3ce284b4f4330e44c037690409483962`와 현재 tree를
+`99926678252b93d9f696a10e1b6e5063b26900f65cb86cc7bdaf1abd86980b43`와 현재 tree를
 비교해 `미시작` 상태의 C2 변경을 거부한다. 이 방식은 특정 branch commit 보존이나 전체
-Git history에 의존하지 않는다. gate 자체를 고칠 수 있도록 제외하는 파일은 정확히
-`v2/infra/tests/verify_c0_gate.py`, `test_verify_c0_gate.py`,
-`documentation_contract_test.sh` 세 개뿐이다. `.venv`, cache, build·QA 결과처럼
+Git history에 의존하지 않는다. C0 검토 보드 계약과 gate 자체를 고칠 수 있도록 제외하는 파일은 정확히
+`v2/frontend/e2e-planning/review-board.spec.ts`, `v2/infra/tests/verify_c0_gate.py`,
+`test_verify_c0_gate.py`, `documentation_contract_test.sh` 네 개뿐이다. `.venv`, cache, build·QA 결과처럼
 명시한 생성물만 추가로 무시하며, 그 밖의 ignored 파일과 생성물 경로 안 코드형·실행 파일,
 Git worktree가 아닌 일반 실행은 fail-closed한다. 기준 digest 갱신 자체는 이 gate가
 독립적으로 인증할 수 없으므로 PR diff에서 사용자 또는 독립 검토를 거쳐야 한다.

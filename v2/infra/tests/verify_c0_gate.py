@@ -83,11 +83,11 @@ C0_B_PENDING_STATES = {
 }
 C0_A_APPROVABLE_CHOICES = {
     "D-01": ("A 승인",),
-    "D-02": ("A 승인",),
+    "D-02": ("A 승인", "확정 원가격 종가·완료 거래일 200개 MA200 적용"),
     "D-03": ("권장안 승인",),
     "D-04": ("A 승인",),
     "D-05": ("A 승인",),
-    "D-06": ("A 승인",),
+    "D-06": ("A 승인", "공통 입력 정확 비교 + 승인된 데이터 개선 차이 검토"),
     "D-07": ("향후 QA 범위·보존 기준 동의",),
     "D-08": ("A 승인",),
     "D-09": ("A 승인",),
@@ -111,7 +111,7 @@ ARTIFACT_REF_PATTERN = re.compile(
 )
 KST_OFFSET = timedelta(hours=9)
 C2_SOURCE_BASELINE_TREE_SHA256 = (
-    "39e1f896720ba8b4a7e33d3148ceb96b3ce284b4f4330e44c037690409483962"
+    "99926678252b93d9f696a10e1b6e5063b26900f65cb86cc7bdaf1abd86980b43"
 )
 C2_PROTECTED_PATHS = (
     "v2/backend",
@@ -119,6 +119,7 @@ C2_PROTECTED_PATHS = (
     "v2/infra",
 )
 C2_PREAPPROVAL_EXCLUSIONS = (
+    "v2/frontend/e2e-planning/review-board.spec.ts",
     "v2/infra/tests/documentation_contract_test.sh",
     "v2/infra/tests/test_verify_c0_gate.py",
     "v2/infra/tests/verify_c0_gate.py",

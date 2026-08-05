@@ -54,14 +54,14 @@ Java EOD 결과(읽기 전용) ↔ 차이·근거 저장           └→ 보호
 - 공급자 응답은 도메인 입력으로 정규화한 뒤 원본 체크섬과 함께 저장한다.
 - 무료·비공식 연구 데이터는 백테스트에는 허용하지만 production 운영 준비 레인의
   인수 증적에는 쓰지 않는다.
-- 동일 normalized snapshot의 `algorithm parity`, 실제 Java EOD/09:45 결과와 Python
-  production run의 `operational parity`, C0-B에서 공급자·가격 의미·신선도를 승인한
-  `production readiness`를 각각 독립 레인으로 분리한다. legacy source는 동등성
+- 동일 normalized snapshot의 `algorithm parity`, 실제 Java EOD/09:45와 Python 결과의
+  `APPROVED_DATA_IMPROVEMENT` 검토, C0-B에서 공급자·가격 의미·신선도를 승인한
+  `production readiness`를 각각 독립 레인으로 분리한다. legacy source는 비교
   증적에만 쓸 수 있고 production 데이터 인수를 대신하지 않는다.
-- 다른 입력끼리 비교해 알고리즘 일치로 판정하지 않는다. 알고리즘 동등성은 같은
-  normalized snapshot을 양쪽에 공급한다. 운영 결과 동등성의 독립 수집은 원문 checksum
-  동일성을 요구하지 않고 아래 `OPERATIONALLY_COMPARABLE` 계약으로 먼저 비교 가능성을
-  판정한다.
+- 다른 입력끼리 알고리즘 일치로 판정하지 않는다. 알고리즘 동등성은 같은 normalized
+  snapshot을 양쪽에 공급한다. 승인된 데이터 의미 차이는 data contract/version,
+  입력 필드, 결과 영향을 보존해 `APPROVED_DATA_IMPROVEMENT`로 분류하고, 방향·수량·위험
+  규칙 영향이 있으면 사용자 확인 전에는 통과로 집계하지 않는다.
 - 서로 다른 평가일·통화·장 상태를 한 스냅샷에 섞지 않는다.
 - 실제 자격증명 등록·교체는 사용자 승인 필수다.
 - KIS `base`, Yahoo `range=1y`, VIX spot, MA200 포함 세션의 의미는
@@ -136,23 +136,21 @@ C2 구현에서는 이를 결정론적인 두 단계로 분리하고, EOD 시점
 | 실행 | 매수/매도, 종목, 우선순위, 수량, 차단 이유 | 동일 09:45 계좌·가격·현금·반올림 입력에서 다르면 `EXECUTION_DIFF` |
 | 설명 | 문구, 이벤트 순서, 표시 자릿수 | 의미가 같으면 `DISPLAY_DIFF` |
 | 알고리즘 입력 | 공유 normalized snapshot checksum | 다르면 `INPUT_DIFF`; 알고리즘 일치로 집계하지 않음 |
-| 운영 입력 | 공급자 계약/version, 시장일·참조 EOD, 가격 의미, 통화·조정 기준, 승인 관측 시간창·신선도, 필드별 값 허용 기준 | 의미·시간창·값 기준을 모두 만족하면 `OPERATIONALLY_COMPARABLE`; 원문 checksum은 각 원본 무결성용이며 서로 같을 필요 없음 |
-| 운영 입력 차이 | 위 의미가 다르거나 시간창·신선도·필드 허용 기준을 벗어남 | `INPUT_DIFF`; 운영 결과 동등성 성공으로 집계하지 않음 |
+| 데이터 개선 차이 | D-02의 확정 원가격 종가·완료 거래일 MA200처럼 승인된 데이터 contract/version, 달라진 입력 필드와 결과 영향이 기록됨 | `APPROVED_DATA_IMPROVEMENT`; 방향·수량·위험 규칙 영향은 사용자 확인 전 통과로 집계하지 않음 |
+| 운영 입력 차이 | 승인된 개선 차이가 아니거나 시장일·가격 의미·시간창·신선도·필드 허용 기준을 벗어남 | `INPUT_DIFF`; 통과로 집계하지 않음 |
 | 안전 차이 | 누락·지연 입력에서 Java는 진행했지만 v2는 차단 | 승인된 경우 `SAFETY_DIVERGENCE`; 정상 일치로 집계하지 않음 |
 | 대조 불가 | Java 결과 누락 또는 기준일 불일치 | `LEGACY_UNAVAILABLE`; 일치로 집계하지 않음 |
 
 비중은 저장 정밀도 기준으로 정확히 비교한다. 허용 오차를 추가하려면 사례, 영향,
 사용자 승인을 남겨야 하며 과거 섀도를 다시 계산한다.
 
-`OPERATIONALLY_COMPARABLE`은 Java와 Python이 독립 호출한 사실을 보존하면서도 비교할 수
-있게 하는 별도 판정이다. C0-B에서 EOD와 09:45 각각에 대해 공급자 계약/version,
-시장일·참조 EOD, `price_kind`, raw/adjusted, 통화, corporate-action 기준, 허용
-`observed_at`/`available_at` 시간창, 최대 신선도, 가격·현금·수량 입력의 필드별 절대/상대
-허용값과 반올림 규칙을 승인한다. 두 원문 checksum과 실제 관측 시각은 각각 보존하며,
-checksum이나 시각이 단순히 서로 다르다는 이유만으로 `INPUT_DIFF`가 되지는 않는다.
-허용 범위 안의 값 차이는 `INPUT_VARIANCE`와 필드 delta로 남긴다. 범위를 벗어나거나 계약
-의미가 다르면 `INPUT_DIFF`다. 승인된 입력 variance가 결과 차이를 완전히 설명하는지는
-별도로 기록하고, 설명되지 않은 차이만 없어야 운영 결과 동등성 성공으로 센다.
+`APPROVED_DATA_IMPROVEMENT`는 Java와 Python이 서로 다른 승인된 데이터 의미를 사용한
+사실을 숨기지 않는 별도 판정이다. C0-B에서 EOD와 09:45 각각에 대해 공급자 계약/version,
+시장일·참조 EOD, `price_kind`, raw/adjusted, 통화, corporate-action 기준,
+`observed_at`/`available_at` 의미와 최대 신선도를 확인한다. 두 원문 checksum과 실제
+관측 시각은 각각 보존한다. 차이가 D-02 승인값과 일치하면 데이터 contract/version과 필드
+delta를 남기고, 방향·수량·위험 규칙 영향을 사용자가 확인할 때까지 통과로 세지 않는다.
+계약 의미가 다르거나 승인 범위를 벗어나면 `INPUT_DIFF`다.
 
 ### 3.5 영속화 (`V2-PER-001`)
 
@@ -198,9 +196,10 @@ SCHEDULED → COLLECTING → VALIDATING → EVALUATING → COMPARING → COMPLET
   checksum을 재승인한 뒤에만 C2 개발을 시작한다.
 - 수식 검증은 동일 normalized snapshot을 Java harness와 Python에 공급한다.
 - 운영 검증은 EOD 저장 결과와 09:45 read-only preview/export 결과를 캡처한다.
-- 운영 검증의 두 원문 checksum은 독립 무결성 증적으로 각각 보존한다. checksum 동일성이
-  아니라 C0-B에서 승인한 `OPERATIONALLY_COMPARABLE` 의미·시간창·값 기준을 만족해야
-  operational parity 후보로 센다.
+- 운영 검증의 두 원문 checksum은 독립 무결성 증적으로 각각 보존한다. D-02의 승인된
+  데이터 의미 차이는 `APPROVED_DATA_IMPROVEMENT`로 분류하고 data contract/version,
+  입력 필드와 결과 영향을 기록한다. 방향·수량·위험 규칙 영향은 사용자 확인 전에는
+  통과 후보로 세지 않는다.
 - exporter는 Java DB·설정·스케줄·주문 상태를 변경하지 않으며 주문 함수를 참조하면
   테스트에서 실패한다.
 
@@ -245,7 +244,7 @@ snapshot과 다른 릴리스 화면이면 캡처 전에 실패한다.
 3. 계좌·전략·데이터·미확정 주문을 검사하는 `ExecutionGate`가 있다.
 
 `LIVE_APPROVED`와 계좌 `ACTIVE`는 현재도 만들 수 있지만 **주문 활성화를 뜻하지 않는다**.
-미래 LIVE는 C3 세 레인이 통과한 뒤 C4-A에서 개발하고, 실제 증권사와 연결되지 않은
+미래 LIVE는 C3의 정확 비교·개선 차이 검토·운영 준비 세 레인이 통과한 뒤 C4-A에서 개발하고, 실제 증권사와 연결되지 않은
 simulator로 아래 계약을 격리 인수한 다음 C4-B 복구 훈련을 통과해야 한다. 이 개발·격리
 인수는 후보 배포나 실제 단건 제출 승인을 대신하지 않는다.
 

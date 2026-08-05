@@ -76,8 +76,8 @@ C2 개발과 관련 로컬·일회용 격리 테스트는 C0-A 확정 → C0-B �
 | 지표 | 기준 |
 | --- | ---: |
 | 알고리즘 동등성 레인 | 같은 normalized input으로 비교 가능한 연속 미국 거래일 20/20 정확 일치 |
-| 두 동등성 레인 분모 제외 | `INPUT_DIFF`·`SAFETY_DIVERGENCE`·`LEGACY_UNAVAILABLE`; 제외일만큼 기간 연장 |
-| 운영 결과 동등성 레인 | 실제 Java EOD/09:45 exporter와 Python production run이 C0-B 승인 시장일·가격 의미·관측 시간창·신선도·필드 허용 기준으로 `OPERATIONALLY_COMPARABLE`인 연속 미국 거래일 20/20, 설명되지 않은 상태·비중·방향·순서·수량 차이 0 |
+| 비교·개선 차이 레인 분모 제외 | `INPUT_DIFF`·`SAFETY_DIVERGENCE`·`LEGACY_UNAVAILABLE` 및 사용자 확인 전의 영향 있는 `APPROVED_DATA_IMPROVEMENT`; 제외일만큼 기간 연장 |
+| 운영 비교·개선 차이 검토 레인 | 실제 Java EOD/09:45 exporter와 Python production run 연속 미국 거래일 20/20. 동일 입력은 정확 일치하고, 승인된 데이터 개선 차이는 contract/version·필드 delta·방향/수량/위험 영향과 사용자 확인을 기록 |
 | production 준비 레인 | C0-B 승인 공급자로 연속 미국 거래일 20일의 16:15/09:45 각각 100% 완료 |
 | 운영 입력 차단·실패 | 0건; 발생 시 해결 뒤 production 연속 기간 재시작 |
 | 중대 전략 차이 | 0건 |

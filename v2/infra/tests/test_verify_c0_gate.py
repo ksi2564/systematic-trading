@@ -309,6 +309,14 @@ class VerifyC0GateTest(unittest.TestCase):
         self._approve_decision("D-01")
         self._verify()
 
+    def test_approved_d02_data_semantics_choice_passes_while_c2_is_unstarted(self) -> None:
+        self._approve_decision("D-02", choice_index=2)
+        self._verify()
+
+    def test_approved_d06_improvement_difference_choice_passes_while_c2_is_unstarted(self) -> None:
+        self._approve_decision("D-06", choice_index=2)
+        self._verify()
+
     def test_conditional_approval_missing_owner_fails(self) -> None:
         self._approve_decision("D-01")
         self.c0 = self.c0.replace(

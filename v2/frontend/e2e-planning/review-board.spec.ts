@@ -63,11 +63,11 @@ test('[QA-PLN-001] C0 결정·화면·추적 보드를 주문 없이 검토한�
   }
   await page.getByRole('button', { name: /검증 증적/ }).click();
   await expect(page.getByText('로컬 가상 화면 검증', { exact: true })).toBeVisible();
-  await expect(page.getByText('기능 후보 1520166 · 26 / 26 통과', { exact: true })).toBeVisible();
+  await expect(page.getByText('통합 안전 코드 a6a7174 · 26 / 26 통과', { exact: true })).toBeVisible();
   await expect(page.getByText('내 작업 버전 자동 검사', { exact: true })).toBeVisible();
-  await expect(page.getByText('브랜치 CI 30959376884 · 5개 작업 통과', { exact: true })).toBeVisible();
+  await expect(page.getByText('브랜치 CI 30965407547 · 5개 작업 통과', { exact: true })).toBeVisible();
   await expect(page.getByText('기준 버전과 합친 상태 검사', { exact: true })).toBeVisible();
-  await expect(page.getByText('PR CI 30959379072 · 5개 작업 통과', { exact: true })).toBeVisible();
+  await expect(page.getByText('PR CI 30965409423 · 5개 작업 통과', { exact: true })).toBeVisible();
   await expect(page.getByText('증적 참조 무결성', { exact: true })).toBeVisible();
   await expect(page.getByText('78개 참조 · 모두 해시 검증 통과', { exact: true })).toBeVisible();
   await expect(page.getByText('운영 배포·인증 화면 검증', { exact: true })).toBeVisible();

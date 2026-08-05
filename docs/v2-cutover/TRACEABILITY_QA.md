@@ -27,20 +27,19 @@
 | `V2-SAF-001` | `Settings.validate_execution_safety`, `DisabledBroker`, `ExecutionGate`; API 미확인·불일치 시 화면 변경 잠금 | backend 안전 테스트; `App.test.tsx`의 API 401/오류·unsafe fail-closed 회귀 | 인증된 배포 화면에서 false/disabled API·배너·잠금 동시 증적 | 부분 |
 | `V2-OPS-001` | operations status/audit API, 오늘의 운영·안전 화면 | `test_api.py`, `App.test.tsx` 일부 | 스케줄·데이터·Java diff·마지막 성공 카드 | 부분 |
 | `V2-API-001` | 요구·기능·화면 문서의 GET-only API 계약 | 문서 링크·경로 정적 검사 대상 | shadow/QA/cutover 조회 API·권한·cursor·마스킹·신선도 테스트 | 미구현 |
-| `V2-UI-001` | React 6개 메뉴와 반응형 CSS; 안전 API 미확인·부분/전체 불일치 시 위험 증가 조작 잠금과 중복 전송 없는 비상 제출 차단 유지; Playwright 읽기 전용 QA | `App.test.tsx` 13건(10초 timeout·겹친 새로고침의 stale-safe 차단·부분 안전 플래그 불일치·보호 정지 성공/실패 포함); 기능 후보 `15201660c009cfbd57da0ff4637d0d33da46b20f`에서 확장된 `QA-RWD-001`을 포함한 로컬 clean-tree mock-only 26/26과 같은 SHA의 [push CI `30959376884`](https://github.com/ksi2564/systematic-trading/actions/runs/30959376884) `ui-qa` 통과. base `8eb580b`와 기능 후보를 합친 당시 test-merge `5fca72e`의 [PR CI `30959379072`](https://github.com/ksi2564/systematic-trading/actions/runs/30959379072)도 통과 | 실제 배포의 인증 브라우저·동일 출처 API, 섀도 화면 | 부분 |
-| `V2-QA-001` | Playwright 스크린샷·network evidence, manifest 안전 검증과 CI artifact 업로드; 인증 배포 GET-only 별도 harness | 기능 후보 `15201660c009cfbd57da0ff4637d0d33da46b20f`에서 로컬 26/26, 마지막 attempt 증적 참조 78개 SHA-256 자기검증, 리소스 변경 0; 같은 SHA의 [push CI `30959376884`](https://github.com/ksi2564/systematic-trading/actions/runs/30959376884) artifact와 당시 test-merge `5fca72ec8ba5167bcbbf3bf99ffad1f4273a6cb7`의 [PR CI `30959379072`](https://github.com/ksi2564/systematic-trading/actions/runs/30959379072) artifact `v2-ui-qa-local-mock-1` 통과. PR #57 후속 후보는 exact health 뒤 후보 전용 무변경 snapshot을 고정하고 화면의 5개 논리 GET을 서버 전송 없이 로컬 응답하며, 6화면×2 viewport의 PNG 12개·관찰 JSON 2개·manifest 1개만 허용하도록 보강했지만 아직 미배포 | 새 후속 SHA의 CI·사용자 승인 RC 배포, 동일 SHA의 `build_sha`, 인증된 외부 화면 증적 | 부분 |
+| `V2-UI-001` | React 6개 메뉴와 반응형 CSS; 안전 API 미확인·부분/전체 불일치 시 위험 증가 조작 잠금과 중복 전송 없는 비상 제출 차단 유지; Playwright 읽기 전용 QA | `App.test.tsx` 13건(10초 timeout·겹친 새로고침의 stale-safe 차단·부분 안전 플래그 불일치·보호 정지 성공/실패 포함); 통합 안전 head `a6a7174`의 로컬 clean-tree mock-only 26/26과 [push CI `30965407547`](https://github.com/ksi2564/systematic-trading/actions/runs/30965407547) `frontend`·`ui-qa` 통과. base `8eb580b`와 head를 합친 test-merge `41fc46b`의 [PR CI `30965409423`](https://github.com/ksi2564/systematic-trading/actions/runs/30965409423)도 통과 | 실제 배포의 인증 브라우저·동일 출처 API, 섀도 화면 | 부분 |
+| `V2-QA-001` | Playwright 스크린샷·network evidence, manifest 안전 검증과 CI artifact 업로드; 인증 배포 GET-only 별도 harness | 통합 안전 head `a6a7174`에서 로컬 26/26, 마지막 attempt 증적 참조 78개 SHA-256 자기검증, 리소스 변경 0; 원본 [push CI `30965407547`](https://github.com/ksi2564/systematic-trading/actions/runs/30965407547)와 test-merge `41fc46b`의 [PR CI `30965409423`](https://github.com/ksi2564/systematic-trading/actions/runs/30965409423)에서 artifact `v2-ui-qa-local-mock-1` 통과. exact health 뒤 후보 전용 무변경 snapshot을 고정하고 화면의 5개 논리 GET을 서버 전송 없이 로컬 응답하며, 6화면×2 viewport의 PNG 12개·관찰 JSON 2개·manifest 1개만 허용하도록 보강했지만 아직 미배포 | 사용자 승인 RC 배포, 동일 SHA의 `build_sha`, 인증된 외부 화면 증적 | 부분 |
 | `V2-APR-001` | LIVE 후보·재개 확인, 감사 로그, 현재 LIVE 설정 시작 거부 | `test_lifecycle_and_paper.py`, `test_api.py` | DNS/트래픽·Java 소유권·롤백 승인 모델 | 부분 |
 | `V2-LIV-001` | 자동 제출·접수·미체결/부분체결·대조 완료 계약만 문서화 | 없음 | C3·C4·사용자 실행 승인 후 별도 설계·canary·인수 QA | 미구현 |
 | `V2-REL-001` | C0/CUTOVER 문서의 세 독립 20거래일 레인과 C5-A/C5-B/C6 계약 | 없음 | 연속 섀도 집계, 승인 게이트, 단건 canary, 예약 5주기, 전체 전환·안정화 | 미구현 |
-| `V2-RBK-001` | SHA+attempt 불변 릴리스 경로와 심볼릭 링크 복구, 첫 배포 실패 시 서비스 정지, 검증 실패 release 보존과 current/rollback/latest-3 보존, host 동시 배포 잠금 | active/stale host lock fail-closed; HUP/TERM→129/143; modern·#54 legacy·same-SHA 복구; health transport·안전값·SHA 오류; 안전 env 중복·기존 비정상 서비스 stop 실패의 pre-switch 거부; rollback 경로/SHA 불일치; systemd restart 오류; rollback health/restart 실패 시 새 bytes 보존; 최초 배포 stop 성공/실패·상태 조회 오류; lock cleanup 실패 non-green을 whole-script 격리 fault test로 검증. workflow의 기존 Java active·nonzero·동일 PID wrapper를 실제 shell matrix로 실행하고 배포 후 SHA·false/disabled 계약을 검사. 기능 후보 `1520166`의 로컬 matrix·[push CI `30959376884`](https://github.com/ksi2564/systematic-trading/actions/runs/30959376884)와 당시 test-merge `5fca72e`의 [PR CI `30959379072`](https://github.com/ksi2564/systematic-trading/actions/runs/30959379072) `infra` 통과 | 실제 staging retention warning·DB 복구·systemd/health 장애·미확정 주문·Java 복귀 훈련과 사용자 확정 | 부분 |
-| `V2-DOC-001` | `docs/v2-cutover/` 문서 묶음, 단일 `DELIVERY_TRACE`, 기능 제안·선택형 PR 템플릿, 비개발자용 review board | D-01~D-10·핵심 화면·요구사항 ID 계약 검사; 기능 후보 `1520166`에서 review board desktop/mobile 2/2와 local-only GET 요청·무저장 메모·가로 overflow·비활성 위험 버튼을 검증했다. 같은 기능 후보의 [push CI `30959376884`](https://github.com/ksi2564/systematic-trading/actions/runs/30959376884)와 당시 test-merge `5fca72e`의 [PR CI `30959379072`](https://github.com/ksi2564/systematic-trading/actions/runs/30959379072) artifact `v2-planning-board-qa-1` 생성 | 사용자 D-01~D-10 검토·승인과 이후 PR별 승인 SHA 연결 | 부분 |
+| `V2-RBK-001` | SHA+attempt 불변 릴리스 경로와 심볼릭 링크 복구, 첫 배포 실패 시 서비스 정지, 검증 실패 release 보존과 current/rollback/latest-3 보존, host 동시 배포 잠금 | active/stale host lock fail-closed; HUP/TERM→129/143; modern·#54 legacy·same-SHA 복구; health transport·안전값·SHA 오류; 안전 env 중복·기존 비정상 서비스 stop 실패의 pre-switch 거부; rollback 경로/SHA 불일치; systemd restart 오류; rollback health/restart 실패 시 새 bytes 보존; 최초 배포 stop 성공/실패·상태 조회 오류; lock cleanup 실패 non-green을 whole-script 격리 fault test로 검증. workflow의 기존 Java active·nonzero·동일 PID wrapper를 실제 shell matrix로 실행하고 배포 후 SHA·false/disabled 계약을 검사. 통합 안전 head `a6a7174`의 로컬 matrix·[push CI `30965407547`](https://github.com/ksi2564/systematic-trading/actions/runs/30965407547)와 test-merge `41fc46b`의 [PR CI `30965409423`](https://github.com/ksi2564/systematic-trading/actions/runs/30965409423) `infra` 통과 | 실제 staging retention warning·DB 복구·systemd/health 장애·미확정 주문·Java 복귀 훈련과 사용자 확정 | 부분 |
+| `V2-DOC-001` | `docs/v2-cutover/` 문서 묶음, 단일 `DELIVERY_TRACE`, 기능 제안·선택형 PR 템플릿, 비개발자용 review board | D-01~D-10·핵심 화면·요구사항 ID 계약 검사; 통합 안전 head `a6a7174`에서 review board desktop/mobile 2/2와 local-only GET 요청·무저장 메모·가로 overflow·비활성 위험 버튼을 검증했다. 원본 [push CI `30965407547`](https://github.com/ksi2564/systematic-trading/actions/runs/30965407547)와 test-merge `41fc46b`의 [PR CI `30965409423`](https://github.com/ksi2564/systematic-trading/actions/runs/30965409423)에서 artifact `v2-planning-board-qa-1` 생성 | 사용자 D-01~D-10 검토·승인과 이후 PR별 승인 SHA 연결 | 부분 |
 
 역할은 다음과 같이 나눈다. `v2 CI`는 PR·push의 빠른 피드백을 위한 동일 테스트이며
-PR #57 기능 후보의 push run과 base/기능 후보 당시 test-merge의 PR run에서 각각 통과했다.
-이 결과를 연결하는 후속 증적 문구·기획 QA 단언 변경은 두 실행 범위에 포함하지 않으며
-두 실행을 해당 변경의 통과 근거로 쓰지 않는다. 이를 담은 후속 커밋의 check를 별도
-증적으로 사용한다. `v2 Release Candidate`는 Staging Deploy가 신뢰하는 정확한 `master` SHA에서
-패리티·no-order UI QA·manifest 안전 검증을 다시 강제하는 배포 게이트 후보다.
+PR #57 통합 안전 head `a6a7174`의 원본 push run과 base `8eb580b`에 합친 test-merge
+`41fc46b`의 PR run에서 각각 통과했다. 이 증적을 기록하는 문서 전용 후속 커밋은 기능
+코드의 통과 근거로 올려 적지 않는다. `v2 Release Candidate`는 Staging Deploy가 신뢰하는
+정확한 `master` SHA에서 패리티·no-order UI QA·manifest 안전 검증을 다시 강제하는 배포 게이트 후보다.
 현재 실제 RC run은 없으므로 v2 CI 성공을 RC·배포 통과 증적으로 계산하지 않는다.
 
 ### 배포 상태 해석
@@ -95,17 +94,17 @@ PR #57 기능 후보의 push run과 base/기능 후보 당시 test-merge의 PR r
 
 실행 상태:
 
-- 기능 후보 `15201660c009cfbd57da0ff4637d0d33da46b20f`의 로컬 clean-tree mock-only UI QA:
+- 통합 안전 기능 코드 `a6a71740b9e2b12c1b488020edfda57d422f1914`의 로컬 clean-tree mock-only UI QA:
   2026-08-05 KST 데스크톱·모바일 26/26 `PASS`,
   flaky 0, 생성·변경 리소스 0, 외부·위험·WebSocket 요청 0. manifest가 마지막 attempt의
   스크린샷·network JSON·trace의 증적 참조 78개 SHA-256과 안전 범위를
   자기검증했다. 전체 26개와
   QA ID별 16/2/2/6, 데스크톱·모바일 각 13개 matrix도 고정한다. unsafe fixture의
   `true/kis-live` 기대값은 harness의 주문 제출 능력 없음과 별도 필드로 기록한다. 이는
-  로컬 후보 검증이며 배포 QA가 아니다. 같은 head SHA의 [push CI
-  `30959376884`](https://github.com/ksi2564/systematic-trading/actions/runs/30959376884)와 base
-  `8eb580b`에 기능 후보를 합친 당시 test-merge `5fca72e`의 [PR CI
-  `30959379072`](https://github.com/ksi2564/systematic-trading/actions/runs/30959379072) `ui-qa`가
+  로컬 후보 검증이며 배포 QA가 아니다. 원본 head의 [push CI
+  `30965407547`](https://github.com/ksi2564/systematic-trading/actions/runs/30965407547)와 base
+  `8eb580b`에 head를 합친 test-merge `41fc46b`의 [PR CI
+  `30965409423`](https://github.com/ksi2564/systematic-trading/actions/runs/30965409423) `ui-qa`가
   모두 통과했다. 각 CI artifact는 이 78개 참조를 다시 hash 검증해 평탄화한 `verified`
   번들만 업로드했다. HTML/JUnit·원본 중복 파일은 제외한다.
   `QA-RWD-001`의 1440/360 가로 넘침

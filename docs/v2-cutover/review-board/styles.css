@@ -1615,7 +1615,7 @@ h3 {
   }
 
   .hero {
-    padding: 48px 0 34px;
+    padding: 40px 0 30px;
   }
 
   h1 {
@@ -1624,6 +1624,15 @@ h3 {
 
   .hero-runway-link {
     width: 100%;
+    margin-bottom: 28px;
+  }
+
+  .safety-strip div {
+    padding: 18px;
+  }
+
+  .version-proof > div {
+    padding: 13px 15px;
   }
 
   .section-heading,
@@ -1641,6 +1650,10 @@ h3 {
     text-align: left;
   }
 
+  .section-heading {
+    margin-bottom: 22px;
+  }
+
   .runway-provenance {
     text-align: left;
   }
@@ -1651,7 +1664,7 @@ h3 {
 
   .view-tabs {
     grid-template-columns: repeat(2, 1fr);
-    margin-top: 60px;
+    margin-top: 48px;
   }
 
   .view-tab {
@@ -1663,7 +1676,12 @@ h3 {
   .gate-section,
   .view-panel,
   .next-step {
-    margin-top: 56px;
+    margin-top: 48px;
+  }
+
+  .gate-rail li {
+    min-height: 84px;
+    padding: 14px 16px;
   }
 
   .notice-card {
@@ -1672,6 +1690,7 @@ h3 {
 
   .parallel-lane {
     grid-template-columns: auto 1fr;
+    padding: 15px 16px;
   }
 
   .parallel-status {
@@ -1680,11 +1699,11 @@ h3 {
   }
 
   .decision-group {
-    padding: 18px;
+    padding: 16px;
   }
 
   .decision-groups {
-    gap: 20px;
+    gap: 16px;
   }
 
   .review-handoff {
@@ -1702,12 +1721,22 @@ h3 {
   .decision-card summary {
     grid-template-columns: 50px 1fr auto;
     gap: 8px;
-    min-height: 84px;
+    min-height: 78px;
   }
 
   .decision-body {
     grid-template-columns: 1fr;
-    padding-left: 0;
+    gap: 14px;
+    padding: 0 0 20px;
+  }
+
+  .recommendation,
+  .decision-impact {
+    padding: 16px;
+  }
+
+  .option-card {
+    padding: 14px;
   }
 
   .decision-title .decision-selection {
@@ -1724,7 +1753,7 @@ h3 {
   }
 
   .decision-navigation span {
-    min-height: 61px;
+    min-height: 56px;
   }
 
   .next-decision {
@@ -1750,6 +1779,12 @@ h3 {
 
   .screen-content {
     padding: 20px;
+  }
+
+  .review-draft {
+    padding: 14px;
+    font-size: 13px;
+    line-height: 1.5;
   }
 
   .evidence-list li {
@@ -1791,7 +1826,7 @@ h3 {
 
   .trace-table tbody {
     display: grid;
-    gap: 12px;
+    gap: 10px;
   }
 
   .trace-table tr {
@@ -1806,8 +1841,8 @@ h3 {
   .trace-table td {
     display: grid;
     grid-template-columns: 76px minmax(0, 1fr);
-    gap: 8px;
-    padding: 10px 12px;
+    gap: 7px;
+    padding: 8px 11px;
     overflow-wrap: anywhere;
   }
 
@@ -1821,6 +1856,11 @@ h3 {
   .next-links,
   .next-links a {
     width: 100%;
+  }
+
+  .footer {
+    margin-top: 52px;
+    padding: 24px 0 32px;
   }
 }
 

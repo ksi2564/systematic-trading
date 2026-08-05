@@ -140,21 +140,27 @@ test('[QA-PLN-001] C0 결정·화면·추적 보드를 주문 없이 검토한�
   await expect(page.getByText('기획안 · 승인 대기', { exact: true })).toBeVisible();
   const safetyStrip = page.getByLabel('현재 안전 상태');
   await expect(
-    safetyStrip.getByText('마지막 제어 작업에서 미중단 · C0-B 재확인 대기', { exact: true })
+    safetyStrip.getByText('마지막 제어 작업에서 미중단 · C0-B 수집 승인 대기', { exact: true })
   ).toBeVisible();
   await expect(
     safetyStrip.getByText('코드 후보는 차단 · 원격 재확인 대기', { exact: true })
   ).toBeVisible();
   const versionProof = page.getByLabel('배포와 검증 버전 구분');
   await expect(versionProof.getByText('#54 · 66e374c', { exact: true })).toBeVisible();
-  await expect(versionProof.getByText('a6a7174', { exact: true })).toBeVisible();
+  await expect(versionProof.getByText('46a34ea', { exact: true })).toBeVisible();
   await expect(versionProof.getByText('PR #57 · Draft', { exact: true })).toBeVisible();
+  await expect(versionProof).toContainText(
+    '현재 검토 보드 화면 검사 10/10 통과 · PR 자동검사 확인 대기 · 운영 미배포'
+  );
   await expect(versionProof.getByText('현재 서버가 이 버전인지 원격 재확인 전', { exact: true })).toBeVisible();
   await expect(page.getByText('C1 인증 화면 읽기 검증은 C0-A와 병렬로 준비할 수 있어요.', { exact: true })).toBeVisible();
   await expect(page.getByText('후보 배포 승인 + 직접 로그인 필요', { exact: true })).toBeVisible();
   await expect(page.getByText(/비밀번호·일회용 인증번호·토큰·쿠키는 보내지 마세요/)).toBeVisible();
   await expect(page.getByLabel('C0-A 검토 권한 경계')).toContainText(
     '후보 배포·시험 서버 변경·자격증명 사용·실제 주문·Java 중단·접속 경로 변경'
+  );
+  await expect(page.getByLabel('C0-A 검토 권한 경계')).toContainText(
+    '① 운영값 수집 전 별도 승인과 ② 결과 확인 뒤 재승인'
   );
   await expect(page.locator('.decision-card')).toHaveCount(10);
   await expect(page.locator('.view-tabs')).toHaveCSS('position', 'static');
@@ -381,7 +387,14 @@ test('[QA-PLN-001] C0 결정·화면·추적 보드를 주문 없이 검토한�
     /D-05 관리 밖 종목 정책 수정: QQQ는 보유 허용, 그 외 종목은 자동 진행 중단/
   );
   await expect(page.locator('#review-draft')).toHaveValue(
-    /후보 배포, 시험 서버 변경, 자격증명 전달·사용, 실제 주문, Java 중단, 접속 경로 변경을 승인하지 않습니다/
+    /후보 배포, 시험 서버 변경, 자격증명 전달·사용, 실제 주문, Java 중단, 접속 경로 변경도 승인하지 않습니다/
+  );
+  await expect(page.locator('#review-draft')).toHaveValue(
+    /C0-B 운영값 수집을 승인하지 않습니다/
+  );
+  await expect(page.locator('#review-draft')).toHaveValue(/두 번의 확인이 필요합니다/);
+  await expect(page.locator('#review-draft')).toHaveValue(
+    /두 번째 승인 전에는 C2 개발을 시작하지 않습니다/
   );
   await expect(page.locator('#review-draft')).toHaveValue(/D-07 실행 경계: 기획 기준 선택 · 실행 승인 아님/);
   await expect(page.locator('#review-draft')).toHaveValue(/D-09 실행 경계: 기획 기준 선택 · 실행 승인 아님/);
@@ -390,12 +403,15 @@ test('[QA-PLN-001] C0 결정·화면·추적 보드를 주문 없이 검토한�
   await expect(copyReviewDraft).toBeEnabled();
   await copyReviewDraft.click();
   await expect(page.locator('#draft-readiness')).toHaveText(
-    '복사했어요. 이 대화에 붙여넣어야 전달돼요.'
+    '복사했어요. 붙여넣어도 C0-A만 전달돼요.'
   );
   const copiedDraft = await page.evaluate(() => navigator.clipboard.readText());
   expect(copiedDraft).toContain('D-01 A 승인');
   expect(copiedDraft).toContain('D-10 A를 미래 실전 명세로 승인');
   expect(copiedDraft).toContain('실제 주문');
+  expect(copiedDraft).toContain('C0-B 운영값 수집을 승인하지 않습니다');
+  expect(copiedDraft).toContain('두 번의 확인이 필요합니다');
+  expect(copiedDraft).toContain('두 번째 승인 전에는 C2 개발을 시작하지 않습니다');
   expect(await page.evaluate(() => [localStorage.length, sessionStorage.length])).toEqual([0, 0]);
 
   await page.evaluate(() => {
@@ -495,23 +511,60 @@ test('[QA-PLN-001] C0 결정·화면·추적 보드를 주문 없이 검토한�
     }
   }
   await page.getByRole('button', { name: /검증 증적/ }).click();
-  await expect(page.getByText('로컬 가상 화면 검증', { exact: true })).toBeVisible();
-  await expect(page.getByText('통합 안전 코드 a6a7174 · 26 / 26 통과', { exact: true })).toBeVisible();
-  await expect(page.getByText('내 작업 버전 자동 검사', { exact: true })).toBeVisible();
-  await expect(page.getByText('브랜치 CI 30965407547 · 5개 작업 통과', { exact: true })).toBeVisible();
-  await expect(page.getByText('기준 버전과 합친 상태 검사', { exact: true })).toBeVisible();
-  await expect(page.getByText('PR CI 30965409423 · 5개 작업 통과', { exact: true })).toBeVisible();
-  await expect(page.getByText('증적 참조 무결성', { exact: true })).toBeVisible();
-  await expect(page.getByText('78개 참조 · 모두 해시 검증 통과', { exact: true })).toBeVisible();
-  await expect(page.getByText('운영 배포·인증 화면 검증', { exact: true })).toBeVisible();
-  await expect(page.getByText(
+  const evidenceScreen = page.getByLabel('S-08 검증 증적 기획 미리보기');
+  await expect(evidenceScreen.getByText('직전 독립 검증', { exact: true })).toBeVisible();
+  await expect(evidenceScreen.getByText(
+    '46a34ea · v2 가상 운영 화면 기능 검사 26 / 26 · C0 문서·기록 검사 51 / 51',
+    { exact: true }
+  )).toBeVisible();
+  await expect(evidenceScreen.getByText('브랜치 자동 검사', { exact: true })).toBeVisible();
+  await expect(evidenceScreen.getByText('CI 30975237262 · 5개 작업 통과', { exact: true })).toBeVisible();
+  await expect(evidenceScreen.getByText('기준 버전과 합본 검사', { exact: true })).toBeVisible();
+  await expect(evidenceScreen.getByText('PR CI 30975239146 · 5개 작업 통과', { exact: true })).toBeVisible();
+  await expect(evidenceScreen.getByText('증적 참조 무결성', { exact: true })).toBeVisible();
+  await expect(evidenceScreen.getByText('78개 참조 · 모두 해시 검증 통과', { exact: true })).toBeVisible();
+  await expect(evidenceScreen.getByText('현재 보강본', { exact: true })).toBeVisible();
+  await expect(evidenceScreen.getByText(
+    '현재 검토 보드 화면 검사 10 / 10 · C0 문서·기록 검사 55 / 55 통과 · PR 자동검사 확인 대기 · 운영 미배포',
+    { exact: true }
+  )).toBeVisible();
+  await expect(evidenceScreen.getByText('운영 배포·인증 화면 검증', { exact: true })).toBeVisible();
+  await expect(evidenceScreen.getByText(
     '차단 확인 · 후보 배포 승인과 사용자 직접 로그인 대기',
     { exact: true }
   )).toBeVisible();
   await page.getByRole('button', { name: /운영값 재확인/ }).click();
-  await expect(page.getByText('0 / 12 · 아직 수집하지 않았어요', { exact: true })).toBeVisible();
-  await expect(page.getByText('모드·소유권 확인 대기', { exact: true })).toBeVisible();
-  await expect(page.getByText('12개 값·차이·문서 버전이 모두 맞아야 열려요.', { exact: true })).toBeVisible();
+  const c0bScreen = page.getByLabel('S-10 운영값 재확인 기획 미리보기');
+  await expect(c0bScreen.getByText('1단계 · 운영값 수집', { exact: true })).toBeVisible();
+  await expect(c0bScreen.getByText('별도 승인 대기', { exact: true })).toBeVisible();
+  await expect(c0bScreen.getByText(
+    'C0-A가 끝나도 바로 수집하지 않아요. 아래 범위를 따로 승인한 뒤에만 12개 값을 읽어요.',
+    { exact: true }
+  )).toBeVisible();
+  await expect(c0bScreen.getByText(
+    'GitHub 자동화를 통해 운영 서버의 설정과 DB를 조회 · 상세: PROD SSH · shell 조회 · DB SELECT',
+    { exact: true }
+  )).toBeVisible();
+  await expect(c0bScreen.getByText(
+    '조회 명령만 허용 · 변경 명령 없음',
+    { exact: true }
+  )).toBeVisible();
+  await expect(c0bScreen.getByText(
+    '정제·마스킹한 증적만 지정 폴더에 저장 · docs/v2-cutover/evidence/c0b/',
+    { exact: true }
+  )).toBeVisible();
+  await expect(c0bScreen.getByText('저장하지 않음', { exact: true })).toBeVisible();
+  await expect(c0bScreen.getByText(
+    '프로젝트 변경 이력에 계속 남음',
+    { exact: true }
+  )).toBeVisible();
+  await expect(c0bScreen.getByText('모드·소유권 확인 대기', { exact: true })).toBeVisible();
+  await expect(c0bScreen.getByText('2단계 · 수집 결과', { exact: true })).toBeVisible();
+  await expect(c0bScreen.getByText('결과 재승인 대기', { exact: true })).toBeVisible();
+  await expect(c0bScreen.getByText(
+    '12개 값과 C0-A 차이를 본 뒤 재승인해야 C2 개발을 시작해요.',
+    { exact: true }
+  )).toBeVisible();
   await testInfo.attach('c0b-review-planning.png', {
     body: await page.locator('.screen-frame').screenshot(),
     contentType: 'image/png'
@@ -526,8 +579,12 @@ test('[QA-PLN-001] C0 결정·화면·추적 보드를 주문 없이 검토한�
     contentType: 'image/png'
   });
   await page.getByRole('button', { name: '개발 추적표' }).click();
+  const c0bLegend = page.getByLabel('C0-B 승인 단계 범례');
+  await expect(c0bLegend).toContainText('① 운영값 수집 승인 → ② 수집 결과 재승인');
+  await expect(c0bLegend).toContainText('두 번째 승인 전에는 C2 개발을 시작하지 않아요.');
   await expect(page.locator('#trace-body tr')).toHaveCount(14);
   await expect(page.getByRole('columnheader')).toHaveCount(7);
+  await expect(page.getByRole('columnheader', { name: '승인 순서' })).toBeVisible();
   await expect(page.locator('.trace-table thead')).toHaveCSS('position', 'absolute');
   expect(
     await page.locator('#trace-body td').evaluateAll((cells) =>
@@ -554,16 +611,42 @@ test('[QA-PLN-001] C0 결정·화면·추적 보드를 주문 없이 검토한�
     await expect(c2Row).toHaveCount(1);
     await expect(c2Row.locator('td').nth(5)).toHaveText('미구현');
   }
-  await expect(page.getByText('C0-A/B', { exact: true })).toBeVisible();
+  const expectedApprovalOrder = new Map([
+    ['D-01~02', 'C0-A → ① 수집 → ② 결과'],
+    ['C1 격리', '① 수집 → ② 결과'],
+    ['D-03', '② 결과 재승인'],
+    ['D-04', '② 결과 재승인'],
+    ['D-05~06', '② 결과 재승인'],
+    ['C2 미래 화면', '② 결과 재승인'],
+    ['C2 종합', '② 결과 재승인'],
+  ]);
+  for (const [rowLabel, approval] of expectedApprovalOrder) {
+    const approvalRow = page.locator('#trace-body tr').filter({
+      has: page.getByText(rowLabel, { exact: true }),
+    });
+    await expect(approvalRow).toHaveCount(1);
+    await expect(approvalRow.locator('td').nth(6)).toHaveText(approval);
+  }
   await expect(page.getByText('단건→범위→전환 승인', { exact: true })).toBeVisible();
+
+  const commonSpecRow = page.locator('#trace-body tr').filter({
+    has: page.getByText('공통 명세', { exact: true }),
+  });
+  await expect(commonSpecRow).toContainText('직전 정본 46a34ea');
+  await expect(commonSpecRow).toContainText('직전 정본 화면 검사 2/2');
+  await expect(commonSpecRow).toContainText('C0 문서·기록 검사 51/51');
+  await expect(commonSpecRow).toContainText('현재 보강본 반복 화면 검사 10/10');
+  await expect(commonSpecRow).toContainText('C0 문서·기록 검사 55/55 로컬 통과');
+  await expect(commonSpecRow).toContainText('새 코드 버전·자동검사·증적 묶음 확인 대기');
   for (const rowLabel of ['D-07', '현재 UI']) {
     const evidenceRow = page.locator('#trace-body tr').filter({
       has: page.getByText(rowLabel, { exact: true }),
     });
     await expect(evidenceRow).toHaveCount(1);
-    await expect(evidenceRow).toContainText('통합 안전 코드 a6a7174');
-    await expect(evidenceRow).toContainText('브랜치 CI 30965407547');
-    await expect(evidenceRow).toContainText('기준 버전 합본 PR CI 30965409423');
+    await expect(evidenceRow).toContainText('직전 독립 검증 46a34ea');
+    await expect(evidenceRow).toContainText('v2 가상 운영 화면 기능 검사 26/26');
+    await expect(evidenceRow).toContainText('브랜치 자동검사 30975237262');
+    await expect(evidenceRow).toContainText('기준 버전 합본 자동검사 30975239146');
   }
 
   await expectNoHorizontalOverflow(page);

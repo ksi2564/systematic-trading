@@ -12,8 +12,10 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from verify_c0_gate import (
+    C0_B_CAPTURE_ITEMS,
+    C0_B_COLLECTION_APPROVAL_ITEM,
+    C0_B_COLLECTION_SCOPE,
     C0_B_ITEM_IDS,
-    C0_B_ITEMS,
     C0_B_PENDING_STATES,
     GateError,
     _artifact,
@@ -129,6 +131,20 @@ class VerifyC0GateTest(unittest.TestCase):
                 "\n" if self.board.endswith("\n") else ""
             )
 
+    def _set_trace_approval(self, gate: str, approval: str) -> None:
+        lines = self.trace.splitlines()
+        changed = 0
+        for index, line in enumerate(lines):
+            if not line.startswith("|"):
+                continue
+            cells = line.split("|")
+            if len(cells) == 11 and cells[1].strip() == gate:
+                cells[9] = f" {approval} "
+                lines[index] = "|".join(cells)
+                changed += 1
+        self.assertEqual(changed, 1)
+        self.trace = "\n".join(lines) + ("\n" if self.trace.endswith("\n") else "")
+
     def _set_c2_state(self, state: str) -> None:
         self.c0, c0_replacements = re.subn(
             r'C2 개발 상태: `[^`]+`',
@@ -154,11 +170,32 @@ class VerifyC0GateTest(unittest.TestCase):
         path.write_bytes(encoded)
         return f"{relative_path}#sha256={hashlib.sha256(encoded).hexdigest()}"
 
-    def _complete_c0_b(self) -> tuple[str, str]:
-        captured_at = "2026-08-05T23:30:00+09:00"
+    def _approve_c0_b_collection(
+        self,
+        *,
+        scope: str = C0_B_COLLECTION_SCOPE,
+        owner: str = "iny",
+        timestamp: str = "2026-08-05T23:20:00+09:00",
+    ) -> None:
+        pending = f"| {C0_B_COLLECTION_APPROVAL_ITEM} | - | - | 승인 대기 | - | - |"
+        approved = (
+            f"| {C0_B_COLLECTION_APPROVAL_ITEM} | {scope} | - | 수집 승인 | "
+            f"{owner} | {timestamp} |"
+        )
+        self.assertIn(pending, self.c0)
+        self.c0 = self.c0.replace(pending, approved, 1)
+
+    def _complete_c0_b(
+        self,
+        *,
+        approve_collection: bool = True,
+        captured_at: str = "2026-08-05T23:30:00+09:00",
+    ) -> tuple[str, str]:
+        if approve_collection:
+            self._approve_c0_b_collection()
         snapshot_items: list[dict[str, object]] = []
         diff_items: list[dict[str, object]] = []
-        for item in C0_B_ITEMS[:-1]:
+        for item in C0_B_CAPTURE_ITEMS:
             pending = C0_B_PENDING_STATES[item]
             pending_row = f"| {item} | - | - | {pending} | - | - |"
             item_id = C0_B_ITEM_IDS[item]
@@ -312,6 +349,97 @@ class VerifyC0GateTest(unittest.TestCase):
         with self.assertRaisesRegex(GateError, "cannot complete before all C0-A"):
             self._verify()
 
+    def test_c0_b_collection_approval_requires_complete_c0_a(self) -> None:
+        self._approve_c0_b_collection()
+        with self.assertRaisesRegex(GateError, "requires complete C0-A decisions"):
+            self._verify()
+
+    def test_c0_b_collection_approval_requires_scope_owner_and_kst_time(self) -> None:
+        self._approve_all()
+        approved_c0 = self.c0
+        cases = (
+            (
+                {
+                    "scope": (
+                        "대상=12개; 권한=읽기 전용; 정제=필수; "
+                        "저장위치=docs/v2-cutover/evidence/c0b/; "
+                        "원문저장=금지; 보존=Git 이력"
+                    )
+                },
+                "scope is incomplete or malformed",
+            ),
+            (
+                {
+                    "scope": (
+                        "대상=12개; 접근방법=GitHub Actions PROD SSH로 운영 호스트 "
+                        "shell 조회·DB SELECT; 권한=읽기 전용; 정제=필수; "
+                        "원문저장=금지; 보존=Git 이력"
+                    )
+                },
+                "scope is incomplete or malformed",
+            ),
+            ({"owner": "-"}, "approval owner is required"),
+            ({"timestamp": "2026-08-05T14:20:00Z"}, r"must use the \+09:00 offset"),
+            (
+                {"timestamp": "2026-08-05T23:00:00+09:00"},
+                "cannot predate C0-A approval",
+            ),
+        )
+        for kwargs, expected_error in cases:
+            with self.subTest(kwargs=kwargs):
+                self.c0 = approved_c0
+                self._approve_c0_b_collection(**kwargs)
+                with self.assertRaisesRegex(GateError, expected_error):
+                    self._verify()
+
+        pending_row = (
+            f"| {C0_B_COLLECTION_APPROVAL_ITEM} | - | - | 승인 대기 | - | - |"
+        )
+        invalid_rows = (
+            (
+                (
+                    f"| {C0_B_COLLECTION_APPROVAL_ITEM} | {C0_B_COLLECTION_SCOPE} | - | "
+                    "승인 대기 | - | - |"
+                ),
+                "pending row must contain only placeholders",
+            ),
+            (
+                (
+                    f"| {C0_B_COLLECTION_APPROVAL_ITEM} | {C0_B_COLLECTION_SCOPE} | - | "
+                    "확인 완료 | iny | 2026-08-05T23:20:00+09:00 |"
+                ),
+                "unsupported state",
+            ),
+            (
+                (
+                    f"| {C0_B_COLLECTION_APPROVAL_ITEM} | {C0_B_COLLECTION_SCOPE} | "
+                    "결과=NO_DIFF | 수집 승인 | iny | 2026-08-05T23:20:00+09:00 |"
+                ),
+                "difference must be a placeholder",
+            ),
+        )
+        for invalid_row, expected_error in invalid_rows:
+            with self.subTest(invalid_row=invalid_row):
+                self.c0 = approved_c0.replace(pending_row, invalid_row, 1)
+                with self.assertRaisesRegex(GateError, expected_error):
+                    self._verify()
+
+    def test_c0_b_capture_requires_prior_collection_approval(self) -> None:
+        self._approve_all()
+        self._complete_c0_b(approve_collection=False)
+        with self.assertRaisesRegex(GateError, "requires prior collection approval"):
+            self._verify()
+
+    def test_c0_b_capture_cannot_predate_collection_approval(self) -> None:
+        self._approve_all()
+        self._approve_c0_b_collection(timestamp="2026-08-05T23:25:00+09:00")
+        self._complete_c0_b(
+            approve_collection=False,
+            captured_at="2026-08-05T23:20:00+09:00",
+        )
+        with self.assertRaisesRegex(GateError, "cannot predate collection approval"):
+            self._verify()
+
     def test_c2_progress_without_c0_b_reapproval_fails(self) -> None:
         self._set_c2_state("진행 중")
         self._set_trace_status("D-03", "부분")
@@ -364,9 +492,49 @@ class VerifyC0GateTest(unittest.TestCase):
             self._verify()
 
     def test_trace_progress_must_match_the_c2_marker(self) -> None:
+        original_trace = self.trace
+        original_board = self.board
         self._set_trace_status("C2 미래 화면", "부분", sync_board=False)
         with self.assertRaisesRegex(GateError, "marked unstarted"):
             self._verify()
+
+        c2_approval_gates = (
+            "D-03",
+            "D-04",
+            "D-05~06",
+            "C2 미래 화면",
+            "C2 종합",
+        )
+        for gate in c2_approval_gates:
+            with self.subTest(artifact="delivery trace", gate=gate):
+                self.trace = original_trace
+                self.board = original_board
+                self._set_trace_approval(gate, "C0-A 승인")
+                with self.assertRaisesRegex(
+                    GateError, "must require C0-B result reapproval"
+                ):
+                    self._verify()
+
+        for gate in c2_approval_gates:
+            with self.subTest(artifact="planning board", gate=gate):
+                self.trace = original_trace
+                board_lines = original_board.splitlines()
+                board_changes = 0
+                for index, line in enumerate(board_lines):
+                    if line.lstrip().startswith(f'["{gate}",'):
+                        self.assertIn('"② 결과 재승인"],', line)
+                        board_lines[index] = line.replace(
+                            '"② 결과 재승인"],',
+                            '"C0-A 승인"],',
+                            1,
+                        )
+                        board_changes += 1
+                self.assertEqual(board_changes, 1)
+                self.board = "\n".join(board_lines) + (
+                    "\n" if original_board.endswith("\n") else ""
+                )
+                with self.assertRaisesRegex(GateError, "must show result reapproval"):
+                    self._verify()
 
     def test_pending_rows_reject_partial_values(self) -> None:
         self.c0 = self.c0.replace(
@@ -674,8 +842,8 @@ class VerifyC0GateTest(unittest.TestCase):
 
     def test_board_trace_status_must_be_a_static_string_value(self) -> None:
         self.board = self.board.replace(
-            '"미구현", "C0-B"],',
-            '"미구현" && forgedTraceStatus, "C0-B"],',
+            '"미구현", "② 결과 재승인"],',
+            '"미구현" && forgedTraceStatus, "② 결과 재승인"],',
             1,
         )
         with self.assertRaisesRegex(GateError, "static seven-string format"):
@@ -709,10 +877,10 @@ class VerifyC0GateTest(unittest.TestCase):
         changed = 0
         for index, line in enumerate(lines):
             if line.lstrip().startswith('["C2 종합",'):
-                self.assertIn('", "미구현", "C0-B"],', line)
+                self.assertIn('", "미구현", "② 결과 재승인"],', line)
                 lines[index] = line.replace(
-                    '", "미구현", "C0-B"],',
-                    '", "부분", "C0-B"],',
+                    '", "미구현", "② 결과 재승인"],',
+                    '", "부분", "② 결과 재승인"],',
                     1,
                 )
                 changed += 1

@@ -24,17 +24,17 @@
         <h1>지금 결정할 건<br />딱 10가지예요</h1>
         <p class="hero-copy">
           이번 기획·QA 준비에서 Java 서비스와 프로세스 번호(PID)는 건드리지 않았습니다. 실제 전략 켜짐/꺼짐·최근 실행·주문 모드는
-          아직 확인 전이므로, 아래 기준을 정한 뒤 C0-B에서 읽기 전용으로 확인합니다.
+          아직 확인 전입니다. 아래 기준을 정해도 바로 읽지 않고, C0-B 운영값 수집을 따로 승인받은 뒤 읽기 전용으로 확인하고 결과도 다시 승인받습니다.
         </p>
         <div class="safety-strip" aria-label="현재 안전 상태">
-          <div><span>기존 시스템</span><strong>마지막 제어 작업에서 미중단 · C0-B 재확인 대기</strong></div>
+          <div><span>기존 시스템</span><strong>마지막 제어 작업에서 미중단 · C0-B 수집 승인 대기</strong></div>
           <div><span>Python 자동 병행 비교</span><strong id="c2-status">아직 미구현</strong></div>
           <div><span>v2 주문</span><strong>코드 후보는 차단 · 원격 재확인 대기</strong></div>
         </div>
         <div class="version-proof" aria-label="배포와 검증 버전 구분">
           <div><span>마지막 앱 배포 기록</span><strong>#54 · 66e374c</strong><small>현재 서버가 이 버전인지 원격 재확인 전</small></div>
-          <div><span>기능 안전 검증 기준</span><strong>a6a7174</strong><small>브랜치·PR CI 5개 작업 통과 · 미배포</small></div>
-          <div><span>현재 검토 작업</span><strong>PR #57 · Draft</strong><small>이 보드 보강의 반영 여부·최신 SHA·CI는 PR에서 확인</small></div>
+          <div><span>직전 독립 검증 기준</span><strong>46a34ea</strong><small>브랜치·PR CI 5개 작업과 증적 파일 검증 · 미배포</small></div>
+          <div><span>현재 보강본</span><strong>PR #57 · Draft</strong><small>현재 검토 보드 화면 검사 10/10 통과 · PR 자동검사 확인 대기 · 운영 미배포</small></div>
         </div>
       </section>
 
@@ -51,7 +51,7 @@
             <span>1</span><div><strong>C0-A</strong><small>D-01~D-10 정책 결정</small></div>
           </li>
           <li>
-            <span>2</span><div><strong>C0-B</strong><small>운영값 읽기 전용 재확인</small></div>
+            <span>2</span><div><strong>C0-B</strong><small>① 수집 승인 → ② 결과 재승인</small></div>
           </li>
           <li>
             <span>3</span><div><strong>C2</strong><small>Python 자동 병행 비교 개발</small></div>
@@ -100,8 +100,8 @@
           <span>브라우저나 서버에 저장·전송·승인되지 않고, 새로고침하면 사라져요.</span>
         </div>
         <div class="scope-boundary" role="note" aria-label="C0-A 검토 권한 경계">
-          <strong>C0-A 답변은 기능 기준만 정해요.</strong>
-          <span>후보 배포·시험 서버 변경·자격증명 사용·실제 주문·Java 중단·접속 경로 변경은 각각 별도 승인 전까지 하지 않아요. C0-B 운영값도 다시 확인받아요.</span>
+          <strong>검토안을 보내도 C0-B 수집은 시작하지 않아요.</strong>
+          <span>① 운영값 수집 전 별도 승인과 ② 결과 확인 뒤 재승인이 필요해요. 후보 배포·시험 서버 변경·자격증명 사용·실제 주문·Java 중단·접속 경로 변경도 각각 별도 승인 전까지 하지 않아요.</span>
         </div>
         <div class="decision-groups" id="decision-groups"></div>
         <section class="review-handoff" aria-labelledby="review-handoff-title">
@@ -115,7 +115,7 @@
           <label class="review-draft-label" for="review-draft">대화에 붙여넣을 검토안</label>
           <textarea id="review-draft" class="review-draft" rows="17" readonly></textarea>
           <div class="handoff-actions">
-            <p>모든 선택과 필요한 메모를 채우면 복사할 수 있어요. 복사만으로는 전송되거나 승인되지 않아요.</p>
+            <p>모든 선택을 채우면 복사할 수 있어요. 붙여넣어 보내도 C0-A 답변만 전달되며, C0-B 수집은 따로 승인해야 해요.</p>
             <button id="copy-review-draft" type="button" disabled>10개 응답 후 복사</button>
           </div>
         </section>
@@ -141,6 +141,10 @@
           </div>
           <p>승인 전 항목은 개발 완료로 표시하지 않습니다.</p>
         </div>
+        <div class="scope-boundary" role="note" aria-label="C0-B 승인 단계 범례">
+          <strong>C0-B는 두 단계예요.</strong>
+          <span>① 운영값 수집 승인 → ② 수집 결과 재승인. 두 번째 승인 전에는 C2 개발을 시작하지 않아요.</span>
+        </div>
         <div class="trace-table-wrap">
           <table class="trace-table">
             <thead>
@@ -151,7 +155,7 @@
                 <th id="trace-col-qa" scope="col">QA ID</th>
                 <th id="trace-col-evidence" scope="col">실행·증적</th>
                 <th id="trace-col-status" scope="col">현재 상태</th>
-                <th id="trace-col-approval" scope="col">다음 승인</th>
+                <th id="trace-col-approval" scope="col">승인 순서</th>
               </tr>
             </thead>
             <tbody id="trace-body"></tbody>
@@ -162,8 +166,8 @@
       <section class="next-step" aria-labelledby="next-title">
         <div>
           <p class="eyebrow">다음 행동</p>
-          <h2 id="next-title">개발 기준은 D-01~D-10부터, 인증 QA는 별도 승인 뒤</h2>
-          <p>검토안을 이 대화에 붙여넣어 주세요. 인증 화면은 후보 배포를 따로 승인하고 사용자가 직접 로그인한 뒤 조회 전용으로 확인합니다.</p>
+          <h2 id="next-title">먼저 C0-A 검토안 전달, C0-B는 두 번 확인</h2>
+          <p>검토안을 붙여넣으면 C0-A 기능 기준만 전달돼요. 운영값은 C0-B 수집을 따로 승인받은 뒤 읽고, 결과를 보여드린 뒤 다시 승인받아요. 인증 QA는 후보 배포 승인과 사용자 직접 로그인 뒤 진행해요.</p>
         </div>
         <div class="next-links">
           <a href="../C0_DECISIONS.md">상세 결정 문서</a>

@@ -112,9 +112,13 @@ PYTHONDONTWRITEBYTECODE=1 python3 "${c0_gate_verifier}" "${repository_root}"
 PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover \
   -s "${documentation_test_dir}" \
   -p 'test_verify_c0_gate.py'
-[[ "$(grep -Ec '^    def test_' "${c0_gate_tests}")" -eq 51 ]]
-grep -F 'C0 gate 51/51 PASS' "${cutover_root}/DELIVERY_TRACE.md" >/dev/null
-grep -F 'C0 기록 검사 51/51 로컬 통과' "${board_root}/app.js" >/dev/null
+[[ "$(grep -Ec '^    def test_' "${c0_gate_tests}")" -eq 55 ]]
+grep -F 'C0 gate 양성/음성 55건' "${cutover_root}/DELIVERY_TRACE.md" >/dev/null
+grep -F 'C0 문서·기록 검사 55/55 로컬 통과' "${board_root}/app.js" >/dev/null
+grep -F 'C0 gate는 51/51이며 이후 추가된 C0-B 수집 승인 검사는 포함하지 않는다.' \
+  "${cutover_root}/DELIVERY_TRACE.md" >/dev/null
+grep -F '현재 C0-B 승인 경계 보강본: 로컬 planning 10/10과 C0 gate 55/55' \
+  "${cutover_root}/DELIVERY_TRACE.md" >/dev/null
 
 for decision_number in 01 02 03 04 05 06 07 08 09 10; do
   decision_id="D-${decision_number}"
@@ -151,7 +155,8 @@ grep -F 'id="planning-status"' "${board_root}/index.html" >/dev/null
 grep -F 'id="c2-status"' "${board_root}/index.html" >/dev/null
 grep -F 'const planningState = Object.freeze({' "${board_root}/app.js" >/dev/null
 grep -F '브라우저나 서버에 저장·전송·승인되지 않고' "${board_root}/index.html" >/dev/null
-grep -F '복사만으로는 전송되거나 승인되지 않아요.' "${board_root}/index.html" >/dev/null
+grep -F '붙여넣어 보내도 C0-A 답변만 전달되며, C0-B 수집은 따로 승인해야 해요.' \
+  "${board_root}/index.html" >/dev/null
 grep -F '이번 기획·QA 준비가 만든 실제 주문 · 증권사 자격증명 · Java 중단 · 접속 경로 변경 0건' \
   "${board_root}/index.html" >/dev/null
 grep -F 'C1 인증 화면 읽기 검증은 C0-A와 병렬로 준비할 수 있어요.' \
@@ -163,9 +168,11 @@ grep -F '후보 배포·시험 서버 변경·자격증명 사용·실제 주문
   "${board_root}/index.html" >/dev/null
 grep -F '마지막 앱 배포 기록' "${board_root}/index.html" >/dev/null
 grep -F '#54 · 66e374c' "${board_root}/index.html" >/dev/null
-grep -F '기능 안전 검증 기준' "${board_root}/index.html" >/dev/null
-grep -F 'a6a7174' "${board_root}/index.html" >/dev/null
+grep -F '직전 독립 검증 기준' "${board_root}/index.html" >/dev/null
+grep -F '46a34ea' "${board_root}/index.html" >/dev/null
 grep -F 'PR #57 · Draft' "${board_root}/index.html" >/dev/null
+grep -F '현재 검토 보드 화면 검사 10/10 통과 · PR 자동검사 확인 대기 · 운영 미배포' \
+  "${board_root}/index.html" >/dev/null
 grep -F '현재 서버가 이 버전인지 원격 재확인 전' "${board_root}/index.html" >/dev/null
 grep -F 'id="review-draft"' "${board_root}/index.html" >/dev/null
 grep -F 'id="copy-review-draft"' "${board_root}/index.html" >/dev/null
@@ -279,11 +286,21 @@ assert_row_terms() {
 
 for trace_artifact in "${cutover_root}/DELIVERY_TRACE.md" "${board_root}/app.js"; do
   if [[ "${trace_artifact}" == *DELIVERY_TRACE.md ]]; then
+    d0102_marker='| D-01~02 · C0-B |'
+    d03_marker='| D-03 |'
+    d04_marker='| D-04 |'
+    d0506_marker='| D-05~06 |'
+    c1_isolation_marker='| C1 격리 |'
     current_ui_marker='| C1 현재 UI |'
     future_ui_marker='| C2 미래 화면 |'
     c2_summary_marker='| C2 종합 |'
     common_spec_marker='| 공통 명세 |'
   else
+    d0102_marker='["D-01~02",'
+    d03_marker='["D-03",'
+    d04_marker='["D-04",'
+    d0506_marker='["D-05~06",'
+    c1_isolation_marker='["C1 격리",'
     d07_marker='["D-07",'
     current_ui_marker='["현재 UI",'
     future_ui_marker='["C2 미래 화면",'
@@ -302,10 +319,20 @@ for trace_artifact in "${cutover_root}/DELIVERY_TRACE.md" "${board_root}/app.js"
     V2-UI-001 V2-OPS-001 S-01 S-02 S-03 S-05 S-06 S-07 \
     QA-NAV-001 QA-OPS-001 QA-SAF-001 QA-RWD-001
   assert_row_terms "${trace_artifact}" "${future_ui_marker}" \
-    V2-OPS-001 V2-API-001 S-01 S-04 S-08 QA-SHD-001
+    V2-OPS-001 V2-API-001 S-01 S-04 S-08 QA-SHD-001 '결과 재승인'
   assert_row_terms "${trace_artifact}" "${c2_summary_marker}" \
     V2-AUT-001 V2-DAT-001 V2-PER-001 V2-OPS-001 V2-API-001 \
-    S-01 S-04 S-08 QA-SHD-001 QA-PAR-001
+    S-01 S-04 S-08 QA-SHD-001 QA-PAR-001 '결과 재승인'
+  assert_row_terms "${trace_artifact}" "${d03_marker}" \
+    V2-AUT-001 V2-DAT-001 QA-SHD-001 '결과 재승인'
+  assert_row_terms "${trace_artifact}" "${d04_marker}" \
+    V2-DAT-001 V2-SAF-001 QA-SAF-001 '결과 재승인'
+  assert_row_terms "${trace_artifact}" "${d0506_marker}" \
+    V2-STR-002 V2-PER-001 QA-PAR-001 '결과 재승인'
+  assert_row_terms "${trace_artifact}" "${d0102_marker}" \
+    V2-STR-001 V2-STR-002 V2-DAT-001 '수집' '결과'
+  assert_row_terms "${trace_artifact}" "${c1_isolation_marker}" \
+    V2-CUT-001 V2-CUT-002 '수집' '결과'
   assert_row_terms "${trace_artifact}" "${common_spec_marker}" \
     V2-DOC-001 S-01 S-04 S-08 S-09 S-10 QA-PLN-001
 done
@@ -317,16 +344,36 @@ grep -F '이 선택은 향후 QA의 범위·보존 기준만 정한다.' \
 grep -F '공유 시험 서버 생성은' "${cutover_root}/SCREEN_SPEC.md" >/dev/null
 grep -F '공유 시험 서버 생성은 대상·영향·정리 방법 확인 뒤 실행 직전 사용자 승인 필수' \
   "${cutover_root}/TRACEABILITY_QA.md" >/dev/null
-grep -F '섀도 개발과 로컬·mock·일회용 격리 테스트는 **C0-A/B 승인 이후**' \
+grep -F '섀도 개발과 관련 로컬·mock·일회용 격리 테스트는 **C0-A 확정 → C0-B 읽기 전용' \
+  "${cutover_root}/TRACEABILITY_QA.md" >/dev/null
+grep -F '수집 별도 승인 → 수집·차이 확인 → C0-B 결과 재승인 이후** 승인된 전략·시점 기준' \
   "${cutover_root}/TRACEABILITY_QA.md" >/dev/null
 grep -F '공유 시험 서버의 자원·데이터 생성·상태 변경·스케줄 시작' \
   "${cutover_root}/TRACEABILITY_QA.md" >/dev/null
 grep -F '아래 표는 그 승인 뒤의 미래 자동 동작 명세이며 현재 실행 권한이' \
   "${cutover_root}/FUNCTIONAL_SPEC.md" >/dev/null
-grep -F 'C0-A/B 뒤 섀도 가시성 개발·로컬 화면 QA 자동, 공유 시험 서버 조회·데이터 생성은 실행 승인 필수' \
+grep -F 'C0-B 결과 재승인 뒤 섀도 가시성 개발·로컬 화면 QA 자동, 공유 시험 서버 조회·데이터 생성은 실행 승인 필수' \
   "${cutover_root}/REQUIREMENTS.md" >/dev/null
-grep -F 'C0-A/B 뒤 섀도 상태 개발·로컬 QA 자동, 공유 시험 서버 조회·데이터 생성은 실행 직전 승인 필수' \
+grep -F 'C0-B 결과 재승인 뒤 섀도 상태 개발·로컬 QA 자동, 공유 시험 서버 조회·데이터 생성은 실행 직전 승인 필수' \
   "${cutover_root}/SCREEN_SPEC.md" >/dev/null
+grep -F '| C0-B 읽기 전용 수집 승인 | - | - | 승인 대기 | - | - |' \
+  "${cutover_root}/C0_DECISIONS.md" >/dev/null
+grep -F '접근방법=GitHub Actions PROD SSH로 운영 호스트 shell 조회·DB SELECT; 권한=읽기 전용; 정제=필수; 저장위치=docs/v2-cutover/evidence/c0b/; 원문저장=금지; 보존=Git 이력' \
+  "${cutover_root}/C0_DECISIONS.md" >/dev/null
+grep -F '가장 늦은 C0-A 승인 ≤ C0-B 수집 승인 ≤ 각 항목 캡처 ≤ snapshot 완성 ≤' \
+  "${cutover_root}/C0_DECISIONS.md" >/dev/null
+grep -F '① 운영값 수집 승인 → ② 수집 결과 재승인' \
+  "${board_root}/index.html" >/dev/null
+grep -F 'C0-B 운영값 수집을 승인하지 않습니다.' \
+  "${board_root}/app.js" >/dev/null
+grep -F 'GitHub 자동화를 통해 운영 서버의 설정과 DB를 조회' \
+  "${board_root}/app.js" >/dev/null
+grep -F '조회 명령만 허용 · 변경 명령 없음' "${board_root}/app.js" >/dev/null
+grep -F '정제·마스킹한 증적만 지정 폴더에 저장 · docs/v2-cutover/evidence/c0b/' \
+  "${board_root}/app.js" >/dev/null
+grep -F '프로젝트 변경 이력에 계속 남음' "${board_root}/app.js" >/dev/null
+grep -F '<th id="trace-col-approval" scope="col">승인 순서</th>' \
+  "${board_root}/index.html" >/dev/null
 grep -F '기준 digest 갱신 자체는 이 gate가' "${cutover_root}/C0_DECISIONS.md" >/dev/null
 if grep -Eq '승인된 범위 내 자동 생성 가능|C0 승인 후 자동 가능|C0에서.*승인 후.*자동 생성 가능|스테이징 테스트 데이터 생성은.*C0 범위 승인 이후|승인된 종류·건수 안에서만 자동 진행|C0 범위 승인 이후.*자동 진행 가능' \
   "${cutover_root}/REQUIREMENTS.md" \
@@ -334,6 +381,19 @@ if grep -Eq '승인된 범위 내 자동 생성 가능|C0 승인 후 자동 가�
   "${cutover_root}/SCREEN_SPEC.md" \
   "${cutover_root}/TRACEABILITY_QA.md"; then
   printf 'C0 planning approval must not authorize shared test-server mutations\n' >&2
+  exit 1
+fi
+if grep -Eq 'C0-A/B|C0-A 승인 뒤 읽기 전용 수집만 자동 가능|C0-A가 끝난 뒤 읽기 전용으로 수집|C0-A 승인 뒤 C2 개발을 시작하기 전에 C0-B에서' \
+  "${cutover_root}/C0_DECISIONS.md" \
+  "${cutover_root}/CUTOVER_ROLLBACK.md" \
+  "${cutover_root}/FUNCTIONAL_SPEC.md" \
+  "${cutover_root}/README.md" \
+  "${cutover_root}/REQUIREMENTS.md" \
+  "${cutover_root}/SCREEN_SPEC.md" \
+  "${cutover_root}/TRACEABILITY_QA.md" \
+  "${board_root}/index.html" \
+  "${board_root}/app.js"; then
+  printf 'C0-A must not authorize C0-B collection or pre-reapproval C2 work\n' >&2
   exit 1
 fi
 
@@ -371,7 +431,7 @@ for planning_ci_path in \
   '.github/PULL_REQUEST_TEMPLATE/v2-feature.md'; do
   [[ "$(grep -Fc -- "- \"${planning_ci_path}\"" "${v2_ci_workflow}")" -eq 2 ]]
 done
-grep -F 'a8b6bccefa6b13487bd62a3206c205fe460687d8b356c815adb6ff19419a7872' \
+grep -F '39e1f896720ba8b4a7e33d3148ceb96b3ce284b4f4330e44c037690409483962' \
   "${cutover_root}/C0_DECISIONS.md" >/dev/null
 
 printf 'C0 decision, planning board, single trace, feature template, and PR gate contract PASS\n'

@@ -30,16 +30,16 @@
 | `V2-SAF-001` | `Settings.validate_execution_safety`, `DisabledBroker`, `ExecutionGate`; API 미확인·불일치 시 화면 변경 잠금 | backend 안전 테스트; `App.test.tsx`의 API 401/오류·unsafe fail-closed 회귀 | 인증된 배포 화면에서 false/disabled API·배너·잠금 동시 증적 | 부분 |
 | `V2-OPS-001` | operations status/audit API, 오늘의 운영·안전 화면 | `test_api.py`, `App.test.tsx` 일부 | 스케줄·데이터·Java diff·마지막 성공 카드 | 부분 |
 | `V2-API-001` | 요구·기능·화면 문서의 GET-only API 계약 | 문서 링크·경로 정적 검사 대상 | shadow/QA/cutover 조회 API·권한·cursor·마스킹·신선도 테스트 | 미구현 |
-| `V2-UI-001` | React 6개 메뉴와 반응형 CSS; 안전 API 미확인·부분/전체 불일치 시 위험 증가 조작 잠금과 중복 전송 없는 비상 제출 차단 유지; Playwright 읽기 전용 QA | `App.test.tsx` 13건(10초 timeout·겹친 새로고침의 stale-safe 차단·부분 안전 플래그 불일치·보호 정지 성공/실패 포함); 현재 source `46a34ea`의 mock-only 26/26과 [push CI `30975237262`](https://github.com/ksi2564/systematic-trading/actions/runs/30975237262) `frontend`·`ui-qa` 통과. base `8eb580b` 합본 test-merge `992b403`의 [PR CI `30975239146`](https://github.com/ksi2564/systematic-trading/actions/runs/30975239146)도 통과 | 실제 배포의 인증 브라우저·동일 출처 API, 섀도 화면 | 부분 |
-| `V2-QA-001` | Playwright 스크린샷·network evidence, manifest 안전 검증과 CI artifact 업로드; 인증 배포 GET-only 별도 harness | 현재 source `46a34ea`와 test-merge `992b403`에서 각각 26/26, 마지막 attempt 증적 참조 78개·고유 파일 56개 SHA-256, 리소스 변경 0을 다운로드 후 재검증했다. [push CI `30975237262`](https://github.com/ksi2564/systematic-trading/actions/runs/30975237262)와 [PR CI `30975239146`](https://github.com/ksi2564/systematic-trading/actions/runs/30975239146)의 artifact `v2-ui-qa-local-mock-1` 통과. exact health 뒤 후보 전용 무변경 snapshot을 고정하고 화면의 5개 논리 GET을 서버 전송 없이 로컬 응답하며, 6화면×2 viewport의 PNG 12개·관찰 JSON 2개·manifest 1개만 허용하도록 보강했지만 아직 미배포 | 사용자 승인 RC 배포, 동일 SHA의 `build_sha`, 인증된 외부 화면 증적 | 부분 |
+| `V2-UI-001` | React 6개 메뉴와 반응형 CSS; 안전 API 미확인·부분/전체 불일치 시 위험 증가 조작 잠금과 중복 전송 없는 비상 제출 차단 유지; Playwright 읽기 전용 QA | `App.test.tsx` 13건(10초 timeout·겹친 새로고침의 stale-safe 차단·부분 안전 플래그 불일치·보호 정지 성공/실패 포함); 직전 source `46a34ea`의 mock-only 26/26과 [push CI `30975237262`](https://github.com/ksi2564/systematic-trading/actions/runs/30975237262) `frontend`·`ui-qa` 통과. base `8eb580b` 합본 test-merge `992b403`의 [PR CI `30975239146`](https://github.com/ksi2564/systematic-trading/actions/runs/30975239146)도 통과 | 실제 배포의 인증 브라우저·동일 출처 API, 섀도 화면 | 부분 |
+| `V2-QA-001` | Playwright 스크린샷·network evidence, manifest 안전 검증과 CI artifact 업로드; 인증 배포 GET-only 별도 harness | 직전 source `46a34ea`와 test-merge `992b403`에서 각각 26/26, 마지막 attempt 증적 참조 78개·고유 파일 56개 SHA-256, 리소스 변경 0을 다운로드 후 재검증했다. [push CI `30975237262`](https://github.com/ksi2564/systematic-trading/actions/runs/30975237262)와 [PR CI `30975239146`](https://github.com/ksi2564/systematic-trading/actions/runs/30975239146)의 artifact `v2-ui-qa-local-mock-1` 통과. exact health 뒤 후보 전용 무변경 snapshot을 고정하고 화면의 5개 논리 GET을 서버 전송 없이 로컬 응답하며, 6화면×2 viewport의 PNG 12개·관찰 JSON 2개·manifest 1개만 허용하도록 보강했지만 아직 미배포 | 사용자 승인 RC 배포, 동일 SHA의 `build_sha`, 인증된 외부 화면 증적 | 부분 |
 | `V2-APR-001` | LIVE 후보·재개 확인, 감사 로그, 현재 LIVE 설정 시작 거부 | `test_lifecycle_and_paper.py`, `test_api.py` | DNS/트래픽·Java 소유권·롤백 승인 모델 | 부분 |
 | `V2-LIV-001` | 자동 제출·접수·미체결/부분체결·대조 완료 계약만 문서화 | 없음 | C3·C4·사용자 실행 승인 후 별도 설계·canary·인수 QA | 미구현 |
 | `V2-REL-001` | C0/CUTOVER 문서의 세 독립 20거래일 레인과 C5-A/C5-B/C6 계약 | 없음 | 연속 섀도 집계, 승인 게이트, 단건 canary, 예약 5주기, 전체 전환·안정화 | 미구현 |
-| `V2-RBK-001` | SHA+attempt 불변 릴리스 경로와 심볼릭 링크 복구, 첫 배포 실패 시 서비스 정지, 검증 실패 release 보존과 current/rollback/latest-3 보존, host 동시 배포 잠금 | active/stale host lock fail-closed; HUP/TERM→129/143; modern·#54 legacy·same-SHA 복구; health transport·안전값·SHA 오류; 안전 env 중복·기존 비정상 서비스 stop 실패의 pre-switch 거부; rollback 경로/SHA 불일치; systemd restart 오류; rollback health/restart 실패 시 새 bytes 보존; 최초 배포 stop 성공/실패·상태 조회 오류; lock cleanup 실패 non-green을 whole-script 격리 fault test로 검증. workflow의 기존 Java active·nonzero·동일 PID wrapper를 실제 shell matrix로 실행하고 배포 후 SHA·false/disabled 계약을 검사. 현재 source `46a34ea`의 [push CI `30975237262`](https://github.com/ksi2564/systematic-trading/actions/runs/30975237262)와 test-merge `992b403`의 [PR CI `30975239146`](https://github.com/ksi2564/systematic-trading/actions/runs/30975239146) `infra` 통과 | 실제 staging retention warning·DB 복구·systemd/health 장애·미확정 주문·Java 복귀 훈련과 사용자 확정 | 부분 |
-| `V2-DOC-001` | `docs/v2-cutover/` 문서 묶음, 단일 `DELIVERY_TRACE`, 기능 제안·선택형 PR 템플릿, 비개발자용 review board | D-01~D-10·핵심 화면·요구사항 ID 계약 검사; 현재 source `46a34ea`에서 review board desktop/mobile 2/2, local-only GET·무저장 메모·가로 overflow·비활성 위험 버튼·320px 상한을 검증했다. [push CI `30975237262`](https://github.com/ksi2564/systematic-trading/actions/runs/30975237262)와 test-merge `992b403`의 [PR CI `30975239146`](https://github.com/ksi2564/systematic-trading/actions/runs/30975239146)에서 artifact `v2-planning-board-qa-1` 생성. 실제 선택지 35개·필수 수정/설명 메모·무저장 검토안 복사와 C0-B 12개 정제 원천·차이 파일 digest, snapshot/diff 상호참조, 동일 최종 승인 SHA, 시간 순서, C2 보호 tree gate의 51개 양성/음성 테스트를 통과했다. 상세 무결성은 [`QA-PLN-001`](evidence/2026-08-05-QA-PLN-001.md)에 기록했다 | 사용자 D-01~D-10 검토·승인과 이후 PR별 승인 SHA 연결 | 부분 |
+| `V2-RBK-001` | SHA+attempt 불변 릴리스 경로와 심볼릭 링크 복구, 첫 배포 실패 시 서비스 정지, 검증 실패 release 보존과 current/rollback/latest-3 보존, host 동시 배포 잠금 | active/stale host lock fail-closed; HUP/TERM→129/143; modern·#54 legacy·same-SHA 복구; health transport·안전값·SHA 오류; 안전 env 중복·기존 비정상 서비스 stop 실패의 pre-switch 거부; rollback 경로/SHA 불일치; systemd restart 오류; rollback health/restart 실패 시 새 bytes 보존; 최초 배포 stop 성공/실패·상태 조회 오류; lock cleanup 실패 non-green을 whole-script 격리 fault test로 검증. workflow의 기존 Java active·nonzero·동일 PID wrapper를 실제 shell matrix로 실행하고 배포 후 SHA·false/disabled 계약을 검사. 직전 source `46a34ea`의 [push CI `30975237262`](https://github.com/ksi2564/systematic-trading/actions/runs/30975237262)와 test-merge `992b403`의 [PR CI `30975239146`](https://github.com/ksi2564/systematic-trading/actions/runs/30975239146) `infra` 통과 | 실제 staging retention warning·DB 복구·systemd/health 장애·미확정 주문·Java 복귀 훈련과 사용자 확정 | 부분 |
+| `V2-DOC-001` | `docs/v2-cutover/` 문서 묶음, 단일 `DELIVERY_TRACE`, 기능 제안·선택형 PR 템플릿, 비개발자용 review board | D-01~D-10·핵심 화면·요구사항 ID 계약 검사. 직전 source `46a34ea`는 review board desktop/mobile 2/2와 C0 gate 51/51을 통과했고, [push CI `30975237262`](https://github.com/ksi2564/systematic-trading/actions/runs/30975237262)와 test-merge `992b403`의 [PR CI `30975239146`](https://github.com/ksi2564/systematic-trading/actions/runs/30975239146)에서 artifact를 생성해 [`QA-PLN-001`](evidence/2026-08-05-QA-PLN-001.md)에 기록했다. 현재 보강본은 로컬 planning 10/10과 C0-B 수집 승인 기록·접근 방법·저장 범위·12개 정제 원천·차이 파일 digest, snapshot/diff 상호참조, 동일 최종 승인 SHA, 시간 순서, C2 보호 tree gate의 55개 양성/음성 테스트를 통과했으며 새 source·CI·artifact는 확인 대기다 | 사용자 D-01~D-10 검토·승인과 이후 PR별 승인 SHA 연결 | 부분 |
 
 역할은 다음과 같이 나눈다. `v2 CI`는 PR·push의 빠른 피드백을 위한 동일 테스트이며
-PR #57 현재 source `46a34ea`의 원본 push run과 base `8eb580b`에 합친 test-merge
+PR #57 직전 검증 source `46a34ea`의 원본 push run과 base `8eb580b`에 합친 test-merge
 `992b403`의 PR run에서 각각 통과했다. 이 증적을 기록하는 문서 전용 후속 커밋은 기능
 코드의 통과 근거로 올려 적지 않는다. `v2 Release Candidate`는 Staging Deploy가 신뢰하는
 정확한 `master` SHA에서 패리티·no-order UI QA·manifest 안전 검증을 다시 강제하는 배포 게이트 후보다.
@@ -97,7 +97,7 @@ PR #57 현재 source `46a34ea`의 원본 push run과 base `8eb580b`에 합친 te
 
 실행 상태:
 
-- 현재 검토·안전 source `46a34eaa9251637a117d038a6eb62c51263fff65`의 clean-tree mock-only UI QA:
+- 직전 검토·안전 source `46a34eaa9251637a117d038a6eb62c51263fff65`의 clean-tree mock-only UI QA:
   2026-08-05 KST 데스크톱·모바일 26/26 `PASS`,
   flaky 0, 생성·변경 리소스 0, 외부·위험·WebSocket 요청 0. manifest가 마지막 attempt의
   스크린샷·network JSON·trace의 증적 참조 78개 SHA-256과 안전 범위를
@@ -113,17 +113,19 @@ PR #57 현재 source `46a34ea`의 원본 push run과 base `8eb580b`에 합친 te
   `QA-RWD-001`의 1440/360 가로 넘침
   단언도 이 26/26 범위에 포함한다. `MANUAL` 9건·`BLOCKED` 2건·`OUT_OF_SCOPE` 1건은
   통과로 올리지 않았다.
-- `QA-PLN-001`: 현재 review board desktop/mobile 2/2 로컬 `PASS`. D-01~D-10 10개,
-  문서와 1:1인 실제 대안 35개, native 단일 선택, 한 번에 하나만 펼침, 선택만으로
-  자동 이동하지 않음, 필수 메모가 있어야 활성화되는 다음 버튼, 접힌 요약의 선택 상태,
-  안전·실행 승인 경계를 포함한 검토안 복사 성공·수동 복사 대체 경로, 새로고침 초기화,
-  light/dark 보조·상태 문자 4.5:1 이상, 핵심 화면 기획 5개, 추적 행 14개의 mobile 표 헤더·셀
-  연결, 320px 모든 결정 10,000px 이하·5개 화면·추적표 PNG·source SHA·clean 여부·
-  소스/PNG SHA-256 manifest를 확인했다. GET 이외 네트워크·브라우저
-  저장·승인 제출·활성 위험 버튼과 문서 전체 가로 overflow는 0건이다. 이 변경의 CI는
-  [정본 증적 보고서](evidence/2026-08-05-QA-PLN-001.md)에서 source·test-merge ZIP과
-  내부 소스/PNG SHA-256을 확인했다. CI와 RC에서 별도 screenshot/HTML/JUnit artifact로
-  남기며, 이 결과는 기획 화면의 사용성 증적이지 v2 기능 구현·배포 증적이 아니다.
+- `QA-PLN-001` 직전 정본: source `46a34ea`의 review board desktop/mobile 2/2와 C0 gate
+  51/51이 통과했다. source·test-merge CI ZIP과 내부 소스/PNG SHA-256은
+  [QA-PLN-001 정본 증적 보고서](evidence/2026-08-05-QA-PLN-001.md)에 기록했다.
+- `QA-PLN-001` 계약의 현재 보강본: 로컬 반복 10/10과 C0 gate 55/55가 통과했다.
+  D-01~D-10 10개, 문서와 1:1인 실제 대안 35개, native 단일 선택, 한 번에 하나만 펼침,
+  선택만으로 자동 이동하지 않음, 필수 메모가 있어야 활성화되는 다음 버튼, 접힌 요약의
+  선택 상태, 안전·실행 승인 경계를 포함한 검토안 복사 성공·수동 복사 대체 경로,
+  새로고침 초기화, light/dark 보조·상태 문자 4.5:1 이상, 핵심 화면 기획 5개, 추적 행
+  14개의 mobile 표 헤더·셀 연결, 320px 모든 결정 10,000px 이하·5개 화면·추적표 PNG·
+  source SHA·clean 여부·소스/PNG SHA-256 manifest를 확인한다. GET 이외 네트워크·브라우저
+  저장·승인 제출·활성 위험 버튼과 문서 전체 가로 overflow는 0건이다. 새 source·CI·artifact
+  독립 검증은 대기 중이며 완료 뒤 별도 `QA-PLN-002`에 기록한다. 이 결과는 기획 화면의
+  사용성 증적이지 v2 기능 구현·배포 증적이 아니다.
 - `QA-ACC-001`: 2026-08-05 KST 읽기 전용 외부 검증 `PASS`. `/`와
   `/api/v2/operations/status` 모두 앱 본문을 직접 반환하지 않고 Cloudflare Access
   로그인으로 `302` 이동했다. 상세 근거는

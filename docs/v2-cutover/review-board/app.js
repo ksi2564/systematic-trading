@@ -16,7 +16,7 @@ const decisionGroups = [
         summary: "승인한 규칙과 Java가 다르면 숨기지 않고 멈춰요",
         recommendation: "사용자가 승인한 제품 규칙을 최종 기준으로 사용",
         reason: "같은 입력에서 두 결과가 다르면 ‘수식 차이’로 남기고 사용자 결정을 기다립니다.",
-        impact: "C0-B에서 Java 실행 버전·실제 설정·전략 상태·주문 모드를 읽기 전용으로 확인합니다.",
+        impact: "C0-B 운영값 수집을 따로 승인받은 뒤 Java 실행 버전·실제 설정·전략 상태·주문 모드를 읽기 전용으로 확인합니다.",
         keyConditions: "확정할 것 · Java 실행 버전 식별값(SHA), 실제 설정, 저장된 전략 상태(DB), 주문 모드의 변경 확인값(해시)",
         options: [
           { name: "A · 권장", reply: "A 승인", detail: "승인한 제품 규칙을 최종 기준으로 삼아요.", consequence: "Java와 다르면 개발을 멈추고 차이를 다시 승인받아요." },
@@ -35,7 +35,7 @@ const decisionGroups = [
         options: [
           { name: "A · 권장", reply: "A 승인", detail: "첫 전환은 Java가 실제 쓴 데이터 의미를 보존해요.", consequence: "동등성 확인이 쉬워지고 데이터 개선은 별도 버전으로 검토해요." },
           { name: "처음부터 데이터 의미 수정", reply: "처음부터 데이터 의미 수정", noteLabel: "바꿀 데이터 의미", notePlaceholder: "예: 당일 확정 종가와 공식 거래일 캘린더 사용", detail: "공식 종가·캘린더 등 더 나은 의미로 바로 바꿔요.", consequence: "Java와의 차이를 허용할 새 기준과 과거 재검증이 필요해요." },
-          { name: "설명 요청", reply: "설명 요청", noteLabel: "먼저 확인할 데이터", notePlaceholder: "예: KIS 기준값이 어느 시장일 가격인지 설명해 주세요", detail: "코드에서 확인한 필드 의미와 C0-B 수집 범위를 더 봐요.", consequence: "C0-A 전에는 실제 응답 수집이나 데이터 어댑터 개발을 하지 않아요." },
+          { name: "설명 요청", reply: "설명 요청", noteLabel: "먼저 확인할 데이터", notePlaceholder: "예: KIS 기준값이 어느 시장일 가격인지 설명해 주세요", detail: "코드에서 확인한 필드 의미와 C0-B 수집 범위를 더 봐요.", consequence: "C0-B 수집 승인 전에는 실제 응답을 읽지 않고, 결과 재승인 전에는 데이터 어댑터를 개발하지 않아요." },
         ],
       },
     ],
@@ -82,12 +82,12 @@ const decisionGroups = [
         id: "D-05",
         title: "OFF·다른 종목·수량",
         summary: "전략 OFF는 의도 0건, 관리 밖 종목은 자동 진행 금지",
-        recommendation: "Java 후보의 호가·반올림·수수료·현금 여유 규칙을 C0-B에서 재확인",
+        recommendation: "Java 후보 수량 규칙은 C0-B 수집 승인 뒤 확인하고 결과를 재승인",
         reason: "보유 종목을 임의로 정리하거나 환율을 주문 수량에 섞지 않습니다.",
         impact: "각 주문 의도 수량이 왜 나왔는지 설명하며 비교할 수 있습니다.",
         keyConditions: "제안 숫자 · 가격 2자리 반올림 · 수량 정수 내림 · 수수료 0.25% · 매도대금 99.5%만 사용",
         options: [
-          { name: "A · 권장", reply: "A 승인", detail: "관리 밖 종목이 있으면 멈추고 Java 후보 수량 규칙을 써요.", consequence: "임의 매매를 막고 C0-B 실제 설정과 다르면 다시 승인해요." },
+          { name: "A · 권장", reply: "A 승인", detail: "관리 밖 종목이 있으면 멈추고 Java 후보 수량 규칙을 써요.", consequence: "임의 매매를 막고 C0-B 수집 결과가 C0-A 기준과 다르면 결과를 보고 다시 승인해요." },
           { name: "관리 밖 종목 정책 수정", reply: "관리 밖 종목 정책 수정", noteLabel: "원하는 관리 밖 종목 정책", notePlaceholder: "예: QQQ는 보유 허용, 그 외 종목은 자동 진행 중단", detail: "관리 밖 종목이 있을 때의 허용·제외 규칙을 정해요.", consequence: "포트폴리오 영향과 수동 확인 절차를 추가해야 해요." },
           { name: "수량 규칙 수정", reply: "수량 규칙 수정", noteLabel: "원하는 수량 규칙", notePlaceholder: "예: 수수료 여유를 0.30%로 변경", detail: "호가·수수료·반올림·현금 여유를 바꿔요.", consequence: "Java 비교용 입력과 예상 체결 금액을 다시 검증해야 해요." },
           { name: "설명 요청", reply: "설명 요청", noteLabel: "먼저 확인할 수량 사례", notePlaceholder: "예: 매도 뒤 매수 가능 수량 계산 예시를 보여 주세요", detail: "관리 밖 종목과 수량 계산 사례를 더 확인해요.", consequence: "수량·보유 종목 정책 개발은 대기해요." },
@@ -104,7 +104,7 @@ const decisionGroups = [
         options: [
           { name: "A · 권장", reply: "A 승인", detail: "수식 비교와 실제 운영 결과 비교를 둘 다 해요.", consequence: "개발 오류와 운영 데이터 차이를 각각 설명할 수 있어요." },
           { name: "공통 입력 비교만", reply: "공통 입력 비교만 사용", noteLabel: "운영 결과 비교를 제외할 이유와 대체 검증", notePlaceholder: "예: 운영 결과 비교 대신 승인할 별도 검증 기준", detail: "같은 비교용 입력의 수식 비교만 해요.", consequence: "관련 동등성 명세를 먼저 고치고 다시 승인해야 해요." },
-          { name: "설명 요청", reply: "설명 요청", noteLabel: "먼저 확인할 비교 범위", notePlaceholder: "예: 실제 Java에서 어떤 결과를 읽는지 설명해 주세요", detail: "Java 결과를 읽기 전용으로 내보낼 범위를 더 확인해요.", consequence: "운영 비교 개발은 C0-B까지 대기해요." },
+          { name: "설명 요청", reply: "설명 요청", noteLabel: "먼저 확인할 비교 범위", notePlaceholder: "예: 실제 Java에서 어떤 결과를 읽는지 설명해 주세요", detail: "Java 결과를 읽기 전용으로 내보낼 범위를 더 확인해요.", consequence: "운영 비교 개발은 C0-B 결과 재승인까지 대기해요." },
         ],
       },
     ],
@@ -193,10 +193,10 @@ const screens = [
     description: "오늘 무엇이 돌고 무엇이 막혔는지",
     content: `
       <div class="mock-grid">
-        <article class="mock-card"><span>기존 시스템</span><strong>마지막 제어 작업에서 미중단</strong><p>현재 서비스·전략 켜짐/꺼짐·최근 성공·주문 모드는 C0-B 확인 대기예요.</p></article>
+        <article class="mock-card"><span>기존 시스템</span><strong>마지막 제어 작업에서 미중단</strong><p>현재 서비스·전략 켜짐/꺼짐·최근 성공·주문 모드는 C0-B 수집 승인 대기예요.</p></article>
         <article class="mock-card"><span>v2 주문 안전 예시</span><strong>후보 코드상 제출 차단</strong><p>검토 중인 화면 예시예요. 현재 원격 값은 다시 확인해야 해요.</p></article>
-        <article class="mock-card"><span>오늘의 다음 일정</span><strong>기획 확정 대기</strong><p>자동 실행기는 C0-B 뒤 개발해요.</p></article>
-        <article class="mock-card full"><span>오늘 확인할 일</span><ul class="gate-list"><li><strong>C0-A D-01~D-10</strong><small>사용자 검토</small></li><li><strong>C0-B 운영 상태 복사본</strong><small>아직 수집 안 함</small></li><li><strong>인증된 화면 검증</strong><small>후보 배포 승인·사용자 직접 로그인 대기</small></li></ul></article>
+        <article class="mock-card"><span>오늘의 다음 일정</span><strong>기획 확정 대기</strong><p>자동 실행기는 C0-B 결과 재승인 뒤 개발해요.</p></article>
+        <article class="mock-card full"><span>오늘 확인할 일</span><ul class="gate-list"><li><strong>C0-A D-01~D-10</strong><small>사용자 검토</small></li><li><strong>C0-B 수집 승인·결과 재승인</strong><small>아직 수집 안 함</small></li><li><strong>인증된 화면 검증</strong><small>후보 배포 승인·사용자 직접 로그인 대기</small></li></ul></article>
       </div>`,
   },
   {
@@ -205,7 +205,7 @@ const screens = [
     description: "Java와 Python의 서로 대신할 수 없는 3가지 비교",
     content: `
       <div class="mock-grid">
-        <article class="mock-card full"><span>20거래일 관찰</span><ul class="lane-list"><li><strong>같은 입력 수식 비교</strong><small>0 / 20 · C0 승인 대기</small></li><li><strong>실제 운영 결과 비교</strong><small>0 / 20 · 읽기 전용 결과 내보내기 미구현</small></li><li><strong>운영 데이터 준비</strong><small>0 / 20 · 공급자 미승인</small></li></ul></article>
+        <article class="mock-card full"><span>20거래일 관찰</span><ul class="lane-list"><li><strong>같은 입력 수식 비교</strong><small>0 / 20 · C0-B 결과 재승인 대기</small></li><li><strong>실제 운영 결과 비교</strong><small>0 / 20 · 읽기 전용 결과 내보내기 미구현</small></li><li><strong>운영 데이터 준비</strong><small>0 / 20 · 공급자 미승인</small></li></ul></article>
         <article class="mock-card wide"><span>최근 비교 결과</span><strong>아직 실행 전</strong><p>입력 차이와 수식 차이를 섞지 않고 보여줘요.</p></article>
         <article class="mock-card"><span>증권사 주문 제출</span><strong>0건</strong><p>병행 비교 중에는 항상 0이어야 해요.</p></article>
       </div>`,
@@ -216,7 +216,7 @@ const screens = [
     description: "누가 언제 무엇을 검증했는지",
     content: `
       <div class="mock-grid">
-        <article class="mock-card full"><span>검증 단계</span><ul class="evidence-list"><li><strong>로컬 가상 화면 검증</strong><small>통합 안전 코드 a6a7174 · 26 / 26 통과</small></li><li><strong>내 작업 버전 자동 검사</strong><small>브랜치 CI 30965407547 · 5개 작업 통과</small></li><li><strong>기준 버전과 합친 상태 검사</strong><small>PR CI 30965409423 · 5개 작업 통과</small></li><li><strong>증적 참조 무결성</strong><small>78개 참조 · 모두 해시 검증 통과</small></li><li><strong>운영 배포·인증 화면 검증</strong><small>차단 확인 · 후보 배포 승인과 사용자 직접 로그인 대기</small></li><li><strong>성공 증적 계약</strong><small>6개 화면 × 2크기 · 그림 12 + 관찰 2 + 검증 목록 1</small></li></ul></article>
+        <article class="mock-card full"><span>검증 단계</span><ul class="evidence-list"><li><strong>직전 독립 검증</strong><small>46a34ea · v2 가상 운영 화면 기능 검사 26 / 26 · C0 문서·기록 검사 51 / 51</small></li><li><strong>브랜치 자동 검사</strong><small>CI 30975237262 · 5개 작업 통과</small></li><li><strong>기준 버전과 합본 검사</strong><small>PR CI 30975239146 · 5개 작업 통과</small></li><li><strong>증적 참조 무결성</strong><small>78개 참조 · 모두 해시 검증 통과</small></li><li><strong>현재 보강본</strong><small>현재 검토 보드 화면 검사 10 / 10 · C0 문서·기록 검사 55 / 55 통과 · PR 자동검사 확인 대기 · 운영 미배포</small></li><li><strong>운영 배포·인증 화면 검증</strong><small>차단 확인 · 후보 배포 승인과 사용자 직접 로그인 대기</small></li></ul></article>
         <article class="mock-card wide"><span>읽기 전용 방식</span><strong>안전 확인 1 + 고정 조회 1</strong><p>화면의 5개 조회는 고정 조회 묶음으로 응답해 서버에 다시 보내지 않아요.</p></article>
         <article class="mock-card wide"><span>민감정보 처리</span><strong>정제·마스킹 뒤 증적</strong><p>로그인 상태는 저장소 밖 별도 경로에 두고 증적에는 넣지 않아요.</p></article>
         <article class="mock-card"><span>이번 화면 QA의 주문 제출</span><strong>0건</strong><p>화면 조회 이외 앱 요청은 차단해요.</p></article>
@@ -228,11 +228,11 @@ const screens = [
     description: "C0-B의 마스킹된 12개 값과 차이를 한눈에",
     content: `
       <div class="mock-grid">
-        <article class="mock-card full"><span>C0-B 재확인 진행</span><strong>0 / 12 · 아직 수집하지 않았어요</strong><p>C0-A가 끝난 뒤 읽기 전용으로 수집하고, 값과 차이를 사람이 읽을 문장으로 보여줘요.</p></article>
+        <article class="mock-card full"><span>1단계 · 운영값 수집</span><strong>별도 승인 대기</strong><p>C0-A가 끝나도 바로 수집하지 않아요. 아래 범위를 따로 승인한 뒤에만 12개 값을 읽어요.</p><ul class="evidence-list"><li><strong>접근 방법</strong><small>GitHub 자동화를 통해 운영 서버의 설정과 DB를 조회 · 상세: PROD SSH · shell 조회 · DB SELECT</small></li><li><strong>승인 권한</strong><small>조회 명령만 허용 · 변경 명령 없음</small></li><li><strong>저장</strong><small>정제·마스킹한 증적만 지정 폴더에 저장 · docs/v2-cutover/evidence/c0b/</small></li><li><strong>원문</strong><small>저장하지 않음</small></li><li><strong>보존</strong><small>프로젝트 변경 이력에 계속 남음</small></li></ul></article>
         <article class="mock-card wide"><span>기존 시스템·전략</span><ul class="evidence-list"><li><strong>실행 버전·실제 설정</strong><small>수집 대기</small></li><li><strong>QQQM/QLD/TQQQ 켜짐·파라미터</strong><small>수집 대기</small></li><li><strong>최근 두 번의 상태</strong><small>수집 대기</small></li></ul></article>
         <article class="mock-card"><span>주문 안전</span><strong>모드·소유권 확인 대기</strong><p>계좌번호와 자격증명은 표시하지 않아요.</p></article>
         <article class="mock-card wide"><span>데이터 의미·비교 기준</span><strong>가격 기준일·관측 시각·허용 차이 확인 대기</strong><p>원문 대신 정제된 요약과 파일 해시를 연결해요.</p></article>
-        <article class="mock-card"><span>최종 재승인</span><strong>잠김</strong><p>12개 값·차이·문서 버전이 모두 맞아야 열려요.</p></article>
+        <article class="mock-card"><span>2단계 · 수집 결과</span><strong>결과 재승인 대기</strong><p>12개 값과 C0-A 차이를 본 뒤 재승인해야 C2 개발을 시작해요.</p></article>
       </div>`,
   },
   {
@@ -241,28 +241,28 @@ const screens = [
     description: "실전으로 갈 준비와 수동 승인 경계",
     content: `
       <div class="mock-grid">
-        <article class="mock-card full"><span>전환 게이트</span><ul class="gate-list"><li><strong>C0 제품·운영 기준선</strong><small>승인 대기</small></li><li><strong>C3 3개 20거래일 레인</strong><small>미시작</small></li><li><strong>C4 복구 훈련</strong><small>공유 환경 미실행</small></li><li><strong>C5-A 단건 → C5-B 5주기 자동운용</strong><button class="mock-button" type="button" disabled>사용자 승인 전 잠김</button></li></ul></article>
-        <article class="mock-card wide"><span>현재 주문 소유권</span><strong>C0-B 확인 대기</strong><p>Java와 v2가 동시에 주문하지 않는 계약은 유지해요.</p></article>
+        <article class="mock-card full"><span>전환 게이트</span><ul class="gate-list"><li><strong>C0-A 결정 → C0-B ① 수집·② 결과</strong><small>① 수집 승인 대기</small></li><li><strong>C3 3개 20거래일 레인</strong><small>미시작</small></li><li><strong>C4 복구 훈련</strong><small>공유 환경 미실행</small></li><li><strong>C5-A 단건 → C5-B 5주기 자동운용</strong><button class="mock-button" type="button" disabled>사용자 승인 전 잠김</button></li></ul></article>
+        <article class="mock-card wide"><span>현재 주문 소유권</span><strong>C0-B ① 수집 승인 대기</strong><p>Java와 v2가 동시에 주문하지 않는 계약은 유지해요.</p></article>
         <article class="mock-card"><span>직전 승인 작업</span><strong>범위 확대·재개</strong><p>C5 범위 · Java 중단 · 접속 경로 변경 · 되돌리기</p></article>
       </div>`,
   },
 ];
 
 const traceRows = [
-  ["D-01~02", "V2-STR-001 · V2-STR-002 · V2-DAT-001", "S-02 · S-04 · S-06 · S-10", "QA-PAR-001", "저장소 Java 후보와 공통 시험값의 수식·주문 방향 비교 통과 · 운영값 미수집", "부분", "C0-A/B"],
-  ["D-03", "V2-AUT-001 · V2-DAT-001", "S-01 · S-04 · S-06", "QA-SHD-001/002", "계획만 있음 · 실행·증적 파일 없음", "미구현", "C0-B"],
-  ["D-04", "V2-DAT-001 · V2-SAF-001", "S-01 · S-07", "QA-SAF-001", "현재 UI 잠금만 통과 · 운영 입력 미검증", "부분", "C0-B"],
-  ["D-05~06", "V2-STR-002 · V2-PER-001", "S-04 · S-05", "QA-PAR-001", "Python 후보 수량·저장만 통과 · Java/Python 수량 비교와 실제 주문 미리보기 없음", "부분", "C0-B"],
-  ["D-07", "V2-QA-001", "S-03 · S-08", "QA-NAV-001 · QA-OPS-001 · QA-RWD-001 · QA-SAF-001", "통합 안전 코드 a6a7174 · 로컬 가상 화면 26/26·브랜치 CI 30965407547·기준 버전 합본 PR CI 30965409423·증적 참조 78개 해시 검증 통과 · 배포 증적 계약은 6화면×2, 정확히 15파일 · QA-OPS-002와 QA-MAN-001~009 위험 작업 미실행", "부분", "조회: 배포 승인·직접 로그인 / 상태변경: 별도 실행 승인"],
+  ["D-01~02", "V2-STR-001 · V2-STR-002 · V2-DAT-001", "S-02 · S-04 · S-06 · S-10", "QA-PAR-001", "저장소 Java 후보와 공통 시험값의 수식·주문 방향 비교 통과 · 운영값 미수집", "부분", "C0-A → ① 수집 → ② 결과"],
+  ["D-03", "V2-AUT-001 · V2-DAT-001", "S-01 · S-04 · S-06", "QA-SHD-001/002", "계획만 있음 · 실행·증적 파일 없음", "미구현", "② 결과 재승인"],
+  ["D-04", "V2-DAT-001 · V2-SAF-001", "S-01 · S-07", "QA-SAF-001", "현재 UI 잠금만 통과 · 운영 입력 미검증", "부분", "② 결과 재승인"],
+  ["D-05~06", "V2-STR-002 · V2-PER-001", "S-04 · S-05", "QA-PAR-001", "Python 후보 수량·저장만 통과 · Java/Python 수량 비교와 실제 주문 미리보기 없음", "부분", "② 결과 재승인"],
+  ["D-07", "V2-QA-001", "S-03 · S-08", "QA-NAV-001 · QA-OPS-001 · QA-RWD-001 · QA-SAF-001", "직전 독립 검증 46a34ea · v2 가상 운영 화면 기능 검사 26/26·브랜치 자동검사 30975237262·기준 버전 합본 자동검사 30975239146·증적 참조 78개 해시 검증 통과 · 배포 증적 계약은 6화면×2, 정확히 15파일 · QA-OPS-002와 QA-MAN-001~009 위험 작업 미실행", "부분", "조회: 배포 승인·직접 로그인 / 상태변경: 별도 실행 승인"],
   ["D-08", "V2-REL-001", "S-04 · S-09", "QA-SHD-001/002", "세 가지 비교 모두 0/20", "미구현", "C3 진입"],
   ["D-09", "V2-RBK-001", "S-07 · S-09", "QA-INF-001", "격리 장애 시험 통과 · 실제 공유 시험 서버 훈련 없음", "부분", "C4 실행 승인"],
   ["D-10", "V2-LIV-001 · V2-APR-001", "S-05 · S-09", "C5-A/B 계획", "QA-ACC-002 시도가 제출한 실제 주문 0건 · 실운영 전체 주문 여부 미확인 · 제한 시험 없음", "미구현", "단건→범위→전환 승인"],
   ["C1 접근", "V2-ACC-001", "S-00", "QA-ACC-001/002", "미인증 경계 통과 · 마지막 GitHub-controlled #54는 버전 표시 없음 · 사용자 승인 새 검증 SHA와 직접 로그인 대기", "부분", "배포 승인 뒤 로그인 검증"],
-  ["C1 격리", "V2-CUT-001 · V2-CUT-002", "S-01 · S-09", "QA-CUT-001", "서비스·프로세스 번호 연속성 시험 통과 · 실제 운용 미확인", "부분", "C0-B"],
-  ["현재 UI", "V2-UI-001 · V2-OPS-001", "현재 콘솔(S-01 일부 · S-02 · S-03 · S-05 · S-06 · S-07)", "QA-NAV-001 · QA-OPS-001 · QA-SAF-001 · QA-RWD-001", "통합 안전 코드 a6a7174 · 로컬 가상 화면 26/26·브랜치 CI 30965407547·기준 버전 합본 PR CI 30965409423 통과 · 운영 배포·인증 화면 미실행", "부분", "사용자 승인 배포 뒤 인증 QA"],
-  ["C2 미래 화면", "V2-OPS-001 · V2-API-001", "S-01 · S-04 · S-08", "QA-SHD-001/002", "자동 병행 비교의 실행·조회 기능·화면 모두 미구현", "미구현", "C0-B"],
-  ["C2 종합", "V2-AUT-001 · V2-DAT-001 · V2-PER-001 · V2-OPS-001 · V2-API-001", "S-01 · S-04 · S-08", "QA-SHD-001/002 · QA-PAR-001", "자동 실행기·운영 데이터·Java 결과 비교·저장·조회·화면의 종합 진행 상태 · 현재 모두 미구현", "미구현", "C0-B"],
-  ["공통 명세", "V2-DOC-001", "기획 미리보기 S-01 · S-04 · S-08 · S-10 · S-09", "QA-PLN-001", "실제 선택 35개·한 번에 결정 하나·명시적 다음 버튼·필수 메모·무저장 검토안 복사·밝은/어두운 화면 보조·상태 문자 4.5:1·320px 결정·화면·추적표·소스/PNG 해시 묶음·desktop/mobile 2/2와 C0 기록 검사 51/51 로컬 통과 · 이 변경의 CI는 PR #57에서 확인 · 기능 구현 증적 아님", "부분", "D-01~10"],
+  ["C1 격리", "V2-CUT-001 · V2-CUT-002", "S-01 · S-09", "QA-CUT-001", "서비스·프로세스 번호 연속성 시험 통과 · 실제 운용 미확인", "부분", "① 수집 → ② 결과"],
+  ["현재 UI", "V2-UI-001 · V2-OPS-001", "현재 콘솔(S-01 일부 · S-02 · S-03 · S-05 · S-06 · S-07)", "QA-NAV-001 · QA-OPS-001 · QA-SAF-001 · QA-RWD-001", "직전 독립 검증 46a34ea · v2 가상 운영 화면 기능 검사 26/26·브랜치 자동검사 30975237262·기준 버전 합본 자동검사 30975239146 통과 · 운영 배포·인증 화면 미실행", "부분", "사용자 승인 배포 뒤 인증 QA"],
+  ["C2 미래 화면", "V2-OPS-001 · V2-API-001", "S-01 · S-04 · S-08", "QA-SHD-001/002", "자동 병행 비교의 실행·조회 기능·화면 모두 미구현", "미구현", "② 결과 재승인"],
+  ["C2 종합", "V2-AUT-001 · V2-DAT-001 · V2-PER-001 · V2-OPS-001 · V2-API-001", "S-01 · S-04 · S-08", "QA-SHD-001/002 · QA-PAR-001", "자동 실행기·운영 데이터·Java 결과 비교·저장·조회·화면의 종합 진행 상태 · 현재 모두 미구현", "미구현", "② 결과 재승인"],
+  ["공통 명세", "V2-DOC-001", "기획 미리보기 S-01 · S-04 · S-08 · S-10 · S-09", "QA-PLN-001", "직전 정본 46a34ea · 직전 정본 화면 검사 2/2·C0 문서·기록 검사 51/51·브랜치/PR 자동검사 통과 · 현재 보강본 반복 화면 검사 10/10·C0 문서·기록 검사 55/55 로컬 통과 · 새 코드 버전·자동검사·증적 묶음 확인 대기 · 기능 구현 증적 아님", "부분", "D-01~10"],
 ];
 
 const decisionContainer = document.getElementById("decision-groups");
@@ -280,7 +280,7 @@ const decisionIds = decisionGroups.flatMap((group) => group.decisions.map((decis
 const decisionsById = new Map(
   decisionGroups.flatMap((group) => group.decisions.map((decision) => [decision.id, decision])),
 );
-const reviewBoundary = "범위 확인: 이 답변은 C0-A 제품 기획 검토입니다. 후보 배포, 시험 서버 변경, 자격증명 전달·사용, 실제 주문, Java 중단, 접속 경로 변경을 승인하지 않습니다. C0-B 운영값과 차이는 별도로 다시 확인하겠습니다.";
+const reviewBoundary = "범위 확인: 이 답변은 C0-A 기능 기준만 정합니다. C0-B 운영값 수집을 승인하지 않습니다. C0-B는 ① 수집 전 별도 승인 ② 수집 결과와 C0-A 차이를 본 뒤 재승인, 두 번의 확인이 필요합니다. 두 번째 승인 전에는 C2 개발을 시작하지 않습니다. 후보 배포, 시험 서버 변경, 자격증명 전달·사용, 실제 주문, Java 중단, 접속 경로 변경도 승인하지 않습니다.";
 
 function escapeText(value) {
   return String(value)
@@ -512,7 +512,7 @@ async function copyReviewDraft() {
   if (copyReviewDraftButton.disabled) return;
   try {
     await navigator.clipboard.writeText(reviewDraft.value);
-    draftReadiness.textContent = "복사했어요. 이 대화에 붙여넣어야 전달돼요.";
+    draftReadiness.textContent = "복사했어요. 붙여넣어도 C0-A만 전달돼요.";
   } catch {
     reviewDraft.focus();
     reviewDraft.select();
@@ -555,7 +555,7 @@ function renderTraceRows() {
     ["trace-col-qa", "QA ID"],
     ["trace-col-evidence", "실행·증적"],
     ["trace-col-status", "현재 상태"],
-    ["trace-col-approval", "다음 승인"],
+    ["trace-col-approval", "승인 순서"],
   ];
   traceBody.innerHTML = traceRows
     .map((row) => {

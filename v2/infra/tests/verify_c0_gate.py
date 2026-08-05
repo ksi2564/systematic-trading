@@ -33,7 +33,13 @@ TRACE_HEADER = [
     "상태",
     "다음 필수 승인",
 ]
-C0_B_ITEMS = [
+C0_B_COLLECTION_APPROVAL_ITEM = "C0-B 읽기 전용 수집 승인"
+C0_B_COLLECTION_SCOPE = (
+    "대상=12개; 접근방법=GitHub Actions PROD SSH로 운영 호스트 shell 조회·DB SELECT; "
+    "권한=읽기 전용; 정제=필수; 저장위치=docs/v2-cutover/evidence/c0b/; "
+    "원문저장=금지; 보존=Git 이력"
+)
+C0_B_CAPTURE_ITEMS = [
     "Java 실행 코드 SHA",
     "effective 런타임 설정",
     "DB 전략 on/off·파라미터",
@@ -46,7 +52,12 @@ C0_B_ITEMS = [
     "operational 비교 시간창·필드별 값 허용 기준·반올림",
     "승인 당시 요구사항·명세 문서/v2 코드 SHA",
     "C0-A 대비 diff 요약",
-    "C0-B 최종 bundle",
+]
+C0_B_FINAL_ITEM = "C0-B 최종 bundle"
+C0_B_ITEMS = [
+    C0_B_COLLECTION_APPROVAL_ITEM,
+    *C0_B_CAPTURE_ITEMS,
+    C0_B_FINAL_ITEM,
 ]
 C0_B_ITEM_IDS = {
     "Java 실행 코드 SHA": "java_code_sha",
@@ -63,11 +74,12 @@ C0_B_ITEM_IDS = {
     "C0-A 대비 diff 요약": "c0a_diff_summary",
 }
 C0_B_PENDING_STATES = {
-    **{item: "캡처 대기" for item in C0_B_ITEMS[:9]},
-    C0_B_ITEMS[9]: "승인 대기",
-    C0_B_ITEMS[10]: "캡처 대기",
-    C0_B_ITEMS[11]: "재확인 대기",
-    C0_B_ITEMS[12]: "재승인 대기",
+    C0_B_COLLECTION_APPROVAL_ITEM: "승인 대기",
+    **{item: "캡처 대기" for item in C0_B_CAPTURE_ITEMS[:9]},
+    C0_B_CAPTURE_ITEMS[9]: "승인 대기",
+    C0_B_CAPTURE_ITEMS[10]: "캡처 대기",
+    C0_B_CAPTURE_ITEMS[11]: "재확인 대기",
+    C0_B_FINAL_ITEM: "재승인 대기",
 }
 C0_A_APPROVABLE_CHOICES = {
     "D-01": ("A 승인",),
@@ -99,7 +111,7 @@ ARTIFACT_REF_PATTERN = re.compile(
 )
 KST_OFFSET = timedelta(hours=9)
 C2_SOURCE_BASELINE_TREE_SHA256 = (
-    "a8b6bccefa6b13487bd62a3206c205fe460687d8b356c815adb6ff19419a7872"
+    "39e1f896720ba8b4a7e33d3148ceb96b3ce284b4f4330e44c037690409483962"
 )
 C2_PROTECTED_PATHS = (
     "v2/backend",
@@ -465,16 +477,16 @@ def _validate_board_state(
         raise GateError("planning board C2 state does not match the C2 marker")
 
 
-def _board_trace_statuses(
+def _board_trace_records(
     board_text: str, gates: tuple[str, ...]
-) -> dict[str, str]:
+) -> dict[str, tuple[str, str]]:
     blocks = re.findall(
         r"(?ms)^const traceRows = \[\n(.*?)^\];$",
         board_text,
     )
     if len(blocks) != 1:
         raise GateError("planning board must declare exactly one traceRows block")
-    statuses: dict[str, str] = {}
+    records: dict[str, tuple[str, str]] = {}
     row_pattern = re.compile(
         r'^\s*\["([^"\\]*)", "([^"\\]*)", "([^"\\]*)", '
         r'"([^"\\]*)", "([^"\\]*)", "([^"\\]*)", "([^"\\]*)"\],$'
@@ -488,12 +500,12 @@ def _board_trace_statuses(
         values = list(row_match.groups())
         if values[0] not in gates:
             continue
-        if values[0] in statuses:
+        if values[0] in records:
             raise GateError(f"planning board contains duplicate {values[0]} trace rows")
-        statuses[values[0]] = values[5]
-    if set(statuses) != set(gates):
+        records[values[0]] = (values[5], values[6])
+    if set(records) != set(gates):
         raise GateError("planning board is missing a required C2 trace row")
-    return statuses
+    return records
 
 
 def _protected_c2_tree_digest(repository_root: Path) -> str:
@@ -1013,11 +1025,57 @@ def _validate_c0_b(
     if [row[0] for row in rows] != C0_B_ITEMS:
         raise GateError("C0-B rows are missing, duplicated, or out of order")
 
+    (
+        collection_item,
+        collection_scope,
+        collection_difference,
+        collection_state,
+        collection_owner,
+        collection_timestamp,
+    ) = rows[0]
+    collection_approved = False
+    collection_approval_time: datetime | None = None
+    if collection_state == C0_B_PENDING_STATES[collection_item]:
+        if [
+            collection_scope,
+            collection_difference,
+            collection_owner,
+            collection_timestamp,
+        ] != [
+            "-",
+            "-",
+            "-",
+            "-",
+        ]:
+            raise GateError("C0-B collection pending row must contain only placeholders")
+    else:
+        if collection_state != "수집 승인":
+            raise GateError(
+                f"C0-B collection approval: unsupported state: {collection_state}"
+            )
+        if not c0_a_complete:
+            raise GateError("C0-B collection approval requires complete C0-A decisions")
+        if _unwrap_code(collection_scope) != C0_B_COLLECTION_SCOPE:
+            raise GateError("C0-B collection approval scope is incomplete or malformed")
+        if collection_difference != "-":
+            raise GateError("C0-B collection approval difference must be a placeholder")
+        _validate_owner(collection_owner, "C0-B collection approval owner")
+        collection_approval_time = _parse_kst_timestamp(
+            collection_timestamp,
+            "C0-B collection approval time",
+        )
+        if (
+            latest_c0_a_approval is None
+            or collection_approval_time < latest_c0_a_approval
+        ):
+            raise GateError("C0-B collection approval cannot predate C0-A approval")
+        collection_approved = True
+
     completed_items = 0
     row_records: dict[str, dict[str, object]] = {}
     approval_document_sha: str | None = None
     approval_code_sha: str | None = None
-    for row in rows[:-1]:
+    for row in rows[1:-1]:
         item, captured_value, difference, state, owner, timestamp = row
         if state == C0_B_PENDING_STATES[item]:
             if [captured_value, difference, owner, timestamp] != ["-", "-", "-", "-"]:
@@ -1027,12 +1085,16 @@ def _validate_c0_b(
             raise GateError(f"{item}: unsupported C0-B state: {state}")
         if not c0_a_complete:
             raise GateError(f"{item}: C0-B capture cannot complete before all C0-A decisions")
+        if not collection_approved or collection_approval_time is None:
+            raise GateError(f"{item}: C0-B capture requires prior collection approval")
         if captured_value == "-" or difference == "-":
             raise GateError(f"{item}: completed C0-B rows require value and diff")
         _validate_owner(owner, f"{item} owner")
         completed_at = _parse_kst_timestamp(timestamp, f"{item} approval time")
         if latest_c0_a_approval is None or completed_at < latest_c0_a_approval:
             raise GateError(f"{item}: C0-B completion cannot predate C0-A approval")
+        if completed_at < collection_approval_time:
+            raise GateError(f"{item}: C0-B completion cannot predate collection approval")
 
         expected_id = C0_B_ITEM_IDS[item]
         raw_capture = _unwrap_code(captured_value)
@@ -1077,7 +1139,11 @@ def _validate_c0_b(
         return False
     if final_state != "재승인 완료":
         raise GateError(f"C0-B final bundle: unsupported state: {final_state}")
-    if not c0_a_complete or completed_items != len(rows) - 1:
+    if (
+        not c0_a_complete
+        or not collection_approved
+        or completed_items != len(C0_B_CAPTURE_ITEMS)
+    ):
         raise GateError("C0-B final reapproval requires complete C0-A and C0-B rows")
     _validate_owner(owner, "C0-B final owner")
     final_approval_time = _parse_kst_timestamp(timestamp, "C0-B final approval time")
@@ -1132,22 +1198,38 @@ def _c2_state(c0_text: str) -> str:
 def _validate_trace(trace_text: str, board_text: str, c2_state: str) -> None:
     rows = _table(trace_text, TRACE_HEADER, "delivery trace")
     row_by_gate: dict[str, list[str]] = {}
-    c2_gates = ("D-03", "C2 미래 화면", "C2 종합")
-    for gate in c2_gates:
+    c2_status_gates = ("D-03", "C2 미래 화면", "C2 종합")
+    expected_c2_approvals = {
+        "D-03": "C0-B 결과 재승인",
+        "D-04": "C0-B 결과 재승인·동일 SHA 인증 화면 QA",
+        "D-05~06": "C0-B 결과 재승인",
+        "C2 미래 화면": "C0-B 결과 재승인",
+        "C2 종합": "C0-B 결과 재승인",
+    }
+    for gate in expected_c2_approvals:
         matching_rows = [row for row in rows if row[0] == gate]
         if len(matching_rows) != 1:
             raise GateError(f"delivery trace must contain exactly one {gate} row")
         row_by_gate[gate] = matching_rows[0]
-    statuses = {gate: row_by_gate[gate][7] for gate in c2_gates}
+    statuses = {gate: row_by_gate[gate][7] for gate in c2_status_gates}
+    approvals = {gate: row_by_gate[gate][8] for gate in expected_c2_approvals}
     if any(state not in {"미구현", "부분", "완료"} for state in statuses.values()):
         raise GateError("C2 trace rows use an unsupported implementation state")
     if c2_state == "미시작" and any(state != "미구현" for state in statuses.values()):
         raise GateError("C2 is marked unstarted but a C2 trace row shows progress")
     if c2_state == "진행 중" and statuses["C2 종합"] != "부분":
         raise GateError("C2 in progress requires the comprehensive C2 trace to be partial")
-    board_statuses = _board_trace_statuses(board_text, c2_gates)
+    if approvals != expected_c2_approvals:
+        raise GateError("C2 trace rows must require C0-B result reapproval")
+    board_records = _board_trace_records(board_text, tuple(expected_c2_approvals))
+    board_statuses = {
+        gate: board_records[gate][0]
+        for gate in c2_status_gates
+    }
     if board_statuses != statuses:
         raise GateError("planning board C2 trace statuses do not match the delivery trace")
+    if any(record[1] != "② 결과 재승인" for record in board_records.values()):
+        raise GateError("planning board C2 rows must show result reapproval")
 
 
 def verify_repository(repository_root: Path, *, allow_non_git: bool = False) -> None:

@@ -35,7 +35,7 @@
 - v2 본체 배포: #54 커밋 `66e374c`, GitHub Actions run `30931862737` 성공
 - #56 접근 수정: 커밋 `8eb580b`, `access-configure` run `30937893445` 성공
 - `master@8eb580b` 기준 #55·#56에는 `v2/backend`, `v2/frontend` 변경이 없어
-  #54 배포본과 동일했음. PR #57 현재 검토·안전 source
+  #54 배포본과 동일했음. PR #57 직전 독립 검증 source
   `46a34eaa9251637a117d038a6eb62c51263fff65`는 미배포 상태임
 - 위 원본 head는 가상 데이터 UI QA 26/26·증적 참조 78개 SHA-256 검증과
   [push v2 CI run `30975237262`](https://github.com/ksi2564/systematic-trading/actions/runs/30975237262)의
@@ -47,6 +47,9 @@
   Java 전략 on/off·최근 성공·주문 모드도 확인하지 않음
 - 두 lane의 planning/mock UI ZIP과 내부 manifest·파일 무결성은
   [`QA-PLN-001 정본 증적`](evidence/2026-08-05-QA-PLN-001.md)에 기록했음
+- 현재 C0-B 승인 경계 보강본은 로컬 기획 화면 10/10·C0 기록 gate 55/55를 통과했으며,
+  새 source SHA·원격 CI·artifact 검증은 PR #57에서 확인 대기임. 직전 `46a34ea`의
+  51/51 gate와 현재 55/55 gate를 같은 실행 근거로 합치지 않음
 - 위 CI 결과를 기록하는 문서 전용 후속 커밋은 기능 코드의 통과 근거로 올려 적지 않음
 - 현재 RC 워크플로 변경은 공통 Java golden·두 스케줄러·프런트엔드
   typecheck/단위 테스트/빌드·no-order Playwright·manifest 안전 검증을 같은
@@ -97,7 +100,7 @@
 | QQQM/QLD/TQQQ 전략과 자동 운용 완료 조건 | [REQUIREMENTS.md](REQUIREMENTS.md) | 문서 검토 자동 가능, 전략·LIVE 범위 확정은 사용자 승인 필수 |
 | D-01~D-10의 상세 근거와 수치 | [C0_DECISIONS.md](C0_DECISIONS.md) | D-01~D-10 확정은 사용자 승인 필수 |
 | 화면에서 볼 정보와 순서 | [SCREEN_SPEC.md](SCREEN_SPEC.md) | 기존 안전 화면 QA 자동 진행 가능 |
-| 안전·차이·증적 통과 기준 | [TRACEABILITY_QA.md](TRACEABILITY_QA.md) | 섀도 증적은 C0 이후, 위험 시나리오는 사용자 승인 필수 |
+| 안전·차이·증적 통과 기준 | [TRACEABILITY_QA.md](TRACEABILITY_QA.md) | 섀도 증적은 C0-B 결과 재승인 뒤, 위험 시나리오는 사용자 승인 필수 |
 | 자동 섀도와 화면 API 설계 | [FUNCTIONAL_SPEC.md](FUNCTIONAL_SPEC.md) | C0-A 확정 → C0-B 수집 별도 승인 → 결과 재승인 뒤 개발·로컬 테스트 자동, 공유 시험 서버 실행은 별도 승인 |
 | 전환·되돌리기 순서 | [CUTOVER_ROLLBACK.md](CUTOVER_ROLLBACK.md) | LIVE·Java 중단·DNS/트래픽·공유 환경 롤백 확정은 사용자 승인 필수 |
 
@@ -117,7 +120,8 @@ C0-A 확정만으로 운영값 접근을 허가하지 않는다. 사용자가 C0
 - [ ] D-07~D-08: 향후 QA 범위·보존 기준(실행 승인 아님)과 20거래일 통과 기준
 - [ ] D-09: 복구 훈련의 자동/수동 경계와 RTO/RPO
 - [ ] D-10: Java 대체 후 자동 제출·접수·체결·대조 완료 조건
-- [ ] C0-B 수집 승인: 읽기 전용 대상·접근 방식·정제 및 저장 범위 확인
+- [ ] C0-B 수집 승인: 12개 대상, GitHub Actions PROD SSH의 shell 조회·DB SELECT,
+      읽기 전용 권한, 정제, `docs/v2-cutover/evidence/c0b/` 저장, 원문 미저장, Git 보존 확인
 - [ ] C0-B 결과 재승인: 운영 Java snapshot·production 데이터 계약·operational 비교 시간창/값 허용 기준·C0-A diff·최종 checksum 확인
 
 ## 변하지 않는 안전 원칙

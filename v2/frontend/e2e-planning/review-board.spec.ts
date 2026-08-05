@@ -1,10 +1,103 @@
-import { expect, test, type Page } from '@playwright/test';
+import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+
+import { expect, test, type Locator, type Page, type TestInfo } from '@playwright/test';
 
 async function expectNoHorizontalOverflow(page: Page) {
   const hasHorizontalOverflow = await page.evaluate(
     () => document.documentElement.scrollWidth > document.documentElement.clientWidth + 1,
   );
   expect(hasHorizontalOverflow).toBe(false);
+}
+
+async function settleLayout(page: Page) {
+  await page.evaluate(
+    () => new Promise<void>((resolveFrame) => {
+      requestAnimationFrame(() => requestAnimationFrame(() => resolveFrame()));
+    })
+  );
+}
+
+async function expectCompactReviewPage(page: Page) {
+  expect(await page.evaluate(() => document.documentElement.scrollHeight)).toBeLessThanOrEqual(10_000);
+}
+
+async function expectFullyVisible(locator: Locator) {
+  await expect.poll(
+    () => locator.evaluate((element) => {
+      const rect = element.getBoundingClientRect();
+      return rect.top >= -1 && rect.bottom <= window.innerHeight + 1;
+    }),
+    { message: 'focused navigation target must remain inside the viewport' }
+  ).toBe(true);
+}
+
+function relativeLuminance(hex: string) {
+  const channels = hex
+    .replace('#', '')
+    .match(/.{2}/g)!
+    .map((value) => Number.parseInt(value, 16) / 255)
+    .map((value) => (value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4));
+  return 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2];
+}
+
+function contrastRatio(foreground: string, background: string) {
+  const foregroundLuminance = relativeLuminance(foreground);
+  const backgroundLuminance = relativeLuminance(background);
+  return (
+    (Math.max(foregroundLuminance, backgroundLuminance) + 0.05) /
+    (Math.min(foregroundLuminance, backgroundLuminance) + 0.05)
+  );
+}
+
+async function expectSecondaryTextContrast(page: Page) {
+  const tokens = await page.evaluate(() => {
+    const styles = getComputedStyle(document.documentElement);
+    return Object.fromEntries(
+      ['text-secondary', 'page', 'surface', 'surface-soft', 'green', 'green-soft'].map((token) => [
+        token,
+        styles.getPropertyValue(`--${token}`).trim()
+      ])
+    );
+  });
+  for (const background of ['page', 'surface', 'surface-soft']) {
+    expect(
+      contrastRatio(tokens['text-secondary'], tokens[background]),
+      `--text-secondary must meet 4.5:1 against --${background}`
+    ).toBeGreaterThanOrEqual(4.5);
+  }
+  expect(
+    contrastRatio(tokens.green, tokens['green-soft']),
+    '--green must meet 4.5:1 against --green-soft'
+  ).toBeGreaterThanOrEqual(4.5);
+}
+
+type EvidenceRecord = {
+  name: string;
+  sha256: string;
+  width: number;
+  height: number;
+  viewport: { width: number; height: number } | null;
+};
+
+async function attachPngEvidence(
+  testInfo: TestInfo,
+  records: EvidenceRecord[],
+  name: string,
+  body: Buffer,
+  viewport: { width: number; height: number } | null
+) {
+  const record = {
+    name,
+    sha256: createHash('sha256').update(body).digest('hex'),
+    width: body.readUInt32BE(16),
+    height: body.readUInt32BE(20),
+    viewport
+  };
+  records.push(record);
+  await testInfo.attach(name, { body, contentType: 'image/png' });
 }
 
 const expectedDecisionReplies = [
@@ -14,7 +107,7 @@ const expectedDecisionReplies = [
   ['A 승인', '기존 방식 유지', '설명 요청'],
   ['A 승인', '관리 밖 종목 정책 수정', '수량 규칙 수정', '설명 요청'],
   ['A 승인', '공통 입력 비교만 사용', '설명 요청'],
-  ['권장 범위·보존 승인', '전부 읽기 전용', '범위/보존 수정', '설명 요청'],
+  ['향후 QA 범위·보존 기준 동의', '전부 읽기 전용', '범위/보존 수정', '설명 요청'],
   ['A 승인', '관찰 기간/기준 수정', '설명 요청'],
   ['A 승인', '복구 목표 수정', '허용 명령 지정', '설명 요청'],
   [
@@ -28,14 +121,16 @@ const expectedDecisionReplies = [
 
 test('[QA-PLN-001] C0 결정·화면·추적 보드를 주문 없이 검토한다', async ({ page }, testInfo) => {
   const observedRequests: Array<{ method: string; url: string }> = [];
+  const evidence320: EvidenceRecord[] = [];
   await page.context().grantPermissions(['clipboard-read', 'clipboard-write'], {
-    origin: 'http://127.0.0.1:4181'
+    origin: 'http://127.0.0.1:4182'
   });
   page.on('request', (request) => {
     observedRequests.push({ method: request.method(), url: request.url() });
   });
 
   await page.goto('./');
+  await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
 
   await expect(page).toHaveTitle('Wall-Ant v2 전환 검토 보드');
   await expect(page.getByRole('heading', { name: /지금 결정할 건/ })).toBeVisible();
@@ -67,6 +162,23 @@ test('[QA-PLN-001] C0 결정·화면·추적 보드를 주문 없이 검토한�
   await expect(page.locator('.key-conditions')).toHaveCount(10);
   await expect(page.locator('.option-card')).toHaveCount(35);
   const decisionCards = page.locator('.decision-card');
+  await expect(page.locator('.decision-card[open]')).toHaveCount(1);
+  await expect(page.locator('.decision-execution-boundary')).toHaveCount(3);
+  await expect(decisionCards.nth(6).locator('.decision-execution-boundary')).toContainText(
+    '이 선택만으로 시험 서버 자원을 만들거나 바꾸지 않아요.'
+  );
+  await expect(decisionCards.nth(8).locator('.decision-execution-boundary')).toContainText(
+    '공유 환경 복구 명령은 대상과 영향을 확인한 뒤 직전에 다시 승인해요.'
+  );
+  await expect(decisionCards.nth(9).locator('.decision-execution-boundary')).toContainText(
+    '실제 주문·Java 중단·전체 전환은 각 단계의 별도 승인 전까지 실행하지 않아요.'
+  );
+  await expect(page.locator('[data-decision-selection="D-01"]')).toHaveText('미응답');
+  await expect(page.locator('[data-current-decision="D-01"]')).toBeDisabled();
+  await expectSecondaryTextContrast(page);
+  await page.emulateMedia({ colorScheme: 'dark', reducedMotion: 'reduce' });
+  await expectSecondaryTextContrast(page);
+  await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
   for (let index = 0; index < expectedDecisionReplies.length; index += 1) {
     const inputs = decisionCards.nth(index).locator('.draft-choice');
     expect(
@@ -98,21 +210,67 @@ test('[QA-PLN-001] C0 결정·화면·추적 보드를 주문 없이 검토한�
     const decisionCard = decisionCards.nth(index);
     await decisionCard.locator('summary').click();
     await expect(decisionCard).toHaveJSProperty('open', true);
+    await expect(page.locator('.decision-card[open]')).toHaveCount(1);
     await expectNoHorizontalOverflow(page);
     await decisionCard.locator('summary').click();
   }
+  await decisionCards.nth(0).locator('summary').click();
+  await expect(decisionCards.nth(0)).toHaveJSProperty('open', true);
 
   const projectViewport = page.viewportSize();
   await page.setViewportSize({ width: 320, height: 800 });
+  await settleLayout(page);
   await expectNoHorizontalOverflow(page);
 
   const firstDraftChoice = decisionCards.nth(0).locator('.draft-choice').first();
   await firstDraftChoice.focus();
+  await settleLayout(page);
+  await page.evaluate(() => {
+    const testWindow = window as Window & {
+      __selectionMutationIds?: string[];
+      __selectionObservers?: MutationObserver[];
+    };
+    testWindow.__selectionMutationIds = [];
+    testWindow.__selectionObservers = [...document.querySelectorAll('[data-decision-selection]')]
+      .map((selection) => {
+        const observer = new MutationObserver(() => {
+          testWindow.__selectionMutationIds?.push(
+            selection.getAttribute('data-decision-selection') ?? ''
+          );
+        });
+        observer.observe(selection, { childList: true });
+        return observer;
+      });
+  });
+  const scrollBeforeSelection = await page.evaluate(() => window.scrollY);
   await page.keyboard.press('Space');
+  await settleLayout(page);
   await expect(firstDraftChoice).toBeChecked();
+  await expect(firstDraftChoice).toBeFocused();
+  expect(Math.abs((await page.evaluate(() => window.scrollY)) - scrollBeforeSelection)).toBeLessThanOrEqual(1);
   await expect(page.locator('#reviewed-count')).toHaveText('1');
   await expect(page.locator('#review-draft')).toHaveValue(/D-01 A 승인/);
+  await expect(page.locator('[data-decision-selection="D-01"]')).toHaveText('선택 · A 승인');
+  expect(await page.evaluate(() => (
+    window as Window & { __selectionMutationIds?: string[] }
+  ).__selectionMutationIds)).toEqual(['D-01']);
+  expect(
+    await page.locator('[data-decision-selection="D-01"]').evaluate(
+      (element) => element.scrollHeight <= element.clientHeight + 1
+    )
+  ).toBe(true);
   await expect(page.getByText('기획안 · 승인 대기', { exact: true })).toBeVisible();
+  const firstNextButton = decisionCards.nth(0).locator('.next-decision');
+  await expect(firstNextButton).toBeEnabled();
+  await expect(firstNextButton).toHaveText('다음 미응답 보기');
+  await expectCompactReviewPage(page);
+  await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'no-preference' });
+  await firstNextButton.click();
+  await expect(decisionCards.nth(0)).toHaveJSProperty('open', false);
+  await expect(decisionCards.nth(1)).toHaveJSProperty('open', true);
+  await expect(decisionCards.nth(1).locator('summary')).toBeFocused();
+  await expectFullyVisible(decisionCards.nth(1).locator('summary'));
+  await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
 
   for (let index = 1; index < 10; index += 1) {
     const decisionCard = decisionCards.nth(index);
@@ -139,23 +297,81 @@ test('[QA-PLN-001] C0 결정·화면·추적 보드를 주문 없이 검토한�
         true
       );
       await expect(page.getByRole('button', { name: /응답 후 복사/ })).toBeDisabled();
+      await expect(decisionCard.locator('.next-decision')).toBeDisabled();
+      await expect(decisionCard.locator('[data-decision-selection="D-05"]')).toContainText('메모 필요');
       await expectNoHorizontalOverflow(page);
       await decisionCard.locator('.draft-note-input').fill(
         'QQQ는 보유 허용, 그 외 종목은 자동 진행 중단'
       );
+      await expect(decisionCard.locator('.next-decision')).toBeEnabled();
+      await expect(decisionCard.locator('[data-decision-selection="D-05"]')).toContainText('메모 작성됨');
     } else {
       await decisionCard.locator('.option-card').first().click();
+    }
+    const nextButton = decisionCard.locator('.next-decision');
+    await expect(nextButton).toBeEnabled();
+    await expect(page.locator('.decision-card[open]')).toHaveCount(1);
+    await expectCompactReviewPage(page);
+    expect(
+      await decisionCard.locator('.decision-selection').evaluate(
+        (element) => element.scrollHeight <= element.clientHeight + 1
+      )
+    ).toBe(true);
+    if (index < 9) {
+      await nextButton.click();
+      await expect(decisionCards.nth(index + 1)).toHaveJSProperty('open', true);
+      await expect(decisionCards.nth(index + 1).locator('summary')).toBeFocused();
+      await expectFullyVisible(decisionCards.nth(index + 1).locator('summary'));
+    } else {
+      await expect(nextButton).toHaveText('검토안 확인');
+      await attachPngEvidence(
+        testInfo,
+        evidence320,
+        'review-handoff-ready-320.png',
+        await page.screenshot({ fullPage: true }),
+        page.viewportSize()
+      );
+      await nextButton.click();
+      const handoffTitle = page.locator('#review-handoff-title');
+      await expect(handoffTitle).toBeFocused();
+      await expectFullyVisible(handoffTitle);
     }
   }
 
   await expect(page.locator('#reviewed-count')).toHaveText('10');
   const fifthDecisionNote = decisionCards.nth(4).locator('.draft-note-input');
+  await decisionCards.nth(4).locator('summary').click();
   await fifthDecisionNote.fill('');
   await expect(page.locator('#draft-readiness')).toHaveText(
     '수정·설명 메모 1개를 적어 주세요.'
   );
   await expect(page.getByRole('button', { name: '메모 1개 작성 후 복사' })).toBeDisabled();
   await expectNoHorizontalOverflow(page);
+  await fifthDecisionNote.fill('Q');
+  await expect(page.locator('#draft-readiness')).toHaveText('검토안이 준비됐어요.');
+  await page.evaluate(() => {
+    const testWindow = window as Window & {
+      __liveRegionMutations?: string[];
+      __liveRegionObserver?: MutationObserver;
+    };
+    testWindow.__liveRegionMutations = [];
+    const liveTargets = ['reviewed-count', 'draft-readiness'];
+    testWindow.__liveRegionObserver = new MutationObserver((mutations) => {
+      for (const mutation of mutations) {
+        const target = mutation.target.parentElement?.closest('[id]') ?? mutation.target;
+        testWindow.__liveRegionMutations?.push((target as HTMLElement).id);
+      }
+    });
+    for (const targetId of liveTargets) {
+      const target = document.getElementById(targetId);
+      if (target) testWindow.__liveRegionObserver.observe(target, { childList: true, subtree: true });
+    }
+  });
+  await fifthDecisionNote.pressSequentially('Q');
+  await settleLayout(page);
+  expect(await page.evaluate(() => (
+    window as Window & { __liveRegionMutations?: string[] }
+  ).__liveRegionMutations)).toEqual([]);
   await fifthDecisionNote.fill('QQQ는 보유 허용, 그 외 종목은 자동 진행 중단');
   await expect(page.locator('#draft-readiness')).toHaveText('검토안이 준비됐어요.');
   await expect(page.locator('#review-draft')).toHaveValue(
@@ -164,12 +380,11 @@ test('[QA-PLN-001] C0 결정·화면·추적 보드를 주문 없이 검토한�
   await expect(page.locator('#review-draft')).toHaveValue(
     /후보 배포, 시험 서버 변경, 자격증명 전달·사용, 실제 주문, Java 중단, 접속 경로 변경을 승인하지 않습니다/
   );
+  await expect(page.locator('#review-draft')).toHaveValue(/D-07 실행 경계: 기획 기준 선택 · 실행 승인 아님/);
+  await expect(page.locator('#review-draft')).toHaveValue(/D-09 실행 경계: 기획 기준 선택 · 실행 승인 아님/);
+  await expect(page.locator('#review-draft')).toHaveValue(/D-10 실행 경계: 기획 기준 선택 · 실행 승인 아님/);
   const copyReviewDraft = page.getByRole('button', { name: '검토안 복사' });
   await expect(copyReviewDraft).toBeEnabled();
-  await testInfo.attach('review-handoff-ready-320.png', {
-    body: await page.screenshot({ fullPage: true }),
-    contentType: 'image/png'
-  });
   await copyReviewDraft.click();
   await expect(page.locator('#draft-readiness')).toHaveText(
     '복사했어요. 이 대화에 붙여넣어야 전달돼요.'
@@ -254,10 +469,27 @@ test('[QA-PLN-001] C0 결정·화면·추적 보드를 주문 없이 검토한�
   await expect(page.locator('.screen-select')).toHaveCount(5);
   await expect(page.getByRole('heading', { name: '오늘의 운영', exact: true })).toBeVisible();
   await expectNoHorizontalOverflow(page);
-  for (const screenName of ['자동 병행 비교', '검증 증적', '운영값 재확인', '전환 센터']) {
+  const screenEvidence = [
+    ['S-01', '오늘의 운영'],
+    ['S-04', '자동 병행 비교'],
+    ['S-08', '검증 증적'],
+    ['S-10', '운영값 재확인'],
+    ['S-09', '전환 센터']
+  ] as const;
+  await page.setViewportSize({ width: 320, height: 800 });
+  for (const [screenId, screenName] of screenEvidence) {
     await page.getByRole('button', { name: new RegExp(screenName) }).click();
     await expect(page.getByRole('heading', { name: screenName, exact: true })).toBeVisible();
     await expectNoHorizontalOverflow(page);
+    if (testInfo.project.name === 'planning-desktop') {
+      await attachPngEvidence(
+        testInfo,
+        evidence320,
+        `planning-320-${screenId}.png`,
+        await page.screenshot({ fullPage: true }),
+        page.viewportSize()
+      );
+    }
   }
   await page.getByRole('button', { name: /검증 증적/ }).click();
   await expect(page.getByText('로컬 가상 화면 검증', { exact: true })).toBeVisible();
@@ -284,9 +516,6 @@ test('[QA-PLN-001] C0 결정·화면·추적 보드를 주문 없이 검토한�
   await expectNoHorizontalOverflow(page);
   await page.setViewportSize({ width: 320, height: 800 });
   await expectNoHorizontalOverflow(page);
-  if (projectViewport) {
-    await page.setViewportSize(projectViewport);
-  }
   await page.getByRole('button', { name: /전환 센터/ }).click();
   await expect(page.getByRole('button', { name: '사용자 승인 전 잠김' })).toBeDisabled();
   await testInfo.attach('screen-planning.png', {
@@ -295,6 +524,20 @@ test('[QA-PLN-001] C0 결정·화면·추적 보드를 주문 없이 검토한�
   });
   await page.getByRole('button', { name: '개발 추적표' }).click();
   await expect(page.locator('#trace-body tr')).toHaveCount(14);
+  await expect(page.getByRole('columnheader')).toHaveCount(7);
+  await expect(page.locator('.trace-table thead')).toHaveCSS('position', 'absolute');
+  expect(
+    await page.locator('#trace-body td').evaluateAll((cells) =>
+      cells.every((cell) => {
+        const headerId = cell.getAttribute('headers');
+        return Boolean(
+          headerId &&
+          cell.getAttribute('data-label') &&
+          document.getElementById(headerId)?.tagName === 'TH'
+        );
+      })
+    )
+  ).toBe(true);
   const comprehensiveC2Row = page.locator('#trace-body tr').filter({
     has: page.getByText('C2 종합', { exact: true }),
   });
@@ -321,6 +564,57 @@ test('[QA-PLN-001] C0 결정·화면·추적 보드를 주문 없이 검토한�
   }
 
   await expectNoHorizontalOverflow(page);
+
+  if (testInfo.project.name === 'planning-desktop') {
+    await attachPngEvidence(
+      testInfo,
+      evidence320,
+      'planning-320-trace.png',
+      await page.screenshot({ fullPage: true }),
+      page.viewportSize()
+    );
+    const sourceSha = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
+    const repositoryRoot = execFileSync('git', ['rev-parse', '--show-toplevel'], {
+      encoding: 'utf8'
+    }).trim();
+    const gitStatus = execFileSync(
+      'git',
+      ['status', '--porcelain=v1'],
+      { encoding: 'utf8' }
+    ).trim();
+    const sourcePaths = [
+      'docs/v2-cutover/review-board/index.html',
+      'docs/v2-cutover/review-board/styles.css',
+      'docs/v2-cutover/review-board/app.js',
+      'v2/frontend/playwright.planning.config.ts',
+      'v2/frontend/e2e-planning/review-board.spec.ts'
+    ];
+    const sourceFiles = Object.fromEntries(
+      sourcePaths.map((sourcePath) => [
+        sourcePath,
+        createHash('sha256')
+          .update(readFileSync(resolve(repositoryRoot, sourcePath)))
+          .digest('hex')
+      ])
+    );
+    const sourceTreeSha256 = createHash('sha256')
+      .update(JSON.stringify(sourceFiles))
+      .digest('hex');
+    if (process.env.CI) {
+      expect(gitStatus, 'CI planning evidence requires a clean tracked tree').toBe('');
+    }
+    await testInfo.attach('planning-320-manifest.json', {
+      body: Buffer.from(`${JSON.stringify({
+        sourceSha,
+        gitClean: gitStatus === '',
+        sourceTreeSha256,
+        sourceFiles,
+        viewport: { width: 320, height: 800 },
+        files: evidence320
+      }, null, 2)}\n`),
+      contentType: 'application/json'
+    });
+  }
 
   const origin = new URL(page.url()).origin;
   expect(observedRequests.length).toBeGreaterThanOrEqual(3);

@@ -17,7 +17,7 @@ export default defineConfig({
     ['junit', { outputFile: 'artifacts/planning-board/junit.xml' }]
   ],
   use: {
-    baseURL: 'http://127.0.0.1:4181/docs/v2-cutover/review-board/',
+    baseURL: 'http://127.0.0.1:4182/docs/v2-cutover/review-board/',
     locale: 'ko-KR',
     timezoneId: 'Asia/Seoul',
     colorScheme: 'light',
@@ -26,8 +26,8 @@ export default defineConfig({
     screenshot: 'only-on-failure'
   },
   webServer: {
-    command: 'python3 -m http.server 4181 --bind 127.0.0.1 --directory ../..',
-    url: 'http://127.0.0.1:4181/docs/v2-cutover/review-board/',
+    command: 'python3 -m http.server 4182 --bind 127.0.0.1 --directory ../..',
+    url: 'http://127.0.0.1:4182/docs/v2-cutover/review-board/',
     reuseExistingServer: !process.env.CI,
     timeout: 30_000
   },

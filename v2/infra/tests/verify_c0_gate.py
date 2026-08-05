@@ -76,7 +76,7 @@ C0_A_APPROVABLE_CHOICES = {
     "D-04": ("A 승인",),
     "D-05": ("A 승인",),
     "D-06": ("A 승인",),
-    "D-07": ("권장 범위·보존 승인",),
+    "D-07": ("향후 QA 범위·보존 기준 동의",),
     "D-08": ("A 승인",),
     "D-09": ("A 승인",),
     "D-10": ("A를 미래 실전 명세로 승인",),
@@ -99,7 +99,7 @@ ARTIFACT_REF_PATTERN = re.compile(
 )
 KST_OFFSET = timedelta(hours=9)
 C2_SOURCE_BASELINE_TREE_SHA256 = (
-    "8665c89d83c2db8c412a4aa1cdd3e6c2e0aaad6fd904adb328fb0569e80bd275"
+    "ba25e6d6dc2dd4b0c05e3a3dbd51de221280cc5cb7dd5ca462787c7f0ea36acb"
 )
 C2_PROTECTED_PATHS = (
     "v2/backend",

@@ -121,8 +121,9 @@ const decisionGroups = [
         reason: "생성 ID, 변경 전후, 보존·정리 결과를 검증 기록 묶음에 남깁니다.",
         impact: "화면 QA가 무엇을 만들고 언제 지우는지 사전에 알 수 있습니다.",
         keyConditions: "제안 범위 · 전략 1 · 정지 계좌 1 · 연구 각 1 · 구독 1 · 전역 변경 0 / 정리 24시간 · 화면 증적 30일 · 감사 90일",
+        executionBoundary: "기획 기준 선택 · 실행 승인 아님 — 이 선택만으로 시험 서버 자원을 만들거나 바꾸지 않아요.",
         options: [
-          { name: "권장 범위·보존", reply: "권장 범위·보존 승인", detail: "위 최소 자원만 만들고 정지·정리 결과를 남겨요.", consequence: "상태변경 화면까지 검증할 수 있지만 승인 범위 안에서 데이터가 생겨요." },
+          { name: "향후 QA 범위·보존 기준 · 권장", reply: "향후 QA 범위·보존 기준 동의", detail: "별도 실행 승인을 받은 뒤 위 최소 자원만 만들고 정지·정리 결과를 남겨요.", consequence: "이 응답만으로 시험 서버 자원을 만들거나 바꾸지 않아요." },
           { name: "전부 읽기 전용", reply: "전부 읽기 전용", noteLabel: "상태 변경 QA를 제외할 범위와 대체 검증", notePlaceholder: "예: 사용자가 직접 실행할 상태 변경 시나리오와 증적", detail: "어떤 QA 자원도 만들거나 바꾸지 않아요.", consequence: "관련 QA 명세를 먼저 고치고 다시 승인해야 해요." },
           { name: "범위·보존 수정", reply: "범위/보존 수정", noteLabel: "원하는 시험 범위·보존 기간", notePlaceholder: "예: 자원 생성 없이 조회만, 화면 증적은 14일 보존", detail: "종류·건수·보존 기간을 직접 바꿔요.", consequence: "QA 기록 묶음과 자동 정리 기준을 함께 다시 확정해요." },
           { name: "설명 요청", reply: "설명 요청", noteLabel: "먼저 확인할 QA 범위", notePlaceholder: "예: 시험 서버에서 생성되는 데이터 목록을 설명해 주세요", detail: "생성 대상과 정리·보존 방식을 더 확인해요.", consequence: "상태변경 QA 범위 승인은 대기해요." },
@@ -156,6 +157,7 @@ const decisionGroups = [
         reason: "복구 시간과 데이터 보존 목표는 실제 리허설에서 측정하기 전까지 제안값입니다.",
         impact: "자동화의 편의가 복구 결정권을 대신하지 않습니다.",
         keyConditions: "제안 목표 · 병행 비교 복구 30분/최대 1거래일 데이터 · 제한 시험과 실전 복구 15분 · 주문·감사 손실 0",
+        executionBoundary: "기획 기준 선택 · 실행 승인 아님 — 공유 환경 복구 명령은 대상과 영향을 확인한 뒤 직전에 다시 승인해요.",
         options: [
           { name: "A · 권장", reply: "A 승인", detail: "격리 훈련만 자동, 공유 환경 명령은 직전 승인해요.", consequence: "안전하지만 실제 목표값은 승인된 리허설에서 따로 증명해야 해요." },
           { name: "복구 목표 수정", reply: "복구 목표 수정", noteLabel: "원하는 복구 목표", notePlaceholder: "예: 병행 비교 복구 20분, 데이터 손실 허용 0일", detail: "복구 시간·데이터 보존 목표를 바꿔요.", consequence: "실제 훈련 방법과 통과 기준을 다시 검토해요." },
@@ -165,12 +167,13 @@ const decisionGroups = [
       },
       {
         id: "D-10",
-        title: "대체 후 자동운용 완료",
-        summary: "승인 범위 안에서는 상태 저장부터 체결 대조까지 자동으로 이어져요",
+        title: "대체 후 자동운용 완료 기준",
+        summary: "승인 범위 안에서 자동이어야 할 미래 흐름을 정해요",
         recommendation: "C5-A 단건 승인 → C5-B 범위·기간 승인 후 5주기 자동운용 → C6 전환 승인",
         reason: "접수 여부가 불명확하면 자동 재전송하지 않고 새 주문을 멈춘 채 사용자 판단을 기다립니다.",
         impact: "주문마다 승인받는 구조가 아니라, 검증된 범위 안의 자동운용을 단계적으로 여는 계약입니다.",
         keyConditions: "단계 숫자 · C5-A 실제 1건 · C5-B 연속 5주기(자동 제출·대조 최소 1회) · C6 전환 · 이후 20거래일 안정화 전 Java 퇴역 금지",
+        executionBoundary: "기획 기준 선택 · 실행 승인 아님 — 실제 주문·Java 중단·전체 전환은 각 단계의 별도 승인 전까지 실행하지 않아요.",
         options: [
           { name: "A · 권장", reply: "A를 미래 실전 명세로 승인", detail: "단건과 제한 5주기를 따로 승인한 뒤 전체 자동운용으로 넓혀요.", consequence: "승인 범위 안에서는 자동으로 돌고, 재개·범위 확대는 다시 승인해요." },
           { name: "주문 연속·중단 정책 수정", reply: "주문 연속/중단 정책 수정", noteLabel: "원하는 주문 순서·중단 정책", notePlaceholder: "예: 접수 불명 시 계좌 정지와 즉시 알림", detail: "주문 직렬 처리와 중단·재개 기준을 바꿔요.", consequence: "가상 브로커 시험기와 복구·대조 기준도 함께 바꿔야 해요." },
@@ -250,7 +253,7 @@ const traceRows = [
   ["D-03", "V2-AUT-001 · V2-DAT-001", "S-01 · S-04 · S-06", "QA-SHD-001/002", "계획만 있음 · 실행·증적 파일 없음", "미구현", "C0-B"],
   ["D-04", "V2-DAT-001 · V2-SAF-001", "S-01 · S-07", "QA-SAF-001", "현재 UI 잠금만 통과 · 운영 입력 미검증", "부분", "C0-B"],
   ["D-05~06", "V2-STR-002 · V2-PER-001", "S-04 · S-05", "QA-PAR-001", "Python 후보 수량·저장만 통과 · Java/Python 수량 비교와 실제 주문 미리보기 없음", "부분", "C0-B"],
-  ["D-07", "V2-QA-001", "S-03 · S-08", "QA-NAV-001 · QA-OPS-001 · QA-RWD-001 · QA-SAF-001", "통합 안전 코드 a6a7174 · 로컬 가상 화면 26/26·브랜치 CI 30965407547·기준 버전 합본 PR CI 30965409423·증적 참조 78개 해시 검증 통과 · 배포 증적 계약은 6화면×2, 정확히 15파일 · QA-OPS-002와 QA-MAN-001~009 위험 작업 미실행", "부분", "배포 승인·로그인"],
+  ["D-07", "V2-QA-001", "S-03 · S-08", "QA-NAV-001 · QA-OPS-001 · QA-RWD-001 · QA-SAF-001", "통합 안전 코드 a6a7174 · 로컬 가상 화면 26/26·브랜치 CI 30965407547·기준 버전 합본 PR CI 30965409423·증적 참조 78개 해시 검증 통과 · 배포 증적 계약은 6화면×2, 정확히 15파일 · QA-OPS-002와 QA-MAN-001~009 위험 작업 미실행", "부분", "조회: 배포 승인·직접 로그인 / 상태변경: 별도 실행 승인"],
   ["D-08", "V2-REL-001", "S-04 · S-09", "QA-SHD-001/002", "세 가지 비교 모두 0/20", "미구현", "C3 진입"],
   ["D-09", "V2-RBK-001", "S-07 · S-09", "QA-INF-001", "격리 장애 시험 통과 · 실제 공유 시험 서버 훈련 없음", "부분", "C4 실행 승인"],
   ["D-10", "V2-LIV-001 · V2-APR-001", "S-05 · S-09", "C5-A/B 계획", "QA-ACC-002 시도가 제출한 실제 주문 0건 · 실운영 전체 주문 여부 미확인 · 제한 시험 없음", "미구현", "단건→범위→전환 승인"],
@@ -259,7 +262,7 @@ const traceRows = [
   ["현재 UI", "V2-UI-001 · V2-OPS-001", "현재 콘솔(S-01 일부 · S-02 · S-03 · S-05 · S-06 · S-07)", "QA-NAV-001 · QA-OPS-001 · QA-SAF-001 · QA-RWD-001", "통합 안전 코드 a6a7174 · 로컬 가상 화면 26/26·브랜치 CI 30965407547·기준 버전 합본 PR CI 30965409423 통과 · 운영 배포·인증 화면 미실행", "부분", "사용자 승인 배포 뒤 인증 QA"],
   ["C2 미래 화면", "V2-OPS-001 · V2-API-001", "S-01 · S-04 · S-08", "QA-SHD-001/002", "자동 병행 비교의 실행·조회 기능·화면 모두 미구현", "미구현", "C0-B"],
   ["C2 종합", "V2-AUT-001 · V2-DAT-001 · V2-PER-001 · V2-OPS-001 · V2-API-001", "S-01 · S-04 · S-08", "QA-SHD-001/002 · QA-PAR-001", "자동 실행기·운영 데이터·Java 결과 비교·저장·조회·화면의 종합 진행 상태 · 현재 모두 미구현", "미구현", "C0-B"],
-  ["공통 명세", "V2-DOC-001", "기획 미리보기 S-01 · S-04 · S-08 · S-10 · S-09", "QA-PLN-001", "실제 선택 35개·검토안 복사 2/2와 C0 기록 검사 51/51 로컬 통과 · 이 변경의 CI는 PR #57에서 확인 · 기능 구현 증적 아님", "부분", "D-01~10"],
+  ["공통 명세", "V2-DOC-001", "기획 미리보기 S-01 · S-04 · S-08 · S-10 · S-09", "QA-PLN-001", "실제 선택 35개·한 번에 결정 하나·명시적 다음 버튼·필수 메모·무저장 검토안 복사·밝은/어두운 화면 보조·상태 문자 4.5:1·320px 결정·화면·추적표·소스/PNG 해시 묶음·desktop/mobile 2/2와 C0 기록 검사 51/51 로컬 통과 · 이 변경의 CI는 PR #57에서 확인 · 기능 구현 증적 아님", "부분", "D-01~10"],
 ];
 
 const decisionContainer = document.getElementById("decision-groups");
@@ -274,6 +277,9 @@ const planningStatus = document.getElementById("planning-status");
 const c2Status = document.getElementById("c2-status");
 const draftReviews = new Map();
 const decisionIds = decisionGroups.flatMap((group) => group.decisions.map((decision) => decision.id));
+const decisionsById = new Map(
+  decisionGroups.flatMap((group) => group.decisions.map((decision) => [decision.id, decision])),
+);
 const reviewBoundary = "범위 확인: 이 답변은 C0-A 제품 기획 검토입니다. 후보 배포, 시험 서버 변경, 자격증명 전달·사용, 실제 주문, Java 중단, 접속 경로 변경을 승인하지 않습니다. C0-B 운영값과 차이는 별도로 다시 확인하겠습니다.";
 
 function escapeText(value) {
@@ -283,6 +289,10 @@ function escapeText(value) {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
+}
+
+function setTextIfChanged(element, value) {
+  if (element.textContent !== value) element.textContent = value;
 }
 
 function renderDecisionGroups() {
@@ -297,16 +307,17 @@ function renderDecisionGroups() {
           ${group.decisions
             .map(
               (decision, decisionIndex) => `
-                <details class="decision-card" ${groupIndex === 0 && decisionIndex === 0 ? "open" : ""}>
+                <details class="decision-card" data-decision-card="${escapeText(decision.id)}" ${groupIndex === 0 && decisionIndex === 0 ? "open" : ""}>
                   <summary>
                     <span class="decision-code">${escapeText(decision.id)}</span>
-                    <span class="decision-title"><strong>${escapeText(decision.title)}</strong><span>${escapeText(decision.summary)}</span></span>
+                    <span class="decision-title"><strong>${escapeText(decision.title)}</strong><span>${escapeText(decision.summary)}</span><span class="decision-selection" data-decision-selection="${escapeText(decision.id)}" aria-live="polite">미응답</span></span>
                     <span class="summary-arrow" aria-hidden="true">⌄</span>
                   </summary>
                   <div class="decision-body">
                     <div class="recommendation"><span>권장안 A</span><strong>${escapeText(decision.recommendation)}</strong><p>${escapeText(decision.reason)}</p></div>
                     <div class="decision-impact"><span>승인하면 달라지는 것</span><p>${escapeText(decision.impact)}</p></div>
                     <div class="key-conditions"><span>꼭 확인할 숫자·조건</span><strong>${escapeText(decision.keyConditions)}</strong></div>
+                    ${decision.executionBoundary ? `<div class="decision-execution-boundary" role="note"><strong>${escapeText(decision.executionBoundary)}</strong></div>` : ""}
                     <fieldset class="decision-options" role="radiogroup">
                       <legend>${escapeText(decision.id)} 실제 선택지 · 하나를 골라 주세요</legend>
                       <div class="option-grid">
@@ -322,6 +333,10 @@ function renderDecisionGroups() {
                       <textarea id="draft-note-${escapeText(decision.id)}" class="draft-note-input" data-decision="${escapeText(decision.id)}" rows="2" maxlength="500"></textarea>
                       <small id="draft-note-${escapeText(decision.id)}-hint">수정·설명 선택은 이 내용을 반드시 적어야 하며, 저장·전송되지 않고 검토안에만 반영돼요.</small>
                     </div>
+                    <div class="decision-navigation">
+                      <span id="decision-next-hint-${escapeText(decision.id)}" data-next-hint="${escapeText(decision.id)}">선택하면 다음 항목으로 이동할 수 있어요.</span>
+                      <button type="button" class="next-decision" data-current-decision="${escapeText(decision.id)}" aria-describedby="decision-next-hint-${escapeText(decision.id)}" disabled>선택 후 다음 항목 보기</button>
+                    </div>
                   </div>
                 </details>`,
             )
@@ -329,6 +344,87 @@ function renderDecisionGroups() {
         </section>`,
     )
     .join("");
+}
+
+function isDecisionComplete(decisionId) {
+  const review = draftReviews.get(decisionId);
+  return Boolean(review && (!review.noteLabel || review.note.trim()));
+}
+
+function updateDecisionCardState(decisionId) {
+  const review = draftReviews.get(decisionId);
+  const selection = decisionContainer.querySelector(`[data-decision-selection="${decisionId}"]`);
+  const nextButton = decisionContainer.querySelector(`[data-current-decision="${decisionId}"]`);
+  const nextHint = decisionContainer.querySelector(`[data-next-hint="${decisionId}"]`);
+  if (!selection || !nextButton || !nextHint) return;
+
+  const complete = isDecisionComplete(decisionId);
+  selection.classList.toggle("is-complete", complete);
+  selection.classList.toggle("needs-note", Boolean(review?.noteLabel && !review.note.trim()));
+  let selectionText;
+  let nextHintText;
+  if (!review) {
+    selectionText = "미응답";
+    nextHintText = "선택하면 다음 항목으로 이동할 수 있어요.";
+  } else if (!complete) {
+    selectionText = `메모 필요 · ${review.reply}`;
+    nextHintText = "필수 메모를 적으면 다음 항목으로 이동할 수 있어요.";
+  } else {
+    selectionText = review.noteLabel
+      ? `선택 · ${review.reply} · 메모 작성됨`
+      : `선택 · ${review.reply}`;
+    nextHintText = "버튼을 누를 때만 이동해요. 선택만으로 화면은 움직이지 않아요.";
+  }
+  setTextIfChanged(selection, selectionText);
+  if (selection.getAttribute("title") !== selectionText) selection.setAttribute("title", selectionText);
+  setTextIfChanged(nextHint, nextHintText);
+
+  const nextIncomplete = decisionIds.find((candidate) => !isDecisionComplete(candidate));
+  nextButton.disabled = !complete;
+  nextButton.textContent = !complete
+    ? review
+      ? "메모 작성 후 다음 항목 보기"
+      : "선택 후 다음 항목 보기"
+    : nextIncomplete
+      ? "다음 미응답 보기"
+      : "검토안 확인";
+}
+
+function setupDecisionAccordion() {
+  decisionContainer.querySelectorAll(".decision-card").forEach((details) => {
+    details.addEventListener("toggle", () => {
+      if (!details.open) return;
+      decisionContainer.querySelectorAll(".decision-card[open]").forEach((candidate) => {
+        if (candidate !== details) candidate.open = false;
+      });
+    });
+  });
+}
+
+function moveAfterDecision(decisionId) {
+  if (!isDecisionComplete(decisionId)) return;
+  const nextDecisionId = decisionIds.find((candidate) => !isDecisionComplete(candidate));
+  const scrollBehavior = window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    ? "auto"
+    : "smooth";
+  if (!nextDecisionId) {
+    const handoffTitle = document.getElementById("review-handoff-title");
+    handoffTitle?.focus({ preventScroll: true });
+    handoffTitle?.scrollIntoView({ behavior: scrollBehavior, block: "start" });
+    return;
+  }
+
+  const nextCard = decisionContainer.querySelector(
+    `[data-decision-card="${nextDecisionId}"]`,
+  );
+  if (!nextCard) return;
+  decisionContainer.querySelectorAll(".decision-card[open]").forEach((candidate) => {
+    candidate.open = false;
+  });
+  nextCard.open = true;
+  const summary = nextCard.querySelector("summary");
+  summary?.focus({ preventScroll: true });
+  summary?.scrollIntoView({ behavior: scrollBehavior, block: "center" });
 }
 
 function updateDraftReview(input) {
@@ -375,14 +471,17 @@ function updateDraftSummary() {
     const review = draftReviews.get(decisionId);
     if (!review) return `${decisionId} 미응답`;
     const note = review.note.trim();
-    if (review.noteLabel) {
-      return `${decisionId} ${review.reply}: ${note || "[내용을 적어 주세요]"}`;
-    }
-    return `${decisionId} ${review.reply}`;
+    const result = review.noteLabel
+      ? `${decisionId} ${review.reply}: ${note || "[내용을 적어 주세요]"}`
+      : `${decisionId} ${review.reply}`;
+    const executionBoundary = decisionsById.get(decisionId)?.executionBoundary;
+    return executionBoundary
+      ? `${result}\n${decisionId} 실행 경계: ${executionBoundary}`
+      : result;
   });
   reviewDraft.value = ["Wall-Ant v2 C0-A 검토안", "", ...lines, "", reviewBoundary].join("\n");
   resizeReviewDraft();
-  reviewedCount.textContent = String(draftReviews.size);
+  setTextIfChanged(reviewedCount, String(draftReviews.size));
 
   const remaining = decisionIds.length - draftReviews.size;
   const missingNotes = [...draftReviews.values()].filter(
@@ -391,15 +490,16 @@ function updateDraftSummary() {
   const ready = remaining === 0 && missingNotes === 0;
   copyReviewDraftButton.disabled = !ready;
   if (remaining > 0) {
-    draftReadiness.textContent = `${remaining}개 응답이 남았어요.`;
-    copyReviewDraftButton.textContent = `${remaining}개 응답 후 복사`;
+    setTextIfChanged(draftReadiness, `${remaining}개 응답이 남았어요.`);
+    setTextIfChanged(copyReviewDraftButton, `${remaining}개 응답 후 복사`);
   } else if (missingNotes > 0) {
-    draftReadiness.textContent = `수정·설명 메모 ${missingNotes}개를 적어 주세요.`;
-    copyReviewDraftButton.textContent = `메모 ${missingNotes}개 작성 후 복사`;
+    setTextIfChanged(draftReadiness, `수정·설명 메모 ${missingNotes}개를 적어 주세요.`);
+    setTextIfChanged(copyReviewDraftButton, `메모 ${missingNotes}개 작성 후 복사`);
   } else {
-    draftReadiness.textContent = "검토안이 준비됐어요.";
-    copyReviewDraftButton.textContent = "검토안 복사";
+    setTextIfChanged(draftReadiness, "검토안이 준비됐어요.");
+    setTextIfChanged(copyReviewDraftButton, "검토안 복사");
   }
+  decisionIds.forEach(updateDecisionCardState);
 }
 
 function resizeReviewDraft() {
@@ -448,10 +548,28 @@ function renderScreen(screenId) {
 }
 
 function renderTraceRows() {
+  const columns = [
+    ["trace-col-decision", "결정"],
+    ["trace-col-requirements", "요구사항"],
+    ["trace-col-screen", "화면"],
+    ["trace-col-qa", "QA ID"],
+    ["trace-col-evidence", "실행·증적"],
+    ["trace-col-status", "현재 상태"],
+    ["trace-col-approval", "다음 승인"],
+  ];
   traceBody.innerHTML = traceRows
     .map((row) => {
       const statusClass = row[5] === "미구현" ? "trace-missing" : "trace-partial";
-      return `<tr><td><code>${escapeText(row[0])}</code></td><td>${escapeText(row[1])}</td><td>${escapeText(row[2])}</td><td>${escapeText(row[3])}</td><td>${escapeText(row[4])}</td><td><span class="trace-status ${statusClass}">${escapeText(row[5])}</span></td><td>${escapeText(row[6])}</td></tr>`;
+      const cells = row.map((value, index) => {
+        const [headerId, label] = columns[index];
+        const content = index === 0
+          ? `<code>${escapeText(value)}</code>`
+          : index === 5
+            ? `<span class="trace-status ${statusClass}">${escapeText(value)}</span>`
+            : escapeText(value);
+        return `<td headers="${headerId}" data-label="${label}">${content}</td>`;
+      });
+      return `<tr>${cells.join("")}</tr>`;
     })
     .join("");
 }
@@ -482,6 +600,11 @@ decisionContainer.addEventListener("input", (event) => {
   if (event.target.classList.contains("draft-note-input")) updateDraftNote(event.target);
 });
 
+decisionContainer.addEventListener("click", (event) => {
+  const button = event.target.closest(".next-decision");
+  if (button?.dataset.currentDecision) moveAfterDecision(button.dataset.currentDecision);
+});
+
 copyReviewDraftButton.addEventListener("click", copyReviewDraft);
 window.addEventListener("resize", resizeReviewDraft);
 
@@ -491,6 +614,7 @@ screenSelector.addEventListener("click", (event) => {
 });
 
 renderDecisionGroups();
+setupDecisionAccordion();
 renderScreenSelector();
 renderTraceRows();
 planningStatus.textContent = `기획안 · ${planningState.c0A}`;

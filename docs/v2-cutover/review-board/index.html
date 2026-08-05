@@ -108,7 +108,7 @@
           <div class="handoff-heading">
             <div>
               <p class="eyebrow">검토 결과 전달</p>
-              <h3 id="review-handoff-title">10개 응답을 한 번에 보내세요</h3>
+              <h3 id="review-handoff-title" tabindex="-1">10개 응답을 한 번에 보내세요</h3>
             </div>
             <span class="handoff-status" id="draft-readiness" role="status" aria-live="polite">10개 응답이 남았어요.</span>
           </div>
@@ -145,13 +145,13 @@
           <table class="trace-table">
             <thead>
               <tr>
-                <th scope="col">결정</th>
-                <th scope="col">요구사항</th>
-                <th scope="col">화면</th>
-                <th scope="col">QA ID</th>
-                <th scope="col">실행·증적</th>
-                <th scope="col">현재 상태</th>
-                <th scope="col">다음 승인</th>
+                <th id="trace-col-decision" scope="col">결정</th>
+                <th id="trace-col-requirements" scope="col">요구사항</th>
+                <th id="trace-col-screen" scope="col">화면</th>
+                <th id="trace-col-qa" scope="col">QA ID</th>
+                <th id="trace-col-evidence" scope="col">실행·증적</th>
+                <th id="trace-col-status" scope="col">현재 상태</th>
+                <th id="trace-col-approval" scope="col">다음 승인</th>
               </tr>
             </thead>
             <tbody id="trace-body"></tbody>

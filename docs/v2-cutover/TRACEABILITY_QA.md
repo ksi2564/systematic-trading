@@ -30,13 +30,13 @@
 | `V2-SAF-001` | `Settings.validate_execution_safety`, `DisabledBroker`, `ExecutionGate`; API 미확인·불일치 시 화면 변경 잠금 | backend 안전 테스트; `App.test.tsx`의 API 401/오류·unsafe fail-closed 회귀 | 인증된 배포 화면에서 false/disabled API·배너·잠금 동시 증적 | 부분 |
 | `V2-OPS-001` | operations status/audit API, 오늘의 운영·안전 화면 | `test_api.py`, `App.test.tsx` 일부 | 스케줄·데이터·Java diff·마지막 성공 카드 | 부분 |
 | `V2-API-001` | 요구·기능·화면 문서의 GET-only API 계약 | 문서 링크·경로 정적 검사 대상 | shadow/QA/cutover 조회 API·권한·cursor·마스킹·신선도 테스트 | 미구현 |
-| `V2-UI-001` | React 6개 메뉴와 반응형 CSS; 안전 API 미확인·부분/전체 불일치 시 위험 증가 조작 잠금과 중복 전송 없는 비상 제출 차단 유지; Playwright 읽기 전용 QA | `App.test.tsx` 13건(10초 timeout·겹친 새로고침의 stale-safe 차단·부분 안전 플래그 불일치·보호 정지 성공/실패 포함); source `b2037f3`의 mock-only 26/26과 [push CI `30978131514`](https://github.com/ksi2564/systematic-trading/actions/runs/30978131514) `frontend`·`ui-qa` 통과. base `8eb580b` 합본 test-merge `e03cbdd`의 [PR CI `30978133806`](https://github.com/ksi2564/systematic-trading/actions/runs/30978133806)도 통과 | 실제 배포의 인증 브라우저·동일 출처 API, 섀도 화면 | 부분 |
+| `V2-UI-001` | React 6개 메뉴와 반응형 CSS; 안전 API 미확인·부분/전체 불일치 시 위험 증가 조작 잠금과 중복 전송 없는 비상 제출 차단 유지; Playwright 읽기 전용 QA | `App.test.tsx` 13건(10초 timeout·겹친 새로고침의 stale-safe 차단·부분 안전 플래그 불일치·보호 정지 성공/실패 포함); source `b2037f3`의 6개 화면 탐색·안전 잠금·반응형 mock-only 26/26과 [push CI `30978131514`](https://github.com/ksi2564/systematic-trading/actions/runs/30978131514) `frontend`·`ui-qa` 통과. base `8eb580b` 합본 test-merge `e03cbdd`의 [PR CI `30978133806`](https://github.com/ksi2564/systematic-trading/actions/runs/30978133806)도 통과. STR/RES/ERR/ACCNT/AUD 기능 시나리오는 이 26개 범위 밖 | 실제 배포의 인증 브라우저·동일 출처 API, 기능별 local-fulfill QA, 섀도 화면 | 부분 |
 | `V2-QA-001` | Playwright 스크린샷·network evidence, manifest 안전 검증과 CI artifact 업로드; 인증 배포 GET-only 별도 harness | source `b2037f3`와 test-merge `e03cbdd`에서 각각 26/26, 마지막 attempt 증적 참조 78개·고유 파일 56개 SHA-256, 리소스 변경 0을 다운로드 후 재검증했다. [push CI `30978131514`](https://github.com/ksi2564/systematic-trading/actions/runs/30978131514)와 [PR CI `30978133806`](https://github.com/ksi2564/systematic-trading/actions/runs/30978133806)의 mock UI artifact 통과. exact health 뒤 후보 전용 무변경 snapshot을 고정하고 화면의 5개 논리 GET을 서버 전송 없이 로컬 응답하며, 6화면×2 viewport의 PNG 12개·관찰 JSON 2개·manifest 1개만 허용하도록 보강했지만 아직 미배포 | 사용자 승인 RC 배포, 동일 SHA의 `build_sha`, 인증된 외부 화면 증적 | 부분 |
 | `V2-APR-001` | LIVE 후보·재개 확인, 감사 로그, 현재 LIVE 설정 시작 거부 | `test_lifecycle_and_paper.py`, `test_api.py` | DNS/트래픽·Java 소유권·롤백 승인 모델 | 부분 |
-| `V2-LIV-001` | 자동 제출·접수·미체결/부분체결·대조 완료 계약만 문서화 | 없음 | C3·C4·사용자 실행 승인 후 별도 설계·canary·인수 QA | 미구현 |
-| `V2-REL-001` | C0/CUTOVER 문서의 세 독립 20거래일 레인과 C5-A/C5-B/C6 계약 | 없음 | 연속 섀도 집계, 승인 게이트, 단건 canary, 예약 5주기, 전체 전환·안정화 | 미구현 |
-| `V2-RBK-001` | SHA+attempt 불변 릴리스 경로와 심볼릭 링크 복구, 첫 배포 실패 시 서비스 정지, 검증 실패 release 보존과 current/rollback/latest-3 보존, host 동시 배포 잠금 | active/stale host lock fail-closed; HUP/TERM→129/143; modern·#54 legacy·same-SHA 복구; health transport·안전값·SHA 오류; 안전 env 중복·기존 비정상 서비스 stop 실패의 pre-switch 거부; rollback 경로/SHA 불일치; systemd restart 오류; rollback health/restart 실패 시 새 bytes 보존; 최초 배포 stop 성공/실패·상태 조회 오류; lock cleanup 실패 non-green을 whole-script 격리 fault test로 검증. workflow의 기존 Java active·nonzero·동일 PID wrapper를 실제 shell matrix로 실행하고 배포 후 SHA·false/disabled 계약을 검사. source `b2037f3`의 [push CI `30978131514`](https://github.com/ksi2564/systematic-trading/actions/runs/30978131514)와 test-merge `e03cbdd`의 [PR CI `30978133806`](https://github.com/ksi2564/systematic-trading/actions/runs/30978133806) `infra` 통과 | 실제 staging retention warning·DB 복구·systemd/health 장애·미확정 주문·Java 복귀 훈련과 사용자 확정 | 부분 |
-| `V2-DOC-001` | `docs/v2-cutover/` 문서 묶음, 단일 `DELIVERY_TRACE`, 기능 제안·선택형 PR 템플릿, 비개발자용 review board | D-01~D-10·핵심 화면·요구사항 ID 계약 검사. source `b2037f3`는 review board desktop/mobile 2/2와 C0 gate 55/55를 통과했고, [push CI `30978131514`](https://github.com/ksi2564/systematic-trading/actions/runs/30978131514)와 test-merge `e03cbdd`의 [PR CI `30978133806`](https://github.com/ksi2564/systematic-trading/actions/runs/30978133806)에서 artifact를 생성했다. 네 ZIP의 archive와 내부 소스·PNG·UI 증적 SHA-256을 내려받아 재검증하고 [`QA-PLN-002`](evidence/2026-08-05-QA-PLN-002.md)에 기록했다. 별도 C0-B 수집 승인 기록·접근 방법·저장 범위·12개 정제 원천·차이 파일 digest, snapshot/diff 상호참조, 동일 최종 승인 SHA, 시간 순서, C2 보호 tree gate를 포함한다 | 사용자 D-01~D-10 검토·승인과 이후 PR별 승인 SHA 연결 | 부분 |
+| `V2-LIV-001` | 자동 제출·접수·미체결/부분체결·대조 완료 계약만 문서화 | 없음 | `QA-LIV-001`: C3 통과 뒤 C4-A에서 LIVE 후보를 개발하고 실제 자격증명·실증권사 endpoint 없는 broker simulator로 durable journal, 단일 주문 소유권, 접수·미체결/부분체결·대조, 자동 재전송 금지와 crash matrix를 격리 인수. `QA-RCV-001`: C4-B 주문 없는 복구 훈련. 이후 제출 차단 후보 배포 별도 승인과 C5-A/B canary·인수 QA | 미구현 |
+| `V2-REL-001` | C0/CUTOVER 문서의 세 독립 20거래일 레인과 C4-A/C4-B/C5 후보 배포/C5-A/C5-B/C6/C7 계약 | 없음 | 연속 섀도 집계, `QA-LIV-001` C4-A 실증권사 미연결 simulator·crash matrix·단일 소유권 격리 인수, `QA-RCV-001` C4-B 복구, 후보 배포 승인 게이트, C5-A 단건 canary, C5-B 예약 5주기, C6 전체 전환·20거래일 안정화, C7 Java 퇴역 별도 승인 | 미구현 |
+| `V2-RBK-001` | SHA+attempt 불변 릴리스 경로와 심볼릭 링크 복구, 첫 배포 실패 시 서비스 정지, 검증 실패 release 보존과 current/rollback/latest-3 보존, host 동시 배포 잠금 | `QA-INF-001`: active/stale host lock fail-closed; HUP/TERM→129/143; modern·#54 legacy·same-SHA 복구; health transport·안전값·SHA 오류; 안전 env 중복·기존 비정상 서비스 stop 실패의 pre-switch 거부; rollback 경로/SHA 불일치; systemd restart 오류; rollback health/restart 실패 시 새 bytes 보존; 최초 배포 stop 성공/실패·상태 조회 오류; lock cleanup 실패 non-green을 whole-script 격리 fault test로 검증. workflow의 기존 Java active·nonzero·동일 PID wrapper를 실제 shell matrix로 실행하고 배포 후 SHA·false/disabled 계약을 검사. source `b2037f3`의 [push CI `30978131514`](https://github.com/ksi2564/systematic-trading/actions/runs/30978131514)와 test-merge `e03cbdd`의 [PR CI `30978133806`](https://github.com/ksi2564/systematic-trading/actions/runs/30978133806) `infra` 통과. `QA-RCV-001` C4-B 제출 차단·주문 없는 복구 인수는 계획·미구현 | 실제 staging retention warning·DB 복구·systemd/health 장애·미확정 주문·Java 복귀 훈련과 사용자 확정 | 부분 |
+| `V2-DOC-001` | `docs/v2-cutover/` 문서 묶음, 단일 `DELIVERY_TRACE`, [`IMPLEMENTATION_RUNWAY`](IMPLEMENTATION_RUNWAY.md), 기능 제안·선택형 PR 템플릿, 비개발자용 review board | D-01~D-10·전체 승인 순서·C2 6묶음·핵심 화면·요구사항 ID 계약 검사. 기능·안전 source `b2037f3`는 review board desktop/mobile 2/2와 C0 gate 55/55를 통과했고, [push CI `30978131514`](https://github.com/ksi2564/systematic-trading/actions/runs/30978131514)와 test-merge `e03cbdd`의 [PR CI `30978133806`](https://github.com/ksi2564/systematic-trading/actions/runs/30978133806)에서 artifact를 생성했다. 네 ZIP의 archive와 내부 소스·PNG·UI 증적 SHA-256을 내려받아 재검증하고 [`QA-PLN-002`](evidence/2026-08-05-QA-PLN-002.md)에 기록했다. 별도 C0-B 수집 승인 기록·접근 방법·저장 범위·12개 정제 원천·차이 파일 digest, snapshot/diff 상호참조, 동일 최종 승인 SHA, 시간 순서, C2 보호 tree gate를 포함한다. 구현 런웨이 보강본은 새 source에서 다시 검증해 별도 증적으로 기록한다 | 사용자 D-01~D-10 검토·승인과 이후 PR별 승인 SHA 연결 | 부분 |
 
 역할은 다음과 같이 나눈다. `v2 CI`는 PR·push의 빠른 피드백을 위한 동일 테스트이며
 PR #57 검증 source `b2037f3`의 원본 push run과 base `8eb580b`에 합친 test-merge
@@ -82,6 +82,7 @@ PR #57 검증 source `b2037f3`의 원본 push run과 base `8eb580b`에 합친 te
 | `QA-RES-001` | QQQM 85, 과거 90·100·95, VIX 20, MA 90으로 단일 평가 | 낙폭 15%, `DRAWDOWN`, 최종 100/0/0, MA 방어 설명 | 저장 없음 | 자동 진행 가능 |
 | `QA-RES-002` | 유효 OHLCV CSV로 백테스트 | 기간·수익률·MDD·거래 수와 경고 표시 | run/audit 저장 | 로컬·일회용 저장 검증은 C0-B 결과 재승인 뒤 자동; 공유 시험 서버 run·감사 생성은 실행 직전 사용자 승인 필수 |
 | `QA-RES-003` | 같은 CSV로 롤링 | 고정 파라미터, 구간별 결과·최악 구간 표시 | run/audit 저장 | 로컬·일회용 저장 검증은 C0-B 결과 재승인 뒤 자동; 공유 시험 서버 run·감사 생성은 실행 직전 사용자 승인 필수 |
+| `QA-PAP-001` | 화면에서 paper session 시작 → 날짜별 step → 완료 | 진행 날짜·상태·의도·완료 요약이 이어지고 모든 단계에서 실제 브로커 호출 0건 | 로컬 일회용 paper fixture | C0-B 결과 재승인 뒤 UI 개발·로컬 fixture 자동; 공유 시험 서버 session/run/audit 생성은 실행 직전 사용자 승인 필수 |
 | `QA-ERR-001` | 필수 CSV 열 누락 | 실행 전 이해 가능한 오류, 다른 화면 정상 | 없음 | 자동 진행 가능 |
 | `QA-ACCNT-001` | 고유 이름의 QA 계좌 생성 | 필수 위험 한도와 `PAUSED` 상태, 주문 없음 | 테스트 계좌 1건 | C0에서는 종류·건수·정리 기준만 확정; 공유 시험 서버 생성은 대상·영향·정리 방법 확인 뒤 실행 직전 사용자 승인 필수 |
 | `QA-OPS-001` | 이미 전체 정지된 가상 화면에서 상태 확인 후 해제 확인창을 취소 | 정지 상태·안전 설정을 표시하고 변경 요청 0건 | 없음 | 로컬 가상 데이터로 자동 진행 가능 |
@@ -89,11 +90,36 @@ PR #57 검증 source `b2037f3`의 원본 push run과 base `8eb580b`에 합친 te
 | `QA-AUD-001` | 최근 감사 기록 확인 | 행위자·동작·대상·KST 시각 표시, 비밀값 없음 | 없음 | 자동 진행 가능 |
 | `QA-RWD-001` | 1440px·360px에서 키보드로 주요 메뉴를 열고 핵심 흐름 확인 | 가로 잘림 1px 이하, 포커스 순서와 선택 화면 결과 확인 | 없음 | 자동 진행 가능 |
 | `QA-PLN-001` | 비개발자용 v2 전환 검토 보드에서 D-01~D-10 실제 선택·수정/설명 메모·검토안 복사와 S-01/S-04/S-08/S-10/S-09·단일 추적표 이동 | 문서와 1:1인 선택지 35개, 한 번에 결정 하나만 펼침, 선택 시 자동 이동 0건, 필수 메모까지 완료해야 명시적 다음 버튼 활성, 10개 완성 시 실행 승인 아님 경계가 포함된 검토안 복사, C0-B 12개 마스킹 요약 화면 기획, 새로고침 뒤 초기화, local/session storage 0, light/dark 보조·상태 문자 4.5:1 이상, desktop/mobile 가로 잘림 없음, 320px 모든 결정 10,000px 이하·5개 화면·추적표 PNG와 source SHA·clean 여부·소스/PNG digest manifest, mobile 표 헤더 접근성 유지, 위험 버튼 비활성, 동일 origin GET만 발생 | 클립보드에 사용자가 누른 검토안만 복사·서버 전송 없음 | 자동 진행 가능 |
+| `QA-RWY-001` | 실행 로드맵에서 16:15 ET 상태 → 다음 거래일 09:45 ET 판단 → 주문 의도 → Java 비교 → 실제 제출 0건의 정확한 하루 순서, 현재/승인 뒤/사용자 직접 승인 권한, C2 6묶음, C0-A~C7 전체 단계를 확인 | 하루 정확한 5단계, 권한 카드 3개, C2 묶음 6개, `C0-A → C0-B ① → C0-B ② → C2 → C2 후보 배포 승인 → C3 실행 승인 → C3 → C4-A → C4-B → C5 후보 배포 승인 → C5-A → C5-B → C6 → C7` 정확히 14단계, `20거래일 + 5주기 + 20거래일`, C0-B 두 승인 전 C2 미착수, desktop/mobile 가로 잘림 0, 높이 10,000px 이하. Darwin sandbox/Linux network namespace가 외부 TCP·UDP를 거부하고 loopback TCP만 허용한다. schema 4 verifier는 최소 환경에서 메모리에 고정한 문서·CSS·JavaScript 3 GET·응답 bytes/header만 허용한다. WebRTC·worker·지연 API·cookie/Storage/IndexedDB/Cache/OPFS의 인스턴스와 prototype 우회, meta refresh·form·외부 URL, clipping·극저투명도·투명 글자·가림·offscreen DOM을 fail-closed로 감사한다. isolated world에서 128개 계약 노드의 실제 Text Range 가시 면적·content fit·텍스트 잘림 금지·4.5:1 이상 명도 대비와 100개 leaf 자체 불투명 배경·불투명 panel root를 확인하고, CDP backend tree로 1,152개 paint point를 대조한다. 실행 중 source/HEAD/status 변경을 차단하고 화면 캡처 직전 page script를 동결한다. main verifier가 정확한 desktop/mobile PNG 2개와 manifest 1개를 `v2/frontend/artifacts/planning-runway-verified/`에만 생성하고, independent verifier를 생성 직후와 무주문 UI QA 직후·업로드 직전에 두 번 통과한 실행만 `v2-qa-runway-evidence-<run_attempt>` artifact를 업로드 | 증적 3파일만 로컬 결과 경로에 생성·서버/운영 리소스 변경 없음 | 자동 진행 가능 |
+| `QA-LIV-001` | C4-A LIVE 안전 후보를 실제 증권사와 분리한 simulator에서 인수 | durable journal, 단일 주문 소유권, 제출·접수·미체결/부분체결·대조, 자동 재전송 금지, 장애 시점별 crash matrix를 모두 통과. 실제 자격증명·실증권사 endpoint·실주문은 정확히 0 | 로컬·일회용 격리 simulator와 정제 증적만 사용 | C3 통과 뒤 격리 테스트 자동 가능. 자격증명·실증권사 호출·후보 배포는 별도 사용자 승인 필수 |
+| `QA-RCV-001` | C4-B 제출 차단 상태의 주문 없는 복구 훈련 | v2 제출 차단, 미확정 주문 0건, snapshot→중지→복원→재대조, 단일 주문 소유권, RTO/RPO와 책임자·복구 증적 확인 | 로컬·일회용 격리 훈련만 자동, 실제 주문 0건 | 공유 환경의 서비스·DB·Java·DNS·링크 변경은 대상·영향·되돌릴 값을 본 뒤 사용자 실행 승인 필수 |
 | `QA-PAR-001` | 같은 정규화 입력을 Java/Python 후보에 공급 | 낙폭·회복·VIX·200MA·5% 게이트와 주문 종목·매수/매도 방향 일치. Java/Python 수량, 실제 운영 입력·설정·DB·스케줄 성공은 범위 밖 | 없음 | 공통 fixture 회귀는 자동 진행 가능, 수량·운영 대조는 C0-B 결과 재승인 후 |
 | `QA-CUT-001` | 배포 workflow의 Java 연속성 wrapper 격리 실행 | 배포 전 active·nonzero PID, 배포 뒤 active·동일 PID. 전략 on/off·최근 16:15/09:45 성공은 범위 밖 | 없음 | 격리 테스트 자동 진행 가능, 운영 snapshot은 C0-B 읽기 전용 수집을 별도 승인받은 뒤에만 수집 |
 | `QA-INF-001` | 임시 경로에서 배포 스크립트 전체 fault matrix 실행 | modern/legacy/same-SHA 복구, systemd·health·signal·lock·안전 env·rollback 검증 실패를 fail-closed 처리. 실제 staging DB/systemd 훈련은 범위 밖 | 임시 파일만 생성·자동 정리 | 격리 테스트 자동 진행 가능, 공유 환경 훈련은 사용자 승인 필수 |
 | `QA-SHD-001` | fake clock으로 16:15 EOD 섀도 실행 | 기준 비중만 저장하고 09:45 입력·주문 의도는 만들지 않음 | 섀도 fixture | C0-B 결과 재승인 뒤 로컬 fixture는 자동, 공유 시험 서버 스케줄·데이터 생성은 별도 실행 승인 필수 |
 | `QA-SHD-002` | 다음 거래일 09:45 리밸런싱 섀도 실행 | 당시 계좌·호가·VIX·200MA로 최종 비중과 의도를 만들고 브로커 호출 0건 | 섀도 fixture | C0-B 결과 재승인 뒤 로컬 fixture는 자동, 공유 시험 서버 스케줄·데이터 생성은 별도 실행 승인 필수 |
+
+`QA-RWY-001`의 성공 전용 증적 경로는
+`v2/frontend/artifacts/planning-runway-verified/`이며 파일은 정확히 아래 3개다.
+
+- `QA-RWY-001-desktop.png`
+- `QA-RWY-001-mobile.png`
+- `QA-RWY-001-manifest.json`
+
+wrapper는 OS 네트워크를 loopback TCP-only로 격리한 뒤 main verifier를 실행한다.
+main verifier는 빈 지정 경로에 schema 4 manifest와 desktop/mobile PNG를 정확히
+3파일만 생성한다. independent verifier는 같은 경로를 읽어 일반 파일·mode
+`0600`·PNG·SHA-256·source/served byte·response header·visible DOM·network/persistence·OS
+isolation 계약을 다시 검증한다. 생성 직후의 독립 검증, 뒤의 무주문 UI
+QA, 업로드 직전의 두 번째 독립 검증이 모두 통과한 실행만
+`v2-qa-runway-evidence-<run_attempt>` artifact를 업로드한다. 실패한 실행의 부분
+로컬 결과는 증적으로 올리지 않는다.
+
+`QA-STR-001`, `QA-RES-001`, `QA-ERR-001`, `QA-ACCNT-001`, `QA-AUD-001`의 첫 화면
+검증은 별도 local-fulfill suite로 만든다. 브라우저 안에서 GET과 POST를 결정적 fixture로
+응답하고 backend continue, 외부 요청, WebSocket, 실제 리소스 생성·변경을 모두 0으로
+고정한다. 이 기능 suite는 현재 26개 탐색·안전 suite 및 배포 GET-only suite와 QA ID,
+실행 결과, 증적 묶음을 합치지 않는다.
 
 실행 상태:
 
@@ -186,7 +212,7 @@ PR #57 검증 source `b2037f3`의 원본 push run과 base `8eb580b`에 합친 te
 | `QA-MAN-001` | 실제 KIS 자격증명 저장·조회 확인 | 마스킹 여부, read-only API 범위, 폐기 방법 | 실제 계좌 접근 |
 | `QA-MAN-002` | 전략 `LIVE_APPROVED`·실계좌 할당·재개 | 대상 버전 checksum, 계좌, 위험 한도 | 실전 후보 상태 변경 |
 | `QA-MAN-003` | C5-A 사용자 승인 단건 제출 canary | 종목·수량·최대 금액·접수·대조, 종료 시 C5-B/Java 소유권 선택 | 실제 자금 영향 |
-| `QA-MAN-004` | Java 자동 주문 경로 중단 | 런타임 모드, 마지막 성공, 미확정 주문 0건 | 운영 연속성 영향 |
+| `QA-MAN-004` | C7 Java 서비스·스케줄·자동 주문 경로 퇴역 | 런타임 모드, 마지막 성공, 미확정 주문 0건, 서비스·스케줄·주문 경로 중단, 설정·데이터·감사·복구 artifact 보존과 복원 가능성 | 운영 연속성·복구 영향 |
 | `QA-MAN-005` | DNS·Tunnel·트래픽 전환 | 변경 전/후 route, TTL, 원본, 되돌릴 값 | 외부 접근 경로 영향 |
 | `QA-MAN-006` | 롤백 확정과 Java 복귀 | v2 차단, 주문 확인, 데이터 보존, Java readiness | 이중 주문·중단 위험 |
 | `QA-MAN-007` | Access 허용 목록·로그인 정책 변경 | 대상 이메일, 정책 우선순위, 복구 값 | 접근 권한 변경 |
@@ -245,10 +271,13 @@ artifacts/qa/v2/<YYYYMMDD-HHMM>-<short-sha>/
 | 화면 접근 | `QA-ACC-001~002`, `QA-SAF-001` 통과 | 외부 QA 중단, Access 원본부터 확인 |
 | 기본 기능 | NAV/STR/RES/ERR/ACCNT/OPS/AUD/RWD 통과 | 결함 ID와 증적을 남기고 배포 완료 선언 금지 |
 | 섀도 기능 | 같은 입력 알고리즘 동등성 20/20 + C0-B의 `OPERATIONALLY_COMPARABLE` 계약을 만족한 실제 Java/Python 운영 결과 동등성 20/20 + 승인 production 레인 연속 20거래일 100%, 중대 diff·입력 차단·submit 0 | Java 유지, 원인 수정 후 해당 연속 관찰 기간 재시작 |
-| LIVE 후보 | 섀도 + 복구 훈련 + 수동 QA 계획 승인 | 사용자 승인 전 실행 금지 |
+| C4-A LIVE 후보 격리 인수 | 섀도 통과 뒤 `QA-LIV-001` simulator에서 journal·단일 소유권·제출/접수/부분체결/대조 crash matrix, 실제 자격증명·실증권사·실주문 0 | 격리 결함 수정 뒤 C4-A 재실행, 후보 배포 금지 |
+| C4-B 주문 없는 복구 | `QA-RCV-001` 제출 차단·미확정 주문 0·snapshot/복원/재대조·RTO/RPO 통과 | 공유 환경 변경 금지, 복구 절차 수정 뒤 격리 재실행 |
+| C5 후보 배포 | C4-A/B 통과, 승인한 동일 SHA를 제출 차단 상태로 배포하고 health·차단값·롤백값 preflight 확인 | C5-A 제출 금지, 사용자 판단 뒤 롤백 |
 | C5-A 단건 canary | 사용자 승인 1건 제출·접수·체결/잔고 대조, 미확정 0, 종료 시 C5-B 진입 또는 Java 복원 선택 | v2 제출 freeze 유지, 주문 확인 후 사용자 소유권 결정 |
 | C5-B 예약 canary | 별도 승인 범위에서 연속 5주기, v2 자동 제출·접수·체결 대조 1회 이상, 최대 종료일 준수 | 남은 제출 차단, 사용자 판단 뒤 Java 복귀 또는 새 범위 승인 |
 | C6 전체 전환 | v2 단일 주문 소유권과 연속 미국 거래일 20일 안정화, 롤백 트리거 0 | 전 계좌 제출 차단·reconcile 후 사용자 롤백 판단 |
+| C7 Java 퇴역 | C6 안정화 통과와 별도 사용자 승인 뒤 `QA-MAN-004`로 Java 서비스·스케줄·주문 경로 중단, 설정·데이터·감사·복구 artifact 보존 확인 | Java 퇴역 금지·복구 가능 상태 유지 |
 
 QA가 통과해도 LIVE 주문, Java 중단, DNS·트래픽 전환, 공유 staging/운영 롤백 확정은 자동으로 이어지지
 않는다.

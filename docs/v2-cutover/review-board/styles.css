@@ -185,9 +185,30 @@ h3 {
 
 .hero-copy {
   max-width: 650px;
-  margin-bottom: 36px;
+  margin-bottom: 20px;
   color: var(--text-secondary);
   font-size: clamp(17px, 2vw, 20px);
+}
+
+.hero-runway-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  margin-bottom: 36px;
+  padding: 12px 18px;
+  border: 0;
+  border-radius: 14px;
+  background: var(--blue-solid);
+  color: #ffffff;
+  box-shadow: 0 8px 22px color-mix(in srgb, var(--blue-solid) 24%, transparent);
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.hero-runway-link:focus-visible {
+  outline: 3px solid var(--blue);
+  outline-offset: 3px;
 }
 
 .safety-strip {
@@ -391,7 +412,7 @@ h3 {
 .view-tabs {
   position: static;
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 5px;
   width: min(620px, 100%);
   margin: 84px auto 0;
@@ -415,6 +436,318 @@ h3 {
 .view-tab.is-active {
   background: var(--text);
   color: var(--surface);
+}
+
+.runway-now {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  overflow: hidden;
+  margin-bottom: 34px;
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+#runway-panel {
+  background: var(--page);
+}
+
+.runway-now > div {
+  display: grid;
+  gap: 6px;
+  padding: 22px;
+}
+
+.runway-now > div + div {
+  border-left: 1px solid var(--line);
+}
+
+.runway-now span,
+.build-bundles small,
+.cutover-steps small {
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.runway-now strong {
+  font-size: 17px;
+}
+
+.runway-provenance {
+  margin: -18px 0 34px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  text-align: right;
+}
+
+.runway-provenance strong {
+  color: var(--text);
+}
+
+.trace-legacy-summary {
+  margin: -14px 0 14px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  text-align: right;
+}
+
+.trace-legacy-summary span {
+  color: var(--text);
+  font-weight: 700;
+}
+
+.runway-heading {
+  margin-bottom: 18px;
+}
+
+.runway-heading h3 {
+  margin-bottom: 0;
+  font-size: 24px;
+}
+
+.day-flow,
+.scope-columns,
+.build-runway,
+.cutover-runway {
+  margin-top: 42px;
+}
+
+.day-flow ol,
+.build-bundles,
+.cutover-steps {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.day-flow ol {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  background: var(--surface);
+}
+
+.day-flow li {
+  position: relative;
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  min-height: 210px;
+  padding: 22px 18px;
+}
+
+.day-flow li + li::before {
+  position: absolute;
+  top: 24px;
+  bottom: 24px;
+  left: 0;
+  width: 1px;
+  background: var(--line);
+  content: "";
+}
+
+.day-flow li > span,
+.bundle-number {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--blue-solid);
+  color: #ffffff;
+  font-weight: 800;
+}
+
+.day-flow li div {
+  display: grid;
+  gap: 7px;
+}
+
+.day-flow p,
+.build-bundles p,
+.calendar-callout p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+.day-flow li > div > strong,
+.day-flow li > div > p,
+.scope-column-grid article > strong,
+.scope-column-grid article > ul > li,
+.build-bundles li > div > strong,
+.build-bundles li > div > p,
+.build-bundles li > div > small {
+  background: var(--surface);
+}
+
+.scope-column-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.scope-column-grid article {
+  padding: 22px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: var(--surface);
+}
+
+.scope-column-grid article > strong {
+  display: block;
+  margin: 15px 0 10px;
+  font-size: 19px;
+}
+
+.scope-column-grid ul {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+  padding-left: 20px;
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+.scope-label {
+  display: inline-flex;
+  padding: 5px 9px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.scope-now {
+  background: var(--green-soft);
+  color: var(--green);
+}
+
+.scope-later {
+  background: var(--orange-soft);
+  color: var(--orange);
+}
+
+.scope-owner {
+  background: var(--red-soft);
+  color: var(--red);
+}
+
+.build-bundles {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.build-bundles li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 14px;
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 19px;
+  background: var(--surface);
+}
+
+.build-bundles li > div {
+  display: grid;
+  gap: 6px;
+}
+
+.bundle-number {
+  background: var(--surface-blue);
+  color: var(--blue-strong);
+}
+
+.cutover-steps {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 9px;
+}
+
+.cutover-steps li {
+  display: grid;
+  align-content: start;
+  gap: 5px;
+  min-height: 126px;
+  padding: 15px;
+  border: 1px solid var(--line);
+  border-radius: 17px;
+  background: var(--surface);
+}
+
+.cutover-steps li > span {
+  width: fit-content;
+  color: var(--blue-strong);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.cutover-steps li > span,
+.cutover-steps li > strong,
+.cutover-steps li > small {
+  background-color: inherit;
+}
+
+.cutover-steps .step-current {
+  border-color: color-mix(in srgb, var(--orange) 38%, var(--line));
+  background: var(--orange-soft);
+}
+
+.cutover-steps .step-owner {
+  border-color: color-mix(in srgb, var(--red) 26%, var(--line));
+}
+
+.cutover-steps .step-owner > span {
+  color: var(--red);
+}
+
+.cutover-steps .step-approval {
+  border-color: color-mix(in srgb, var(--orange) 30%, var(--line));
+  background: color-mix(in srgb, var(--orange-soft) 52%, var(--surface));
+}
+
+.cutover-steps .step-approval > span {
+  color: var(--orange);
+}
+
+.calendar-callout {
+  display: grid;
+  gap: 5px;
+  margin-top: 14px;
+  padding: 24px;
+  border-radius: 20px;
+  background: var(--text);
+  color: var(--surface);
+}
+
+.calendar-callout span,
+.calendar-callout p {
+  color: color-mix(in srgb, var(--surface) 72%, transparent);
+}
+
+.calendar-callout strong {
+  font-size: clamp(25px, 4vw, 36px);
+  letter-spacing: -0.035em;
+}
+
+.runway-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+  margin-top: 18px;
+}
+
+.runway-links a {
+  padding: 10px 13px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: var(--surface);
+  color: var(--blue-strong);
+  font-weight: 700;
 }
 
 .review-counter {
@@ -1068,6 +1401,16 @@ h3 {
   color: var(--text-secondary);
 }
 
+.history-note {
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: var(--surface-soft);
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-style: normal;
+  white-space: nowrap;
+}
+
 .mock-button {
   padding: 9px 13px;
   border: 0;
@@ -1192,13 +1535,42 @@ h3 {
 @media (max-width: 900px) {
   .safety-strip,
   .gate-rail,
-  .version-proof {
+  .version-proof,
+  .runway-now,
+  .day-flow ol {
     grid-template-columns: 1fr;
   }
 
   .safety-strip div + div {
     border-top: 1px solid var(--line);
     border-left: 0;
+  }
+
+  .runway-now > div + div,
+  .day-flow li + li::before {
+    border-left: 0;
+  }
+
+  .runway-now > div + div {
+    border-top: 1px solid var(--line);
+  }
+
+  .day-flow li {
+    grid-template-columns: auto minmax(0, 1fr);
+    min-height: 0;
+  }
+
+  .day-flow li + li::before {
+    top: 0;
+    right: 20px;
+    bottom: auto;
+    left: 20px;
+    width: auto;
+    height: 1px;
+  }
+
+  .cutover-steps {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .gate-rail .gate-current {
@@ -1250,6 +1622,10 @@ h3 {
     font-size: 42px;
   }
 
+  .hero-runway-link {
+    width: 100%;
+  }
+
   .section-heading,
   .decision-group-head,
   .handoff-heading,
@@ -1265,7 +1641,16 @@ h3 {
     text-align: left;
   }
 
+  .runway-provenance {
+    text-align: left;
+  }
+
+  .trace-legacy-summary {
+    text-align: left;
+  }
+
   .view-tabs {
+    grid-template-columns: repeat(2, 1fr);
     margin-top: 60px;
   }
 
@@ -1347,8 +1732,15 @@ h3 {
   }
 
   .screen-selector,
-  .mock-grid {
+  .mock-grid,
+  .scope-column-grid,
+  .build-bundles,
+  .cutover-steps {
     grid-template-columns: 1fr;
+  }
+
+  .runway-links {
+    display: grid;
   }
 
   .mock-card.wide,
@@ -1368,6 +1760,10 @@ h3 {
 
   .evidence-list small {
     text-align: left;
+  }
+
+  .history-note {
+    white-space: normal;
   }
 
   .trace-table-wrap {

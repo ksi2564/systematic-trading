@@ -214,11 +214,25 @@ jobs:
         run: npm run test:e2e:masking
       - name: Verify the non-mutating v2 planning board
         run: npm run test:e2e:planning
+      - name: Verify the implementation runway without actions or orders
+        run: bash ../../docs/v2-cutover/review-board/run-verified-runway.sh
+      - name: Independently verify the exact runway evidence bundle
+        run: node ../../docs/v2-cutover/review-board/verify-runway-evidence.mjs
       - name: Run zero-real-order UI QA
         env:
           QA_GIT_SHA: ${{ github.sha }}
           QA_ENVIRONMENT: github-actions-local-mock
         run: npm run test:e2e
+      - name: Re-verify the runway evidence immediately before upload
+        run: node ../../docs/v2-cutover/review-board/verify-runway-evidence.mjs
+      - name: Upload independently verified runway evidence
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: v2-qa-runway-evidence-${{ github.run_attempt }}
+          path: v2/frontend/artifacts/planning-runway-verified
+          if-no-files-found: error
+          retention-days: 30
       - name: Upload UI QA evidence
         if: always()
         uses: actions/upload-artifact@v4

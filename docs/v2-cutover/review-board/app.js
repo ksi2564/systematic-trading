@@ -169,13 +169,13 @@ const decisionGroups = [
         id: "D-10",
         title: "대체 후 자동운용 완료 기준",
         summary: "승인 범위 안에서 자동이어야 할 미래 흐름을 정해요",
-        recommendation: "C5-A 단건 승인 → C5-B 범위·기간 승인 후 5주기 자동운용 → C6 전환 승인",
+        recommendation: "C3 통과 → C4-A/B 격리 인수·복구 → C5 후보 배포 승인 → C5-A v2 단건 제출·대조 → 사용자 선택. C5-B 선택 시에만 범위·기간 승인 후 5주기 자동운용 → C6 전환 승인 → 20거래일 안정화 → C7 Java 퇴역 별도 승인. Java 복원 선택 시 v2 제출 차단·canary 종료",
         reason: "접수 여부가 불명확하면 자동 재전송하지 않고 새 주문을 멈춘 채 사용자 판단을 기다립니다.",
         impact: "주문마다 승인받는 구조가 아니라, 검증된 범위 안의 자동운용을 단계적으로 여는 계약입니다.",
-        keyConditions: "단계 숫자 · C5-A 실제 1건 · C5-B 연속 5주기(자동 제출·대조 최소 1회) · C6 전환 · 이후 20거래일 안정화 전 Java 퇴역 금지",
+        keyConditions: "단계 숫자 · C5-A 실제 1건과 종료 선택 · C5-B 연속 5주기(자동 제출·대조 최소 1회) · C6 전환 · 이후 20거래일 안정화 전 Java 퇴역 금지",
         executionBoundary: "기획 기준 선택 · 실행 승인 아님 — 실제 주문·Java 중단·전체 전환은 각 단계의 별도 승인 전까지 실행하지 않아요.",
         options: [
-          { name: "A · 권장", reply: "A를 미래 실전 명세로 승인", detail: "단건과 제한 5주기를 따로 승인한 뒤 전체 자동운용으로 넓혀요.", consequence: "승인 범위 안에서는 자동으로 돌고, 재개·범위 확대는 다시 승인해요." },
+          { name: "A · 권장", reply: "A를 미래 실전 명세로 승인", detail: "단건 대조 뒤 C5-B 또는 Java 복원을 선택하고, C5-B 범위·기간을 따로 승인한 뒤 전체 자동운용으로 넓혀요.", consequence: "승인 범위 안에서는 자동으로 돌고, 재개·범위 확대는 다시 승인해요." },
           { name: "주문 연속·중단 정책 수정", reply: "주문 연속/중단 정책 수정", noteLabel: "원하는 주문 순서·중단 정책", notePlaceholder: "예: 접수 불명 시 계좌 정지와 즉시 알림", detail: "주문 직렬 처리와 중단·재개 기준을 바꿔요.", consequence: "가상 브로커 시험기와 복구·대조 기준도 함께 바꿔야 해요." },
           { name: "제한 시험 횟수 수정", reply: "제한 시험 횟수 수정", noteLabel: "원하는 제한 시험 횟수", notePlaceholder: "예: 단건 뒤 연속 10주기", detail: "단건 뒤 자동운용 주기 수와 최소 체결 확인 횟수를 바꿔요.", consequence: "실전 전환까지 필요한 기간과 승인 범위를 다시 계산해요." },
           { name: "자동 제출 제외", reply: "자동 제출 제외", noteLabel: "자동 제출을 제외한 운영 방식", notePlaceholder: "예: 판단 알림 뒤 사용자가 수동 제출", detail: "Python은 판단만 하고 실제 제출은 계속 수동으로 남겨요.", consequence: "자동 대체 목표와 관련 명세를 먼저 바꾸고 다시 승인해야 해요." },
@@ -216,7 +216,7 @@ const screens = [
     description: "누가 언제 무엇을 검증했는지",
     content: `
       <div class="mock-grid">
-        <article class="mock-card full"><span>검증 단계</span><ul class="evidence-list"><li><strong>직전 독립 검증</strong><small>46a34ea · v2 가상 운영 화면 기능 검사 26 / 26 · C0 문서·기록 검사 51 / 51</small></li><li><strong>브랜치 자동 검사</strong><small>CI 30975237262 · 5개 작업 통과</small></li><li><strong>기준 버전과 합본 검사</strong><small>PR CI 30975239146 · 5개 작업 통과</small></li><li><strong>증적 참조 무결성</strong><small>78개 참조 · 모두 해시 검증 통과</small></li><li><strong>현재 보강본</strong><small>현재 검토 보드 화면 검사 10 / 10 · C0 문서·기록 검사 55 / 55 통과 · PR 자동검사 확인 대기 · 운영 미배포</small></li><li><strong>운영 배포·인증 화면 검증</strong><small>차단 확인 · 후보 배포 승인과 사용자 직접 로그인 대기</small></li></ul></article>
+        <article class="mock-card full"><span>검증 단계</span><ul class="evidence-list"><li><strong>직전 독립 검증</strong><small>46a34ea · v2 가상 운영 화면 기능 검사 26 / 26 · C0 문서·기록 검사 51 / 51</small><em class="history-note">역사적 명칭 · 기능 전체 검사가 아님</em></li><li><strong>브랜치 자동 검사</strong><small>CI 30975237262 · 5개 작업 통과</small></li><li><strong>기준 버전과 합본 검사</strong><small>PR CI 30975239146 · 5개 작업 통과</small></li><li><strong>증적 참조 무결성</strong><small>78개 참조 · 모두 해시 검증 통과</small></li><li><strong>현재 보강본</strong><small>현재 검토 보드 화면 검사 10 / 10 · C0 문서·기록 검사 55 / 55 통과 · PR 자동검사 확인 대기 · 운영 미배포</small><em class="history-note">역사적 캡처 문구 · 최신 판정 아님</em></li><li><strong>기능·안전 최신 정본</strong><small>b2037f3 · 6개 화면 탐색·안전 잠금·반응형 검사 26 / 26 · C0 문서·기록 검사 55 / 55 · 위 두 묶음은 역사적 기록</small></li><li><strong>이 검토 보드</strong><small>최신 화면 검사·source·증적은 상단 안내 문서와 전체 개발 추적표에서 확인 · 운영 미배포</small></li><li><strong>운영 배포·인증 화면 검증</strong><small>차단 확인 · 후보 배포 승인과 사용자 직접 로그인 대기</small></li></ul></article>
         <article class="mock-card wide"><span>읽기 전용 방식</span><strong>안전 확인 1 + 고정 조회 1</strong><p>화면의 5개 조회는 고정 조회 묶음으로 응답해 서버에 다시 보내지 않아요.</p></article>
         <article class="mock-card wide"><span>민감정보 처리</span><strong>정제·마스킹 뒤 증적</strong><p>로그인 상태는 저장소 밖 별도 경로에 두고 증적에는 넣지 않아요.</p></article>
         <article class="mock-card"><span>이번 화면 QA의 주문 제출</span><strong>0건</strong><p>화면 조회 이외 앱 요청은 차단해요.</p></article>
@@ -241,7 +241,7 @@ const screens = [
     description: "실전으로 갈 준비와 수동 승인 경계",
     content: `
       <div class="mock-grid">
-        <article class="mock-card full"><span>전환 게이트</span><ul class="gate-list"><li><strong>C0-A 결정 → C0-B ① 수집·② 결과</strong><small>① 수집 승인 대기</small></li><li><strong>C3 3개 20거래일 레인</strong><small>미시작</small></li><li><strong>C4 복구 훈련</strong><small>공유 환경 미실행</small></li><li><strong>C5-A 단건 → C5-B 5주기 자동운용</strong><button class="mock-button" type="button" disabled>사용자 승인 전 잠김</button></li></ul></article>
+        <article class="mock-card full"><span>전환 게이트 · 전체 14단계</span><ul class="gate-list"><li><strong>1 · C0-A 제품 규칙 승인</strong><small>D-01~D-10 승인 대기</small></li><li><strong>2 · C0-B ① 운영값 읽기 승인</strong><small>C0-A와 별도 승인</small></li><li><strong>3 · C0-B ② 정제 결과·차이 재승인</strong><small>수집 전이라 결과 없음</small></li><li><strong>4 · C2 주문 없는 자동 병행 개발</strong><small>C0-B ② 전에는 미시작</small></li><li><strong>5 · C2 후보 동일 SHA 배포 승인</strong><small>별도 승인 전 미배포</small></li><li><strong>6 · C3 대상·기간·영향 실행 승인</strong><small>별도 승인 전 미실행</small></li><li><strong>7 · C3 세 레인 20거래일 관찰</strong><small>0 / 20 · 미시작</small></li><li><strong>8 · C4-A LIVE 후보 격리 인수</strong><small>실증권사 연결 없는 simulator</small></li><li><strong>9 · C4-B 주문 없는 복구 훈련</strong><small>공유 환경 미실행</small></li><li><strong>10 · C5 제출 차단 후보 배포 승인</strong><small>별도 승인 전 미배포</small></li><li><strong>11 · C5-A v2 단건 제출·대조</strong><button class="mock-button" type="button" disabled>사용자 승인 전 잠김</button></li><li><strong>12 · C5-B를 선택한 경우만 범위·기간 승인 뒤 5주기 자동운용</strong><small>Java 복원 선택 시 v2 제출 차단·canary 종료</small></li><li><strong>13 · C6 v2 단독 전환·20거래일 안정화</strong><small>범위 확대·진행률을 따로 표시</small></li><li><strong>14 · C7 Java 퇴역</strong><small>안정화 뒤 별도 사용자 승인</small></li></ul></article>
         <article class="mock-card wide"><span>현재 주문 소유권</span><strong>C0-B ① 수집 승인 대기</strong><p>Java와 v2가 동시에 주문하지 않는 계약은 유지해요.</p></article>
         <article class="mock-card"><span>직전 승인 작업</span><strong>범위 확대·재개</strong><p>C5 범위 · Java 중단 · 접속 경로 변경 · 되돌리기</p></article>
       </div>`,
@@ -253,16 +253,16 @@ const traceRows = [
   ["D-03", "V2-AUT-001 · V2-DAT-001", "S-01 · S-04 · S-06", "QA-SHD-001/002", "계획만 있음 · 실행·증적 파일 없음", "미구현", "② 결과 재승인"],
   ["D-04", "V2-DAT-001 · V2-SAF-001", "S-01 · S-07", "QA-SAF-001", "현재 UI 잠금만 통과 · 운영 입력 미검증", "부분", "② 결과 재승인"],
   ["D-05~06", "V2-STR-002 · V2-PER-001", "S-04 · S-05", "QA-PAR-001", "Python 후보 수량·저장만 통과 · Java/Python 수량 비교와 실제 주문 미리보기 없음", "부분", "② 결과 재승인"],
-  ["D-07", "V2-QA-001", "S-03 · S-08", "QA-NAV-001 · QA-OPS-001 · QA-RWD-001 · QA-SAF-001", "직전 독립 검증 46a34ea · v2 가상 운영 화면 기능 검사 26/26·브랜치 자동검사 30975237262·기준 버전 합본 자동검사 30975239146·증적 참조 78개 해시 검증 통과 · 배포 증적 계약은 6화면×2, 정확히 15파일 · QA-OPS-002와 QA-MAN-001~009 위험 작업 미실행", "부분", "조회: 배포 승인·직접 로그인 / 상태변경: 별도 실행 승인"],
+  ["D-07", "V2-QA-001", "S-03 · S-08", "QA-NAV-001 · QA-OPS-001 · QA-RWD-001 · QA-SAF-001", "역사적 기록: 직전 독립 검증 46a34ea · v2 가상 운영 화면 기능 검사 26/26·브랜치 자동검사 30975237262·기준 버전 합본 자동검사 30975239146. 기능·안전 최신 정본 b2037f3 · 실제 범위는 6개 화면 탐색·안전 잠금·반응형 26/26·증적 참조 78개 해시 검증 통과 · 배포 증적 계약은 6화면×2, 정확히 15파일 · QA-OPS-002와 QA-MAN-001~009 위험 작업 미실행", "부분", "조회: 배포 승인·직접 로그인 / 상태변경: 별도 실행 승인"],
   ["D-08", "V2-REL-001", "S-04 · S-09", "QA-SHD-001/002", "세 가지 비교 모두 0/20", "미구현", "C3 진입"],
-  ["D-09", "V2-RBK-001", "S-07 · S-09", "QA-INF-001", "격리 장애 시험 통과 · 실제 공유 시험 서버 훈련 없음", "부분", "C4 실행 승인"],
-  ["D-10", "V2-LIV-001 · V2-APR-001", "S-05 · S-09", "C5-A/B 계획", "QA-ACC-002 시도가 제출한 실제 주문 0건 · 실운영 전체 주문 여부 미확인 · 제한 시험 없음", "미구현", "단건→범위→전환 승인"],
+  ["D-09", "V2-RBK-001", "S-07 · S-09", "QA-INF-001 · QA-RCV-001", "QA-INF 격리 통과 · QA-RCV C4-B 무주문 복구 계획·미구현 · 공유 환경 미실행", "부분", "C4-B 격리 훈련 자동 · 공유 환경 실행은 별도 승인"],
+  ["D-10", "V2-LIV-001 · V2-APR-001", "S-05 · S-09", "QA-LIV-001 · QA-RCV-001 · QA-MAN-003 · QA-MAN-008 · QA-MAN-009 · QA-MAN-004", "C4-A 실증권사 미연결 모의 제출기·장애 시점별 시험·단일 소유권과 C4-B 무주문 복구는 계획·미구현 · 실제 주문 0 · C5 후보/C5-A/B/C6/C7 미실행 · 실운영 미확인", "미구현", "C3 → C4-A/B → C5 후보 → C5-A → 사용자 선택. C5-B면 승인·5주기 → C6·20거래일 → C7 별도 승인. Java 복원이면 v2 차단·canary 종료"],
   ["C1 접근", "V2-ACC-001", "S-00", "QA-ACC-001/002", "미인증 경계 통과 · 마지막 GitHub-controlled #54는 버전 표시 없음 · 사용자 승인 새 검증 SHA와 직접 로그인 대기", "부분", "배포 승인 뒤 로그인 검증"],
   ["C1 격리", "V2-CUT-001 · V2-CUT-002", "S-01 · S-09", "QA-CUT-001", "서비스·프로세스 번호 연속성 시험 통과 · 실제 운용 미확인", "부분", "① 수집 → ② 결과"],
-  ["현재 UI", "V2-UI-001 · V2-OPS-001", "현재 콘솔(S-01 일부 · S-02 · S-03 · S-05 · S-06 · S-07)", "QA-NAV-001 · QA-OPS-001 · QA-SAF-001 · QA-RWD-001", "직전 독립 검증 46a34ea · v2 가상 운영 화면 기능 검사 26/26·브랜치 자동검사 30975237262·기준 버전 합본 자동검사 30975239146 통과 · 운영 배포·인증 화면 미실행", "부분", "사용자 승인 배포 뒤 인증 QA"],
+  ["현재 UI", "V2-UI-001 · V2-OPS-001", "현재 콘솔(S-01 일부 · S-02 · S-03 · S-05 · S-06 · S-07)", "QA-NAV-001 · QA-OPS-001 · QA-SAF-001 · QA-RWD-001", "역사적 기록: 직전 독립 검증 46a34ea · v2 가상 운영 화면 기능 검사 26/26·브랜치 자동검사 30975237262·기준 버전 합본 자동검사 30975239146. 기능·안전 최신 정본 b2037f3의 실제 범위는 6개 화면 탐색·안전 잠금·반응형 26/26 · 기능 시나리오 QA와 운영 배포·인증 화면은 미실행", "부분", "사용자 승인 배포 뒤 인증 QA"],
   ["C2 미래 화면", "V2-OPS-001 · V2-API-001", "S-01 · S-04 · S-08", "QA-SHD-001/002", "자동 병행 비교의 실행·조회 기능·화면 모두 미구현", "미구현", "② 결과 재승인"],
   ["C2 종합", "V2-AUT-001 · V2-DAT-001 · V2-PER-001 · V2-OPS-001 · V2-API-001", "S-01 · S-04 · S-08", "QA-SHD-001/002 · QA-PAR-001", "자동 실행기·운영 데이터·Java 결과 비교·저장·조회·화면의 종합 진행 상태 · 현재 모두 미구현", "미구현", "② 결과 재승인"],
-  ["공통 명세", "V2-DOC-001", "기획 미리보기 S-01 · S-04 · S-08 · S-10 · S-09", "QA-PLN-001", "직전 정본 46a34ea · 직전 정본 화면 검사 2/2·C0 문서·기록 검사 51/51·브랜치/PR 자동검사 통과 · 현재 보강본 반복 화면 검사 10/10·C0 문서·기록 검사 55/55 로컬 통과 · 새 코드 버전·자동검사·증적 묶음 확인 대기 · 기능 구현 증적 아님", "부분", "D-01~10"],
+  ["공통 명세", "V2-DOC-001", "실행 로드맵 · 기획 미리보기 S-01 · S-04 · S-08 · S-10 · S-09", "QA-PLN-001 · QA-RWY-001", "역사적 기록: 직전 정본 46a34ea · 직전 정본 화면 검사 2/2·C0 문서·기록 검사 51/51. 기능·안전 정본 b2037f3은 현재 보강본 반복 화면 검사 10/10·C0 문서·기록 검사 55/55 로컬 통과·브랜치/PR 자동검사 통과. 실행 로드맵의 최신 source·화면 검사·증적은 상단 안내 문서와 전체 개발 추적표에서 확인 · 새 코드 버전·자동검사·증적 묶음 확인 대기 · 기능 구현 증적 아님", "부분", "D-01~10"],
 ];
 
 const decisionContainer = document.getElementById("decision-groups");
@@ -275,6 +275,7 @@ const copyReviewDraftButton = document.getElementById("copy-review-draft");
 const draftReadiness = document.getElementById("draft-readiness");
 const planningStatus = document.getElementById("planning-status");
 const c2Status = document.getElementById("c2-status");
+const openRunwayButton = document.getElementById("open-runway");
 const draftReviews = new Map();
 const decisionIds = decisionGroups.flatMap((group) => group.decisions.map((decision) => decision.id));
 const decisionsById = new Map(
@@ -574,22 +575,38 @@ function renderTraceRows() {
     .join("");
 }
 
-document.querySelectorAll(".view-tab").forEach((button) => {
-  button.addEventListener("click", () => {
-    const selectedView = button.dataset.view;
-    document.querySelectorAll(".view-tab").forEach((tab) => {
-      const active = tab === button;
-      tab.classList.toggle("is-active", active);
-      tab.setAttribute("aria-pressed", String(active));
-    });
-    document.querySelectorAll(".view-panel").forEach((panel) => {
-      panel.hidden = panel.dataset.panel !== selectedView;
-    });
-    if (selectedView === "decisions") {
-      resizeReviewDraft();
-      window.requestAnimationFrame(resizeReviewDraft);
-    }
+function activateView(selectedView, { focusPanel = false } = {}) {
+  if (!selectedView) return;
+  let selectedPanel = null;
+  document.querySelectorAll(".view-tab").forEach((tab) => {
+    const active = tab.dataset.view === selectedView;
+    tab.classList.toggle("is-active", active);
+    tab.setAttribute("aria-pressed", String(active));
   });
+  document.querySelectorAll(".view-panel").forEach((panel) => {
+    const active = panel.dataset.panel === selectedView;
+    panel.hidden = !active;
+    if (active) selectedPanel = panel;
+  });
+  if (selectedView === "decisions") {
+    resizeReviewDraft();
+    window.requestAnimationFrame(resizeReviewDraft);
+  }
+  if (focusPanel && selectedPanel) {
+    const scrollBehavior = window.matchMedia("(prefers-reduced-motion: reduce)").matches
+      ? "auto"
+      : "smooth";
+    selectedPanel.focus({ preventScroll: true });
+    selectedPanel.scrollIntoView({ behavior: scrollBehavior, block: "start" });
+  }
+}
+
+document.querySelectorAll(".view-tab").forEach((button) => {
+  button.addEventListener("click", () => activateView(button.dataset.view));
+});
+
+openRunwayButton?.addEventListener("click", () => {
+  activateView("runway", { focusPanel: true });
 });
 
 decisionContainer.addEventListener("change", (event) => {

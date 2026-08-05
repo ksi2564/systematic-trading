@@ -1,7 +1,7 @@
 # 다음 세션 handoff — Python v2 전환 / PR #57
 
 기준일: 2026-08-06 KST
-현재 브랜치: `codex/v2-cutover-foundation` (`3530cfc`)
+현재 브랜치: `codex/v2-cutover-foundation` (PR #57의 최신 커밋은 GitHub에서 확인)
 
 ## 사용자가 지금 할 일
 

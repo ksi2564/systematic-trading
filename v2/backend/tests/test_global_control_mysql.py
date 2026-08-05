@@ -75,22 +75,17 @@ def test_mysql_감사_insert_실패는_제어행까지_rollback한다(mysql_engi
         connection.execute(
             text(
                 """
-                CREATE TRIGGER wallant_fail_audit_insert
-                BEFORE INSERT ON v2_audit_event
-                FOR EACH ROW
-                SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'forced audit failure'
+                ALTER TABLE v2_audit_event
+                ADD CONSTRAINT wallant_fail_audit_insert
+                CHECK (action <> 'GLOBAL_PAUSED')
                 """
             )
         )
 
-    try:
-        with sessions() as session:
-            with pytest.raises(Exception, match="forced audit failure"):
-                GlobalControlRepository(session).pause("rollback", actor="tester")
-            session.rollback()
-    finally:
-        with mysql_engine.begin() as connection:
-            connection.execute(text("DROP TRIGGER IF EXISTS wallant_fail_audit_insert"))
+    with sessions() as session:
+        with pytest.raises(Exception, match="wallant_fail_audit_insert"):
+            GlobalControlRepository(session).pause("rollback", actor="tester")
+        session.rollback()
 
     with sessions() as session:
         assert session.scalar(select(func.count()).select_from(GlobalControlRecord)) == 0

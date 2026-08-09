@@ -7,6 +7,7 @@ import os
 import re
 import subprocess
 import sys
+import tarfile
 import tempfile
 import unittest
 from pathlib import Path
@@ -33,6 +34,7 @@ from contract import (  # noqa: E402
     validate_bundle_directory,
     validate_capture_directory,
 )
+import transport_bundle as transport  # noqa: E402
 
 
 FAKE_RUNTIME_SHA = PINNED_RUNTIME_SHA
@@ -966,6 +968,244 @@ class C0BToolsTest(unittest.TestCase):
                 repository_root=self.fake_repository,
                 decision_file=self.decision_file,
             )
+
+    def test_transport_round_trip_and_split_job_outputs_preserve_exact_bytes(self) -> None:
+        bundle = self.build_bundle()
+        archive = self.root / "bundle.tar.gz"
+        roundtrip = self.root / "roundtrip"
+        transport.pack_bundle(bundle, archive, roundtrip)
+        self.assertEqual(
+            transport._bundle_payloads(roundtrip),
+            transport._bundle_payloads(bundle),
+        )
+        validate_bundle_directory(
+            roundtrip,
+            decision_file=self.decision_file,
+            known_deployments_path=self.known_file,
+            repository_root=self.fake_repository,
+            **self.workflow_context,
+        )
+
+        github_output = self.root / "github-output"
+        transport.emit_outputs(archive, github_output)
+        outputs = dict(
+            line.split("=", 1)
+            for line in github_output.read_text(encoding="ascii").splitlines()
+        )
+        self.assertEqual(
+            set(outputs),
+            {
+                "archive_b64_0",
+                "archive_b64_1",
+                "archive_b64_2",
+                "archive_b64_3",
+                "archive_sha256",
+                "archive_bytes",
+                "archive_b64_chars",
+            },
+        )
+        environment = {
+            f"C0B_ARCHIVE_B64_{index}": outputs[f"archive_b64_{index}"]
+            for index in range(transport.OUTPUT_CHUNK_COUNT)
+        }
+        environment.update(
+            {
+                "C0B_ARCHIVE_SHA256": outputs["archive_sha256"],
+                "C0B_ARCHIVE_BYTES": outputs["archive_bytes"],
+                "C0B_ARCHIVE_B64_CHARS": outputs["archive_b64_chars"],
+            }
+        )
+        received_archive = self.root / "received.tar.gz"
+        received = self.root / "received"
+        with mock.patch.dict(os.environ, environment, clear=False):
+            transport.receive_outputs(received_archive, received)
+        self.assertEqual(received_archive.read_bytes(), archive.read_bytes())
+        self.assertEqual(
+            transport._bundle_payloads(received),
+            transport._bundle_payloads(bundle),
+        )
+        validate_bundle_directory(
+            received,
+            decision_file=self.decision_file,
+            known_deployments_path=self.known_file,
+            repository_root=self.fake_repository,
+            **self.workflow_context,
+        )
+
+    def test_transport_is_deterministic_and_rejects_concatenated_gzip(self) -> None:
+        bundle = self.build_bundle()
+        first = self.root / "first.tar.gz"
+        second = self.root / "second.tar.gz"
+        transport.pack_bundle(bundle, first, self.root / "first-roundtrip")
+        transport.pack_bundle(bundle, second, self.root / "second-roundtrip")
+        self.assertEqual(first.read_bytes(), second.read_bytes())
+
+        concatenated = first.read_bytes() + second.read_bytes()
+        with self.assertRaisesRegex(C0BError, "concatenated"):
+            transport._archive_payloads(concatenated)
+
+    def test_transport_rejects_path_link_and_metadata_attacks(self) -> None:
+        def single_member_archive(
+            member: tarfile.TarInfo, payload: bytes = b"{}\n"
+        ) -> bytes:
+            output = io.BytesIO()
+            with tarfile.open(
+                fileobj=output, mode="w", format=tarfile.USTAR_FORMAT
+            ) as archive:
+                member.size = len(payload) if member.isreg() else 0
+                archive.addfile(member, io.BytesIO(payload) if member.isreg() else None)
+            return transport._canonical_gzip_bytes(output.getvalue())
+
+        traversal = tarfile.TarInfo("../snapshot.json")
+        traversal.mode = 0o644
+        traversal.uid = traversal.gid = traversal.mtime = 0
+        with self.assertRaises(C0BError):
+            transport._archive_payloads(single_member_archive(traversal))
+
+        payloads = transport._bundle_payloads(self.build_bundle("mode-bundle"))
+
+        def exact_member_attack(kind: str) -> bytes:
+            output = io.BytesIO()
+            archive_format = (
+                tarfile.PAX_FORMAT if kind == "pax" else tarfile.USTAR_FORMAT
+            )
+            with tarfile.open(
+                fileobj=output, mode="w", format=archive_format
+            ) as archive:
+                for index, relative_path in enumerate(
+                    transport.EXPECTED_RELATIVE_PATHS
+                ):
+                    payload = payloads[relative_path]
+                    member = tarfile.TarInfo(relative_path)
+                    member.size = len(payload)
+                    member.mode = 0o644
+                    member.uid = member.gid = member.mtime = 0
+                    member.uname = member.gname = ""
+                    if index == 0 and kind == "mode":
+                        member.mode = 0o600
+                    if index == 0 and kind == "link":
+                        member.type = tarfile.SYMTYPE
+                        member.linkname = "../../outside"
+                        member.size = 0
+                    if index == 0 and kind == "pax":
+                        member.pax_headers = {"comment": "unexpected"}
+                    archive.addfile(
+                        member,
+                        None if member.issym() else io.BytesIO(payload),
+                    )
+            return transport._canonical_gzip_bytes(output.getvalue())
+
+        for kind in ("mode", "link", "pax"):
+            with self.subTest(kind=kind):
+                with self.assertRaises(C0BError):
+                    transport._archive_payloads(exact_member_attack(kind))
+
+    def test_transport_rejects_missing_or_tampered_job_output(self) -> None:
+        bundle = self.build_bundle()
+        archive = self.root / "bundle.tar.gz"
+        transport.pack_bundle(bundle, archive, self.root / "roundtrip")
+        github_output = self.root / "github-output"
+        transport.emit_outputs(archive, github_output)
+        outputs = dict(
+            line.split("=", 1)
+            for line in github_output.read_text(encoding="ascii").splitlines()
+        )
+        environment = {
+            f"C0B_ARCHIVE_B64_{index}": outputs[f"archive_b64_{index}"]
+            for index in range(transport.OUTPUT_CHUNK_COUNT)
+        }
+        environment.update(
+            {
+                "C0B_ARCHIVE_SHA256": outputs["archive_sha256"],
+                "C0B_ARCHIVE_BYTES": outputs["archive_bytes"],
+                "C0B_ARCHIVE_B64_CHARS": outputs["archive_b64_chars"],
+            }
+        )
+        attacks = {
+            "truncated": {
+                **environment,
+                "C0B_ARCHIVE_B64_0": environment["C0B_ARCHIVE_B64_0"][1:],
+            },
+            "missing": {
+                key: value
+                for key, value in environment.items()
+                if key != "C0B_ARCHIVE_B64_0"
+            },
+            "swapped": {
+                **environment,
+                "C0B_ARCHIVE_B64_0": environment["C0B_ARCHIVE_B64_1"],
+                "C0B_ARCHIVE_B64_1": environment["C0B_ARCHIVE_B64_0"],
+            },
+        }
+        for name, attacked_environment in attacks.items():
+            received_archive = self.root / f"{name}.tar.gz"
+            received = self.root / name
+            with self.subTest(name=name):
+                with mock.patch.dict(
+                    os.environ, attacked_environment, clear=True
+                ):
+                    with self.assertRaises(C0BError):
+                        transport.receive_outputs(received_archive, received)
+                self.assertFalse(received_archive.exists())
+                self.assertFalse(received.exists())
+
+        archive_bytes = bytearray(archive.read_bytes())
+        for index, value in ((8, 0), (9, 3)):
+            malformed = bytearray(archive_bytes)
+            malformed[index] = value
+            with self.subTest(header_index=index):
+                with self.assertRaisesRegex(C0BError, "header"):
+                    transport._archive_payloads(bytes(malformed))
+
+    def test_transport_chunk_boundary_is_fixed_and_bounded(self) -> None:
+        encoded = "A" * (transport.OUTPUT_CHUNK_CHARS * 2 + 4)
+        parts = transport._split_encoded(encoded)
+        self.assertEqual(
+            [len(part) for part in parts],
+            [transport.OUTPUT_CHUNK_CHARS, transport.OUTPUT_CHUNK_CHARS, 4, 0],
+        )
+        with self.assertRaises(C0BError):
+            transport._split_encoded("A" * (transport.MAX_BASE64_CHARS + 4))
+
+    def test_transport_four_nonempty_chunks_round_trip_end_to_end(self) -> None:
+        bundle = self.root / "large-bundle"
+        bundle.mkdir()
+        (bundle / "diff-items").mkdir()
+        (bundle / "items").mkdir()
+        for relative_path in transport.EXPECTED_RELATIVE_PATHS:
+            (bundle / relative_path).write_bytes(os.urandom(6_000))
+
+        archive = self.root / "large.tar.gz"
+        transport.pack_bundle(bundle, archive, self.root / "large-roundtrip")
+        github_output = self.root / "large-github-output"
+        transport.emit_outputs(archive, github_output)
+        outputs = dict(
+            line.split("=", 1)
+            for line in github_output.read_text(encoding="ascii").splitlines()
+        )
+        self.assertEqual(
+            [len(outputs[f"archive_b64_{index}"]) for index in range(4)][:3],
+            [transport.OUTPUT_CHUNK_CHARS] * 3,
+        )
+        self.assertGreater(len(outputs["archive_b64_3"]), 0)
+        environment = {
+            f"C0B_ARCHIVE_B64_{index}": outputs[f"archive_b64_{index}"]
+            for index in range(transport.OUTPUT_CHUNK_COUNT)
+        }
+        environment.update(
+            {
+                "C0B_ARCHIVE_SHA256": outputs["archive_sha256"],
+                "C0B_ARCHIVE_BYTES": outputs["archive_bytes"],
+                "C0B_ARCHIVE_B64_CHARS": outputs["archive_b64_chars"],
+            }
+        )
+        restored = self.root / "large-restored"
+        with mock.patch.dict(os.environ, environment, clear=True):
+            transport.receive_outputs(self.root / "large-received.tar.gz", restored)
+        self.assertEqual(
+            transport._bundle_payloads(restored),
+            transport._bundle_payloads(bundle),
+        )
 
     def test_safe_detector_matches_repository_restrictions(self) -> None:
         for unsafe in (

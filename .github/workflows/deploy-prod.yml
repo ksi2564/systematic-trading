@@ -2,6 +2,19 @@ name: Deploy Production
 
 on:
   workflow_dispatch:
+    inputs:
+      operation:
+        description: Select the single production operation to run
+        required: true
+        default: deploy
+        type: choice
+        options:
+          - deploy
+          - c0b-read-only
+      expected_sha:
+        description: Exact 40-character commit SHA required for C0-B collection
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -19,8 +32,40 @@ env:
   ADMIN_DASHBOARD_URL: http://100.66.226.12:18081
 
 jobs:
+  reject-unsupported-route:
+    name: Reject unsupported production route
+    if: >-
+      ${{
+        !(
+          github.event_name == 'workflow_dispatch' &&
+          (
+            (github.ref == 'refs/heads/master' && inputs.operation == 'deploy') ||
+            (
+              github.repository == 'ksi2564/systematic-trading' &&
+              github.ref == 'refs/heads/codex/v2-cutover-foundation' &&
+              inputs.operation == 'c0b-read-only' &&
+              inputs.expected_sha == github.sha &&
+              github.actor == 'ksi2564' &&
+              github.triggering_actor == 'ksi2564'
+            )
+          )
+        )
+      }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Reject fail-closed
+        run: |
+          echo "The selected operation is not allowed on this ref."
+          exit 1
+
   deploy:
     name: Build and deploy production
+    if: >-
+      ${{
+        github.event_name == 'workflow_dispatch' &&
+        github.ref == 'refs/heads/master' &&
+        inputs.operation == 'deploy'
+      }}
     runs-on: ubuntu-latest
     environment: production
 
@@ -252,3 +297,553 @@ jobs:
           journalctl -u trading --since "5 minutes ago" --no-pager \
             | grep -Ei "ERROR|Exception|No operations allowed after connection closed" || true
           REMOTE
+
+  collect-c0b-read-only:
+    name: Collect sanitized C0-B evidence (read-only)
+    if: >-
+      ${{
+        github.event_name == 'workflow_dispatch' &&
+        github.repository == 'ksi2564/systematic-trading' &&
+        github.ref == 'refs/heads/codex/v2-cutover-foundation' &&
+        inputs.operation == 'c0b-read-only' &&
+        inputs.expected_sha == github.sha &&
+        github.actor == 'ksi2564' &&
+        github.triggering_actor == 'ksi2564'
+      }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    environment: production
+    permissions:
+      actions: read
+      contents: read
+    env:
+      BASH_ENV: /dev/null
+      C0B_TOOL_COMMIT: d9943767037bcf41f86caad380824b2e4a13c12d
+      EXPECTED_SHA: ${{ inputs.expected_sha }}
+      GIT_NO_REPLACE_OBJECTS: "1"
+      PYTHONDONTWRITEBYTECODE: "1"
+      SELECTED_OPERATION: ${{ inputs.operation }}
+
+    steps:
+      - name: Checkout pinned collection commit
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Verify authorization and create the locked tool worktree
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          expected_tool_commit=d9943767037bcf41f86caad380824b2e4a13c12d
+          if [[ "${GITHUB_EVENT_NAME}" != "workflow_dispatch" \
+            || "${GITHUB_REPOSITORY}" != "ksi2564/systematic-trading" \
+            || "${GITHUB_REF}" != "refs/heads/codex/v2-cutover-foundation" \
+            || "${SELECTED_OPERATION}" != "c0b-read-only" \
+            || "${GITHUB_ACTOR}" != "ksi2564" \
+            || "${GITHUB_TRIGGERING_ACTOR}" != "ksi2564" \
+            || "${C0B_TOOL_COMMIT}" != "${expected_tool_commit}" ]]; then
+            echo "C0-B collection authorization context is not allowed."
+            exit 1
+          fi
+
+          if [[ ! "${EXPECTED_SHA}" =~ ^[0-9a-f]{40}$ \
+            || "${EXPECTED_SHA}" != "${GITHUB_SHA}" \
+            || "$(git --no-replace-objects rev-parse HEAD)" != "${GITHUB_SHA}" ]]; then
+            echo "C0-B collection requires an exact, lowercase 40-character commit pin."
+            exit 1
+          fi
+
+          git --no-replace-objects cat-file -e "${C0B_TOOL_COMMIT}^{commit}"
+          read -r -a commit_and_parents <<<"$(
+            git --no-replace-objects rev-list --parents -n 1 "${GITHUB_SHA}"
+          )"
+          if [[ "${#commit_and_parents[@]}" -ne 2 \
+            || "${commit_and_parents[0]}" != "${GITHUB_SHA}" \
+            || "${commit_and_parents[1]}" != "${C0B_TOOL_COMMIT}" ]]; then
+            echo "The collection workflow commit must directly follow the audited tool commit."
+            exit 1
+          fi
+          mapfile -t lock_commit_paths < <(
+            git --no-replace-objects diff --name-only \
+              "${C0B_TOOL_COMMIT}" "${GITHUB_SHA}"
+          )
+          if [[ "${#lock_commit_paths[@]}" -ne 1 \
+            || "${lock_commit_paths[0]}" != ".github/workflows/deploy-prod.yml" ]]; then
+            echo "The workflow lock commit must change only the production workflow."
+            exit 1
+          fi
+
+          if ! git --no-replace-objects diff --no-ext-diff --quiet \
+              "${C0B_TOOL_COMMIT}" "${GITHUB_SHA}" -- .github/scripts/c0b \
+            || [[ -n "$(git status --porcelain=v1 --untracked-files=all)" ]] \
+            || [[ -e docs/v2-cutover/evidence/c0b ]]; then
+            echo "The current checkout violates the audited collection boundary."
+            exit 1
+          fi
+
+          locked_root="${RUNNER_TEMP}/c0b-tool"
+          if [[ -e "${locked_root}" || -L "${locked_root}" ]]; then
+            echo "The locked tool worktree path already exists."
+            exit 1
+          fi
+          git --no-replace-objects worktree add --detach \
+            "${locked_root}" "${C0B_TOOL_COMMIT}" >/dev/null
+
+          expected_tools=(
+            .github/scripts/c0b/build_evidence.py
+            .github/scripts/c0b/collect_remote.sh
+            .github/scripts/c0b/contract.py
+            .github/scripts/c0b/known_deployments.json
+            .github/scripts/c0b/sanitize_capture.py
+            .github/scripts/c0b/test_c0b_tools.py
+            .github/scripts/c0b/validate_evidence.py
+          )
+          mapfile -t observed_tools < <(
+            git --no-replace-objects ls-tree -r --name-only \
+              "${C0B_TOOL_COMMIT}" -- .github/scripts/c0b
+          )
+          if [[ "${#observed_tools[@]}" -ne "${#expected_tools[@]}" ]]; then
+            echo "The audited tool tree contains an unexpected file count."
+            exit 1
+          fi
+          for index in "${!expected_tools[@]}"; do
+            if [[ "${observed_tools[index]}" != "${expected_tools[index]}" ]]; then
+              echo "The audited tool tree does not match the exact file allowlist."
+              exit 1
+            fi
+            locked_file="${locked_root}/${expected_tools[index]}"
+            if [[ ! -f "${locked_file}" || -L "${locked_file}" ]]; then
+              echo "An audited tool is not a regular file."
+              exit 1
+            fi
+          done
+          if [[ "$(git -C "${locked_root}" --no-replace-objects rev-parse HEAD)" != "${C0B_TOOL_COMMIT}" \
+            || -n "$(git -C "${locked_root}" status --porcelain=v1 --untracked-files=all)" \
+            || -e "${locked_root}/docs/v2-cutover/evidence/c0b" \
+            || -n "$(find "${locked_root}/.github/scripts/c0b" -type l -print -quit)" ]]; then
+            echo "The locked tool worktree is not clean and exact."
+            exit 1
+          fi
+
+          python3 -B -E -S \
+            "${locked_root}/v2/infra/tests/verify_c0_gate.py" "${locked_root}"
+          bash -n "${locked_root}/.github/scripts/c0b/collect_remote.sh"
+          bash "${locked_root}/.github/scripts/c0b/collect_remote.sh" --self-test
+          (
+            cd "${locked_root}"
+            python3 -B -E -S -m unittest discover \
+              -s .github/scripts/c0b \
+              -p 'test_*.py'
+          )
+          python3 -B -E -S -m json.tool \
+            "${locked_root}/.github/scripts/c0b/known_deployments.json" \
+            >/dev/null
+          python3 -B -E -S \
+            "${locked_root}/.github/scripts/c0b/sanitize_capture.py" --help >/dev/null
+          python3 -B -E -S \
+            "${locked_root}/.github/scripts/c0b/build_evidence.py" --help >/dev/null
+          python3 -B -E -S \
+            "${locked_root}/.github/scripts/c0b/validate_evidence.py" bundle --help >/dev/null
+
+      - name: Verify GitHub run and pinned deployment provenance
+        shell: bash
+        env:
+          GH_HOST: github.com
+          GH_PROMPT_DISABLED: "1"
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          current_run="$(
+            gh api \
+              "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          )"
+          if ! jq -e \
+              --argjson run_id "${GITHUB_RUN_ID}" \
+              --argjson run_attempt "${GITHUB_RUN_ATTEMPT}" \
+              --arg head_sha "${GITHUB_SHA}" \
+              '
+                .id == $run_id and
+                .run_attempt == $run_attempt and
+                .event == "workflow_dispatch" and
+                .head_branch == "codex/v2-cutover-foundation" and
+                .head_sha == $head_sha and
+                .path == ".github/workflows/deploy-prod.yml" and
+                .actor.login == "ksi2564" and
+                .triggering_actor.login == "ksi2564" and
+                .repository.full_name == "ksi2564/systematic-trading" and
+                (.status == "queued" or .status == "in_progress") and
+                .conclusion == null
+              ' <<<"${current_run}" >/dev/null; then
+            echo "The current GitHub workflow run provenance is invalid."
+            exit 1
+          fi
+
+          pinned_deploy_run="$(
+            gh api \
+              "repos/${GITHUB_REPOSITORY}/actions/runs/26564469535"
+          )"
+          if ! jq -e '
+                .id == 26564469535 and
+                .run_attempt == 1 and
+                .event == "workflow_dispatch" and
+                .head_branch == "master" and
+                .head_sha == "5510399f8a576efc6450a47a195f0cb61869675e" and
+                .path == ".github/workflows/deploy-prod.yml" and
+                .status == "completed" and
+                .conclusion == "success" and
+                .repository.full_name == "ksi2564/systematic-trading"
+              ' <<<"${pinned_deploy_run}" >/dev/null; then
+            echo "The code-owned production deployment run pin is invalid."
+            exit 1
+          fi
+
+          latest_successful_deploy="$(
+            gh api --method GET \
+              "repos/${GITHUB_REPOSITORY}/actions/workflows/deploy-prod.yml/runs" \
+              -f branch=master \
+              -f event=workflow_dispatch \
+              -f status=success \
+              -f per_page=1
+          )"
+          if ! jq -e '
+                (.workflow_runs | length) == 1 and
+                .workflow_runs[0].id == 26564469535 and
+                .workflow_runs[0].head_sha == "5510399f8a576efc6450a47a195f0cb61869675e" and
+                .workflow_runs[0].path == ".github/workflows/deploy-prod.yml" and
+                .workflow_runs[0].conclusion == "success"
+              ' <<<"${latest_successful_deploy}" >/dev/null; then
+            echo "A newer successful production deployment exists or the pin is invalid."
+            exit 1
+          fi
+
+      - name: Connect to Tailscale
+        uses: tailscale/github-action@306e68a486fd2350f2bfc3b19fcd143891a4a2d8
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          tags: tag:github-actions
+          ping: ${{ env.PROD_HOST }}
+          use-cache: false
+          version: 1.94.2
+
+      - name: Prepare read-only SSH
+        shell: bash
+        env:
+          C0B_SSH_PRIVATE_KEY: ${{ secrets.PROD_SSH_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+
+          locked_root="${RUNNER_TEMP}/c0b-tool"
+          if [[ "${C0B_TOOL_COMMIT}" != d9943767037bcf41f86caad380824b2e4a13c12d \
+            || "$(git --no-replace-objects rev-parse HEAD)" != "${GITHUB_SHA}" \
+            || "$(git -C "${locked_root}" --no-replace-objects rev-parse HEAD)" != "${C0B_TOOL_COMMIT}" \
+            || -n "$(git status --porcelain=v1 --untracked-files=all)" \
+            || -n "$(git -C "${locked_root}" status --porcelain=v1 --untracked-files=all)" \
+            || -e docs/v2-cutover/evidence/c0b \
+            || ! -f "${locked_root}/.github/scripts/c0b/collect_remote.sh" \
+            || -L "${locked_root}/.github/scripts/c0b/collect_remote.sh" ]]; then
+            echo "The collection tool lock changed before SSH preparation."
+            exit 1
+          fi
+          git --no-replace-objects diff --no-ext-diff --exit-code \
+            "${C0B_TOOL_COMMIT}" "${GITHUB_SHA}" -- .github/scripts/c0b
+
+          ssh_dir="${RUNNER_TEMP}/c0b-ssh"
+          if [[ -e "${ssh_dir}" || -L "${ssh_dir}" || -z "${C0B_SSH_PRIVATE_KEY}" ]]; then
+            echo "The SSH preparation boundary is invalid."
+            exit 1
+          fi
+          install -d -m 700 "${ssh_dir}"
+          printf '%s\n' "${C0B_SSH_PRIVATE_KEY}" > "${ssh_dir}/key"
+          chmod 600 "${ssh_dir}/key"
+          if ! ssh-keyscan -T 10 -H "${PROD_HOST}" \
+              > "${ssh_dir}/known_hosts" 2>/dev/null \
+            || [[ ! -s "${ssh_dir}/known_hosts" ]]; then
+            echo "The production SSH host key could not be read."
+            exit 1
+          fi
+          chmod 600 "${ssh_dir}/known_hosts"
+
+      - name: Collect, sanitize, compare, and build the final bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          locked_root="${RUNNER_TEMP}/c0b-tool"
+          locked_tools="${locked_root}/.github/scripts/c0b"
+          capture_dir="${RUNNER_TEMP}/c0b-sanitized"
+          evidence_dir="${RUNNER_TEMP}/c0b-final"
+          ssh_dir="${RUNNER_TEMP}/c0b-ssh"
+
+          if [[ "${C0B_TOOL_COMMIT}" != d9943767037bcf41f86caad380824b2e4a13c12d \
+            || "${EXPECTED_SHA}" != "${GITHUB_SHA}" \
+            || "$(git --no-replace-objects rev-parse HEAD)" != "${GITHUB_SHA}" \
+            || "$(git -C "${locked_root}" --no-replace-objects rev-parse HEAD)" != "${C0B_TOOL_COMMIT}" \
+            || -n "$(git status --porcelain=v1 --untracked-files=all)" \
+            || -n "$(git -C "${locked_root}" status --porcelain=v1 --untracked-files=all)" \
+            || -e docs/v2-cutover/evidence/c0b \
+            || -e "${capture_dir}" || -L "${capture_dir}" \
+            || -e "${evidence_dir}" || -L "${evidence_dir}" \
+            || ! -f "${ssh_dir}/key" || -L "${ssh_dir}/key" \
+            || ! -f "${ssh_dir}/known_hosts" || -L "${ssh_dir}/known_hosts" ]]; then
+            echo "The collection boundary changed before the read-only SSH command."
+            exit 1
+          fi
+          git --no-replace-objects diff --no-ext-diff --exit-code \
+            "${C0B_TOOL_COMMIT}" "${GITHUB_SHA}" -- .github/scripts/c0b
+
+          captured_at="$(TZ=Asia/Seoul date '+%Y-%m-%dT%H:%M:%S+09:00')"
+          if ! ssh -F /dev/null \
+              -i "${ssh_dir}/key" \
+              -o BatchMode=yes \
+              -o CanonicalizeHostname=no \
+              -o ClearAllForwardings=yes \
+              -o ConnectTimeout=10 \
+              -o ExitOnForwardFailure=yes \
+              -o ForwardAgent=no \
+              -o ForwardX11=no \
+              -o GlobalKnownHostsFile=/dev/null \
+              -o IdentitiesOnly=yes \
+              -o KbdInteractiveAuthentication=no \
+              -o LogLevel=ERROR \
+              -o NumberOfPasswordPrompts=0 \
+              -o PasswordAuthentication=no \
+              -o PermitLocalCommand=no \
+              -o PreferredAuthentications=publickey \
+              -o RequestTTY=no \
+              -o ServerAliveCountMax=2 \
+              -o ServerAliveInterval=15 \
+              -o StrictHostKeyChecking=yes \
+              -o "UserKnownHostsFile=${ssh_dir}/known_hosts" \
+              "${PROD_USER}@${PROD_HOST}" \
+              'sudo -n /bin/bash --noprofile --norc -s' \
+              < "${locked_tools}/collect_remote.sh" \
+              2>/dev/null \
+            | python3 -B -E -S "${locked_tools}/sanitize_capture.py" \
+              --output-dir "${capture_dir}" \
+              --captured-at "${captured_at}" \
+              --collector github-actions-prod-read-only \
+              --workflow-sha "${GITHUB_SHA}" \
+              --workflow-run-id "${GITHUB_RUN_ID}" \
+              --workflow-run-attempt "${GITHUB_RUN_ATTEMPT}" \
+              --repository-root "${locked_root}" \
+              --decision-file "${locked_root}/docs/v2-cutover/C0_DECISIONS.md" \
+              --known-deployments "${locked_tools}/known_deployments.json" \
+              >/dev/null; then
+            echo "C0-B read-only collection failed before sanitized evidence was produced."
+            exit 1
+          fi
+
+          python3 -B -E -S "${locked_tools}/validate_evidence.py" captures \
+            --capture-dir "${capture_dir}" \
+            --captured-at "${captured_at}" \
+            --workflow-sha "${GITHUB_SHA}" \
+            --workflow-run-id "${GITHUB_RUN_ID}" \
+            --workflow-run-attempt "${GITHUB_RUN_ATTEMPT}" \
+            --repository-root "${locked_root}" \
+            --decision-file "${locked_root}/docs/v2-cutover/C0_DECISIONS.md" \
+            --known-deployments "${locked_tools}/known_deployments.json" \
+            >/dev/null
+
+          snapshot_at="$(TZ=Asia/Seoul date '+%Y-%m-%dT%H:%M:%S+09:00')"
+          compared_at="$(TZ=Asia/Seoul date '+%Y-%m-%dT%H:%M:%S+09:00')"
+          python3 -B -E -S "${locked_tools}/build_evidence.py" \
+            --capture-dir "${capture_dir}" \
+            --output-dir "${evidence_dir}" \
+            --snapshot-at "${snapshot_at}" \
+            --compared-at "${compared_at}" \
+            --workflow-sha "${GITHUB_SHA}" \
+            --workflow-run-id "${GITHUB_RUN_ID}" \
+            --workflow-run-attempt "${GITHUB_RUN_ATTEMPT}" \
+            --repository-root "${locked_root}" \
+            --decision-file "${locked_root}/docs/v2-cutover/C0_DECISIONS.md" \
+            --known-deployments "${locked_tools}/known_deployments.json" \
+            >/dev/null
+          python3 -B -E -S "${locked_tools}/validate_evidence.py" bundle \
+            --evidence-dir "${evidence_dir}" \
+            --workflow-sha "${GITHUB_SHA}" \
+            --workflow-run-id "${GITHUB_RUN_ID}" \
+            --workflow-run-attempt "${GITHUB_RUN_ATTEMPT}" \
+            --repository-root "${locked_root}" \
+            --decision-file "${locked_root}/docs/v2-cutover/C0_DECISIONS.md" \
+            --known-deployments "${locked_tools}/known_deployments.json" \
+            >/dev/null
+
+          if [[ ! -d "${capture_dir}" || -L "${capture_dir}" ]]; then
+            echo "The sanitized intermediate directory is invalid."
+            exit 1
+          fi
+          rm -rf -- "${capture_dir}"
+          [[ ! -e "${capture_dir}" ]]
+
+          if [[ ! -d "${evidence_dir}" || -L "${evidence_dir}" \
+            || "$(find "${evidence_dir}" -type f | wc -l | tr -d ' ')" != 26 \
+            || "$(find "${evidence_dir}" -mindepth 1 -type d | wc -l | tr -d ' ')" != 2 \
+            || -n "$(find "${evidence_dir}" -type l -print -quit)" \
+            || -n "$(find "${evidence_dir}" -type f ! -name '*.json' -print -quit)" ]]; then
+            echo "The final sanitized bundle violates the exact artifact boundary."
+            exit 1
+          fi
+
+      - name: Remove the SSH key before artifact handling
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh_dir="${RUNNER_TEMP}/c0b-ssh"
+          if [[ -d "${ssh_dir}" && ! -L "${ssh_dir}" ]]; then
+            rm -f -- "${ssh_dir}/key" "${ssh_dir}/known_hosts"
+            rmdir -- "${ssh_dir}" 2>/dev/null || true
+          fi
+          if [[ -e "${ssh_dir}/key" || -e "${ssh_dir}/known_hosts" ]]; then
+            echo "The collection SSH material was not removed."
+            exit 1
+          fi
+
+      - name: Revalidate the locked final bundle before upload
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          locked_root="${RUNNER_TEMP}/c0b-tool"
+          locked_tools="${locked_root}/.github/scripts/c0b"
+          evidence_dir="${RUNNER_TEMP}/c0b-final"
+          if [[ "${C0B_TOOL_COMMIT}" != d9943767037bcf41f86caad380824b2e4a13c12d \
+            || "${EXPECTED_SHA}" != "${GITHUB_SHA}" \
+            || "$(git --no-replace-objects rev-parse HEAD)" != "${GITHUB_SHA}" \
+            || "$(git -C "${locked_root}" --no-replace-objects rev-parse HEAD)" != "${C0B_TOOL_COMMIT}" \
+            || -n "$(git status --porcelain=v1 --untracked-files=all)" \
+            || -n "$(git -C "${locked_root}" status --porcelain=v1 --untracked-files=all)" \
+            || -e docs/v2-cutover/evidence/c0b \
+            || -e "${RUNNER_TEMP}/c0b-sanitized" \
+            || -e "${RUNNER_TEMP}/c0b-ssh/key" \
+            || -e "${RUNNER_TEMP}/c0b-ssh/known_hosts" \
+            || ! -d "${evidence_dir}" || -L "${evidence_dir}" ]]; then
+            echo "The collection boundary changed before artifact upload."
+            exit 1
+          fi
+          git --no-replace-objects diff --no-ext-diff --exit-code \
+            "${C0B_TOOL_COMMIT}" "${GITHUB_SHA}" -- .github/scripts/c0b
+          python3 -B -E -S "${locked_tools}/validate_evidence.py" bundle \
+            --evidence-dir "${evidence_dir}" \
+            --workflow-sha "${GITHUB_SHA}" \
+            --workflow-run-id "${GITHUB_RUN_ID}" \
+            --workflow-run-attempt "${GITHUB_RUN_ATTEMPT}" \
+            --repository-root "${locked_root}" \
+            --decision-file "${locked_root}/docs/v2-cutover/C0_DECISIONS.md" \
+            --known-deployments "${locked_tools}/known_deployments.json" \
+            >/dev/null
+          if [[ "$(find "${evidence_dir}" -type f | wc -l | tr -d ' ')" != 26 \
+            || "$(find "${evidence_dir}" -mindepth 1 -type d | wc -l | tr -d ' ')" != 2 \
+            || -n "$(find "${evidence_dir}" -type l -print -quit)" \
+            || -n "$(find "${evidence_dir}" -type f ! -name '*.json' -print -quit)" ]]; then
+            echo "The final bundle boundary changed before upload."
+            exit 1
+          fi
+
+      - name: Upload the final sanitized C0-B bundle only
+        id: c0b_upload
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: c0b-final-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/c0b-final/
+          if-no-files-found: error
+          include-hidden-files: false
+          overwrite: false
+          retention-days: 1
+
+      - name: Verify uploaded artifact and workflow-run binding
+        shell: bash
+        env:
+          GH_HOST: github.com
+          GH_PROMPT_DISABLED: "1"
+          GH_TOKEN: ${{ github.token }}
+          UPLOADED_ARTIFACT_DIGEST: ${{ steps.c0b_upload.outputs.artifact-digest }}
+          UPLOADED_ARTIFACT_ID: ${{ steps.c0b_upload.outputs.artifact-id }}
+          UPLOADED_ARTIFACT_URL: ${{ steps.c0b_upload.outputs.artifact-url }}
+        run: |
+          set -euo pipefail
+
+          expected_name="c0b-final-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          expected_url="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/artifacts/${UPLOADED_ARTIFACT_ID}"
+          if [[ ! "${UPLOADED_ARTIFACT_ID}" =~ ^[1-9][0-9]{0,19}$ \
+            || ! "${UPLOADED_ARTIFACT_DIGEST}" =~ ^[0-9a-f]{64}$ \
+            || "${UPLOADED_ARTIFACT_URL}" != "${expected_url}" ]]; then
+            echo "The upload action outputs are malformed."
+            exit 1
+          fi
+
+          artifact_json=''
+          for attempt in $(seq 1 10); do
+            if artifact_json="$(
+              gh api \
+                "repos/${GITHUB_REPOSITORY}/actions/artifacts/${UPLOADED_ARTIFACT_ID}" \
+                2>/dev/null
+            )"; then
+              break
+            fi
+            if [[ "${attempt}" -eq 10 ]]; then
+              echo "The uploaded artifact did not become visible through the API."
+              exit 1
+            fi
+            sleep 2
+          done
+          if ! jq -e \
+              --argjson artifact_id "${UPLOADED_ARTIFACT_ID}" \
+              --argjson run_id "${GITHUB_RUN_ID}" \
+              --arg name "${expected_name}" \
+              --arg digest "sha256:${UPLOADED_ARTIFACT_DIGEST}" \
+              --arg head_sha "${GITHUB_SHA}" \
+              '
+                .id == $artifact_id and
+                .name == $name and
+                .digest == $digest and
+                .expired == false and
+                (.size_in_bytes > 0 and .size_in_bytes <= 1048576) and
+                .workflow_run.id == $run_id and
+                .workflow_run.head_branch == "codex/v2-cutover-foundation" and
+                .workflow_run.head_sha == $head_sha
+              ' <<<"${artifact_json}" >/dev/null; then
+            echo "The uploaded artifact is not bound to this exact workflow run."
+            exit 1
+          fi
+
+          current_run="$(
+            gh api \
+              "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          )"
+          if ! jq -e \
+              --argjson run_id "${GITHUB_RUN_ID}" \
+              --argjson run_attempt "${GITHUB_RUN_ATTEMPT}" \
+              --arg head_sha "${GITHUB_SHA}" \
+              '
+                .id == $run_id and
+                .run_attempt == $run_attempt and
+                .event == "workflow_dispatch" and
+                .head_branch == "codex/v2-cutover-foundation" and
+                .head_sha == $head_sha and
+                .path == ".github/workflows/deploy-prod.yml" and
+                .actor.login == "ksi2564" and
+                .triggering_actor.login == "ksi2564" and
+                .repository.full_name == "ksi2564/systematic-trading" and
+                .status == "in_progress" and
+                .conclusion == null
+              ' <<<"${current_run}" >/dev/null; then
+            echo "The workflow run binding changed after artifact upload."
+            exit 1
+          fi
+
+      - name: Remove any residual collection SSH material
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh_dir="${RUNNER_TEMP}/c0b-ssh"
+          if [[ -d "${ssh_dir}" && ! -L "${ssh_dir}" ]]; then
+            rm -f -- "${ssh_dir}/key" "${ssh_dir}/known_hosts"
+            rmdir -- "${ssh_dir}" 2>/dev/null || true
+          fi

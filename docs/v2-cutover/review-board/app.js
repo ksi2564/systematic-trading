@@ -195,10 +195,10 @@ const screens = [
     description: "오늘 무엇이 돌고 무엇이 막혔는지",
     content: `
       <div class="mock-grid">
-        <article class="mock-card"><span>기존 시스템</span><strong>마지막 제어 작업에서 미중단</strong><p>현재 서비스·전략 켜짐/꺼짐·최근 성공·주문 모드는 C0-B 수집 승인 대기예요.</p></article>
+        <article class="mock-card"><span>기존 시스템</span><strong>마지막 제어 작업에서 미중단</strong><p>현재 서비스·전략 켜짐/꺼짐·최근 성공·주문 모드는 승인된 C0-B 범위에서 수집·정제 대기예요.</p></article>
         <article class="mock-card"><span>v2 주문 안전 예시</span><strong>후보 코드상 제출 차단</strong><p>검토 중인 화면 예시예요. 현재 원격 값은 다시 확인해야 해요.</p></article>
-        <article class="mock-card"><span>오늘의 다음 일정</span><strong>기획 확정 대기</strong><p>자동 실행기는 C0-B 결과 재승인 뒤 개발해요.</p></article>
-        <article class="mock-card full"><span>오늘 확인할 일</span><ul class="gate-list"><li><strong>C0-A D-01~D-10</strong><small>조건부 승인 · C0-B 수집 권한 없음</small></li><li><strong>C0-B 수집 승인·결과 재승인</strong><small>아직 수집 안 함</small></li><li><strong>인증된 화면 검증</strong><small>후보 배포 승인·사용자 직접 로그인 대기</small></li></ul></article>
+        <article class="mock-card"><span>오늘의 다음 일정</span><strong>C0-B 결과 재승인 대기</strong><p>자동 실행기는 C0-B 결과 재승인 뒤 개발해요.</p></article>
+        <article class="mock-card full"><span>오늘 확인할 일</span><ul class="gate-list"><li><strong>C0-A D-01~D-10</strong><small>조건부 승인 완료</small></li><li><strong>C0-B 수집 승인·결과 재승인</strong><small>읽기 전용 수집 승인 완료 · 12개 정제 결과 대기</small></li><li><strong>인증된 화면 검증</strong><small>후보 배포 승인·사용자 직접 로그인 대기</small></li></ul></article>
       </div>`,
   },
   {
@@ -230,7 +230,7 @@ const screens = [
     description: "C0-B의 마스킹된 12개 값과 차이를 한눈에",
     content: `
       <div class="mock-grid">
-        <article class="mock-card full"><span>1단계 · 운영값 수집</span><strong>별도 승인 대기</strong><p>C0-A가 끝나도 바로 수집하지 않아요. 아래 범위를 따로 승인한 뒤에만 12개 값을 읽어요.</p><ul class="evidence-list"><li><strong>접근 방법</strong><small>GitHub 자동화를 통해 운영 서버의 설정과 DB를 조회 · 상세: PROD SSH · shell 조회 · DB SELECT</small></li><li><strong>승인 권한</strong><small>조회 명령만 허용 · 변경 명령 없음</small></li><li><strong>저장</strong><small>정제·마스킹한 증적만 지정 폴더에 저장 · docs/v2-cutover/evidence/c0b/</small></li><li><strong>원문</strong><small>저장하지 않음</small></li><li><strong>보존</strong><small>프로젝트 변경 이력에 계속 남음</small></li></ul></article>
+        <article class="mock-card full"><span>1단계 · 운영값 수집</span><strong>읽기 전용 수집 승인 완료</strong><p>아래 정확한 범위로만 12개 값을 읽고 정제해요. 원문은 저장하지 않고 결과는 다시 승인받아요.</p><ul class="evidence-list"><li><strong>접근 방법</strong><small>GitHub 자동화를 통해 운영 서버의 설정과 DB를 조회 · 상세: PROD SSH · shell 조회 · DB SELECT</small></li><li><strong>승인 권한</strong><small>조회 명령만 허용 · 변경 명령 없음</small></li><li><strong>저장</strong><small>정제·마스킹한 증적만 지정 폴더에 저장 · docs/v2-cutover/evidence/c0b/</small></li><li><strong>원문</strong><small>저장하지 않음</small></li><li><strong>보존</strong><small>프로젝트 변경 이력에 계속 남음</small></li></ul></article>
         <article class="mock-card wide"><span>기존 시스템·전략</span><ul class="evidence-list"><li><strong>실행 버전·실제 설정</strong><small>수집 대기</small></li><li><strong>QQQM/QLD/TQQQ 켜짐·파라미터</strong><small>수집 대기</small></li><li><strong>최근 두 번의 상태</strong><small>수집 대기</small></li></ul></article>
         <article class="mock-card"><span>주문 안전</span><strong>모드·소유권 확인 대기</strong><p>계좌번호와 자격증명은 표시하지 않아요.</p></article>
         <article class="mock-card wide"><span>데이터 의미·비교 기준</span><strong>가격 기준일·관측 시각·허용 차이 확인 대기</strong><p>원문 대신 정제된 요약과 파일 해시를 연결해요.</p></article>
@@ -243,8 +243,8 @@ const screens = [
     description: "실전으로 갈 준비와 수동 승인 경계",
     content: `
       <div class="mock-grid">
-        <article class="mock-card full"><span>전환 게이트 · 전체 14단계</span><ul class="gate-list"><li><strong>1 · C0-A 제품 규칙 승인</strong><small>D-01~D-10 조건부 승인 · C0-B 별도 승인 대기</small></li><li><strong>2 · C0-B ① 운영값 읽기 승인</strong><small>C0-A와 별도 승인</small></li><li><strong>3 · C0-B ② 정제 결과·차이 재승인</strong><small>수집 전이라 결과 없음</small></li><li><strong>4 · C2 주문 없는 자동 병행 개발</strong><small>C0-B ② 전에는 미시작</small></li><li><strong>5 · C2 후보 동일 SHA 배포 승인</strong><small>별도 승인 전 미배포</small></li><li><strong>6 · C3 대상·기간·영향 실행 승인</strong><small>별도 승인 전 미실행</small></li><li><strong>7 · C3 세 레인 20거래일 관찰</strong><small>0 / 20 · 미시작</small></li><li><strong>8 · C4-A LIVE 후보 격리 인수</strong><small>실증권사 연결 없는 simulator</small></li><li><strong>9 · C4-B 주문 없는 복구 훈련</strong><small>공유 환경 미실행</small></li><li><strong>10 · C5 제출 차단 후보 배포 승인</strong><small>별도 승인 전 미배포</small></li><li><strong>11 · C5-A v2 단건 제출·대조</strong><button class="mock-button" type="button" disabled>사용자 승인 전 잠김</button></li><li><strong>12 · C5-B를 선택한 경우만 범위·기간 승인 뒤 5주기 자동운용</strong><small>Java 복원 선택 시 v2 제출 차단·canary 종료</small></li><li><strong>13 · C6 v2 단독 전환·20거래일 안정화</strong><small>범위 확대·진행률을 따로 표시</small></li><li><strong>14 · C7 Java 퇴역</strong><small>안정화 뒤 별도 사용자 승인</small></li></ul></article>
-        <article class="mock-card wide"><span>현재 주문 소유권</span><strong>C0-B ① 수집 승인 대기</strong><p>Java와 v2가 동시에 주문하지 않는 계약은 유지해요.</p></article>
+        <article class="mock-card full"><span>전환 게이트 · 전체 14단계</span><ul class="gate-list"><li><strong>1 · C0-A 제품 규칙 승인</strong><small>D-01~D-10 조건부 승인 완료</small></li><li><strong>2 · C0-B ① 운영값 읽기 승인</strong><small>12개 읽기 전용 수집 승인 완료</small></li><li><strong>3 · C0-B ② 정제 결과·차이 재승인</strong><small>정제된 12개 값·차이·checksum 대기</small></li><li><strong>4 · C2 주문 없는 자동 병행 개발</strong><small>C0-B ② 전에는 미시작</small></li><li><strong>5 · C2 후보 동일 SHA 배포 승인</strong><small>별도 승인 전 미배포</small></li><li><strong>6 · C3 대상·기간·영향 실행 승인</strong><small>별도 승인 전 미실행</small></li><li><strong>7 · C3 세 레인 20거래일 관찰</strong><small>0 / 20 · 미시작</small></li><li><strong>8 · C4-A LIVE 후보 격리 인수</strong><small>실증권사 연결 없는 simulator</small></li><li><strong>9 · C4-B 주문 없는 복구 훈련</strong><small>공유 환경 미실행</small></li><li><strong>10 · C5 제출 차단 후보 배포 승인</strong><small>별도 승인 전 미배포</small></li><li><strong>11 · C5-A v2 단건 제출·대조</strong><button class="mock-button" type="button" disabled>사용자 승인 전 잠김</button></li><li><strong>12 · C5-B를 선택한 경우만 범위·기간 승인 뒤 5주기 자동운용</strong><small>Java 복원 선택 시 v2 제출 차단·canary 종료</small></li><li><strong>13 · C6 v2 단독 전환·20거래일 안정화</strong><small>범위 확대·진행률을 따로 표시</small></li><li><strong>14 · C7 Java 퇴역</strong><small>안정화 뒤 별도 사용자 승인</small></li></ul></article>
+        <article class="mock-card wide"><span>현재 주문 소유권</span><strong>C0-B ② 결과 재승인 대기</strong><p>Java와 v2가 동시에 주문하지 않는 계약은 유지해요.</p></article>
         <article class="mock-card"><span>직전 승인 작업</span><strong>범위 확대·재개</strong><p>C5 범위 · Java 중단 · 접속 경로 변경 · 되돌리기</p></article>
       </div>`,
   },
@@ -264,7 +264,7 @@ const traceRows = [
   ["현재 UI", "V2-UI-001 · V2-OPS-001", "현재 콘솔(S-01 일부 · S-02 · S-03 · S-05 · S-06 · S-07)", "QA-NAV-001 · QA-OPS-001 · QA-SAF-001 · QA-RWD-001", "역사적 기록: 직전 독립 검증 46a34ea · v2 가상 운영 화면 기능 검사 26/26·브랜치 자동검사 30975237262·기준 버전 합본 자동검사 30975239146. 기능·안전 최신 정본 b2037f3의 실제 범위는 6개 화면 탐색·안전 잠금·반응형 26/26 · 기능 시나리오 QA와 운영 배포·인증 화면은 미실행", "부분", "사용자 승인 배포 뒤 인증 QA"],
   ["C2 미래 화면", "V2-OPS-001 · V2-API-001", "S-01 · S-04 · S-08", "QA-SHD-001/002", "자동 병행 비교의 실행·조회 기능·화면 모두 미구현", "미구현", "② 결과 재승인"],
   ["C2 종합", "V2-AUT-001 · V2-DAT-001 · V2-PER-001 · V2-OPS-001 · V2-API-001", "S-01 · S-04 · S-08", "QA-SHD-001/002 · QA-PAR-001", "자동 실행기·운영 데이터·Java 결과 비교·저장·조회·화면의 종합 진행 상태 · 현재 모두 미구현", "미구현", "② 결과 재승인"],
-  ["공통 명세", "V2-DOC-001", "실행 로드맵 · 기획 미리보기 S-01 · S-04 · S-08 · S-10 · S-09", "QA-PLN-001 · QA-RWY-001", "역사적 기록: 직전 정본 46a34ea · 직전 정본 화면 검사 2/2·C0 문서·기록 검사 51/51. 기능·안전 정본 b2037f3은 현재 보강본 반복 화면 검사 10/10·C0 문서·기록 검사 57/57 로컬 통과·브랜치/PR 자동검사 통과. 실행 로드맵의 최신 source·화면 검사·증적은 상단 안내 문서와 전체 개발 추적표에서 확인 · 새 코드 버전·자동검사·증적 묶음 확인 대기 · 기능 구현 증적 아님", "부분", "D-01~10"],
+  ["공통 명세", "V2-DOC-001", "실행 로드맵 · 기획 미리보기 S-01 · S-04 · S-08 · S-10 · S-09", "QA-PLN-001 · QA-RWY-001", "역사적 기록: 직전 정본 46a34ea · 직전 정본 화면 검사 2/2·C0 문서·기록 검사 51/51. 기능·안전 정본 b2037f3 보강본은 반복 화면 검사 10/10·C0 문서·기록 검사 57/57·브랜치/PR 자동검사를 통과. 현재 C0-B 수집 승인 반영본은 C0 문서·기록 검사 58/58 로컬 통과·새 CI 확인 대기. 실행 로드맵의 최신 source·화면 검사·증적은 상단 안내 문서와 전체 개발 추적표에서 확인 · 기능 구현 증적 아님", "부분", "② 결과 재승인"],
 ];
 
 const decisionContainer = document.getElementById("decision-groups");

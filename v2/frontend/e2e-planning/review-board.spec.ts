@@ -140,7 +140,7 @@ test('[QA-PLN-001] C0 결정·화면·추적 보드를 주문 없이 검토한�
   await expect(page.getByText('기획안 · 조건부 승인', { exact: true })).toBeVisible();
   const safetyStrip = page.getByLabel('현재 안전 상태');
   await expect(
-    safetyStrip.getByText('마지막 제어 작업에서 미중단 · C0-B 수집 승인 대기', { exact: true })
+    safetyStrip.getByText('마지막 제어 작업에서 미중단 · C0-B 수집 승인 완료', { exact: true })
   ).toBeVisible();
   await expect(
     safetyStrip.getByText('코드 후보는 차단 · 원격 재확인 대기', { exact: true })
@@ -538,9 +538,9 @@ test('[QA-PLN-001] C0 결정·화면·추적 보드를 주문 없이 검토한�
   await page.getByRole('button', { name: /운영값 재확인/ }).click();
   const c0bScreen = page.getByLabel('S-10 운영값 재확인 기획 미리보기');
   await expect(c0bScreen.getByText('1단계 · 운영값 수집', { exact: true })).toBeVisible();
-  await expect(c0bScreen.getByText('별도 승인 대기', { exact: true })).toBeVisible();
+  await expect(c0bScreen.getByText('읽기 전용 수집 승인 완료', { exact: true })).toBeVisible();
   await expect(c0bScreen.getByText(
-    'C0-A가 끝나도 바로 수집하지 않아요. 아래 범위를 따로 승인한 뒤에만 12개 값을 읽어요.',
+    '아래 정확한 범위로만 12개 값을 읽고 정제해요. 원문은 저장하지 않고 결과는 다시 승인받아요.',
     { exact: true }
   )).toBeVisible();
   await expect(c0bScreen.getByText(
@@ -637,9 +637,9 @@ test('[QA-PLN-001] C0 결정·화면·추적 보드를 주문 없이 검토한�
   await expect(commonSpecRow).toContainText('직전 정본 46a34ea');
   await expect(commonSpecRow).toContainText('직전 정본 화면 검사 2/2');
   await expect(commonSpecRow).toContainText('C0 문서·기록 검사 51/51');
-  await expect(commonSpecRow).toContainText('현재 보강본 반복 화면 검사 10/10');
-  await expect(commonSpecRow).toContainText('C0 문서·기록 검사 57/57 로컬 통과');
-  await expect(commonSpecRow).toContainText('새 코드 버전·자동검사·증적 묶음 확인 대기');
+  await expect(commonSpecRow).toContainText('기능·안전 정본 b2037f3 보강본은 반복 화면 검사 10/10');
+  await expect(commonSpecRow).toContainText('C0 문서·기록 검사 58/58 로컬 통과');
+  await expect(commonSpecRow).toContainText('새 CI 확인 대기');
   for (const rowLabel of ['D-07', '현재 UI']) {
     const evidenceRow = page.locator('#trace-body tr').filter({
       has: page.getByText(rowLabel, { exact: true }),

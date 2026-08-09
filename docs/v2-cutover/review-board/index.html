@@ -15,7 +15,7 @@
         <span class="brand-mark" aria-hidden="true">W</span>
         <span>Wall-Ant v2</span>
       </a>
-      <span id="planning-status" class="status-pill status-waiting">기획안 · 승인 대기</span>
+      <span id="planning-status" class="status-pill status-waiting">기획안 · 조건부 승인</span>
     </header>
 
     <main id="main-content">
@@ -23,14 +23,14 @@
         <p class="eyebrow">Python v2 전환 · 개발 전 검토</p>
         <h1>지금 결정할 건<br />딱 10가지예요</h1>
         <p class="hero-copy">
-          이번 기획·QA 준비에서 Java 서비스와 프로세스 번호(PID)는 건드리지 않았습니다. 실제 전략 켜짐/꺼짐·최근 실행·주문 모드는
-          아직 확인 전입니다. 아래 기준을 정해도 바로 읽지 않고, C0-B 운영값 수집을 따로 승인받은 뒤 읽기 전용으로 확인하고 결과도 다시 승인받습니다.
+          이번 기획·QA 준비에서 Java 서비스와 프로세스 번호(PID)는 건드리지 않았습니다. D-01~D-10은 조건부 승인됐고,
+          C0-B의 12개 운영값 읽기 전용 수집도 승인됐습니다. 실제 전략 켜짐/꺼짐·최근 실행·주문 모드는 정제된 결과를 확인하고 다시 승인하기 전까지 전환 기준으로 단정하지 않습니다.
         </p>
         <button id="open-runway" class="hero-runway-link" type="button" aria-controls="runway-panel">
           먼저 실행 로드맵 보기
         </button>
         <div class="safety-strip" aria-label="현재 안전 상태">
-          <div><span>기존 시스템</span><strong>마지막 제어 작업에서 미중단 · C0-B 수집 승인 대기</strong></div>
+          <div><span>기존 시스템</span><strong>마지막 제어 작업에서 미중단 · C0-B 수집 승인 완료</strong></div>
           <div><span>Python 자동 병행 비교</span><strong id="c2-status">아직 미구현</strong></div>
           <div><span>v2 주문</span><strong>코드 후보는 차단 · 원격 재확인 대기</strong></div>
         </div>
@@ -50,10 +50,10 @@
           <p>아래는 기능 개발의 순서입니다.</p>
         </div>
         <ol class="gate-rail">
-          <li class="gate-current">
+          <li>
             <span>1</span><div><strong>C0-A</strong><small>D-01~D-10 정책 결정</small></div>
           </li>
-          <li>
+          <li class="gate-current">
             <span>2</span><div><strong>C0-B</strong><small>① 수집 승인 → ② 결과 재승인</small></div>
           </li>
           <li>
@@ -101,9 +101,9 @@
         </div>
 
         <div class="runway-now" role="note" aria-label="현재 실행 위치">
-          <div><span>현재 위치</span><strong>C0-A · 제품 규칙 승인 대기</strong></div>
-          <div><span>지금 가능한 일</span><strong>기획 검토와 기존 코드 점검</strong></div>
-          <div><span>아직 하지 않는 일</span><strong>C2 개발 · 배포 · 운영 조회 · 주문</strong></div>
+          <div><span>현재 위치</span><strong>C0-B · 읽기 전용 수집 승인 · 결과 재승인 대기</strong></div>
+          <div><span>지금 가능한 일</span><strong>승인된 12개 운영값 조회·정제·checksum 기록</strong></div>
+          <div><span>아직 하지 않는 일</span><strong>C2 개발 · 배포 · 운영 변경 · 주문</strong></div>
         </div>
         <p class="runway-provenance">기능·안전 독립 검증 기준 <strong>b2037f3</strong> · 최신 보드 검사와 증적은 README·DELIVERY_TRACE에서 확인</p>
 
@@ -188,9 +188,9 @@
             <h3 id="cutover-runway-title">실제 대체는 관찰과 사용자 승인을 지나야 해요</h3>
           </div>
           <ol class="cutover-steps">
-            <li class="step-current"><span>C0-A</span><strong>제품 규칙 승인</strong><small>현재 · 10개 승인 대기</small></li>
-            <li><span>C0-B ①</span><strong>운영값 읽기 승인</strong><small>12개 · 읽기 전용</small></li>
-            <li><span>C0-B ②</span><strong>운영값 결과 재승인</strong><small>차이 · 확인값 검토</small></li>
+            <li><span>C0-A</span><strong>제품 규칙 승인</strong><small>10개 · 조건부 승인 완료</small></li>
+            <li><span>C0-B ①</span><strong>운영값 읽기 승인</strong><small>12개 · 읽기 전용 승인 완료</small></li>
+            <li class="step-current"><span>C0-B ②</span><strong>운영값 결과 재승인</strong><small>현재 · 정제된 차이·checksum 대기</small></li>
             <li><span>C2</span><strong>주문 없는 자동 병행 개발</strong><small>위 6묶음</small></li>
             <li class="step-approval"><span>C2 후보</span><strong>후보 배포 별도 승인</strong><small>동일 SHA · 제출 차단</small></li>
             <li class="step-approval"><span>C3 승인</span><strong>대상 · 기간 · 영향 승인</strong><small>공유 환경 실행 직전</small></li>
@@ -299,8 +299,8 @@
       <section class="next-step" aria-labelledby="next-title">
         <div>
           <p class="eyebrow">다음 행동</p>
-          <h2 id="next-title">먼저 C0-A 검토안 전달, C0-B는 두 번 확인</h2>
-          <p>검토안을 붙여넣으면 C0-A 기능 기준만 전달돼요. 운영값은 C0-B 수집을 따로 승인받은 뒤 읽고, 결과를 보여드린 뒤 다시 승인받아요. 인증 QA는 후보 배포 승인과 사용자 직접 로그인 뒤 진행해요.</p>
+          <h2 id="next-title">정제된 C0-B 12개 운영값과 차이를 확인해요</h2>
+          <p>읽기 전용 수집 승인은 완료됐어요. 승인된 범위로만 수집·정제한 12개 값, C0-A 차이, checksum을 보여드린 뒤 결과를 다시 승인받아요. 그전에는 C2 개발을 시작하지 않아요.</p>
         </div>
         <div class="next-links">
           <a href="../C0_DECISIONS.md">상세 결정 문서</a>

@@ -1,0 +1,987 @@
+from __future__ import annotations
+
+import io
+import hashlib
+import json
+import os
+import re
+import subprocess
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+from unittest import mock
+
+
+SCRIPT_DIR = Path(__file__).resolve().parent
+sys.path.insert(0, str(SCRIPT_DIR))
+
+from contract import (  # noqa: E402
+    C0BError,
+    ITEM_IDS,
+    PINNED_DEPLOY_RUN_ID,
+    PINNED_RUNTIME_JAR_SHA256,
+    PINNED_RUNTIME_SHA,
+    RAW_FACTS,
+    _item5_live_environment_verified,
+    _latest_job_is_completed,
+    build_bundle_atomic,
+    load_known_deployments,
+    parse_raw_stream,
+    resolve_deployment,
+    safe_evidence_text,
+    validate_bundle_directory,
+    validate_capture_directory,
+)
+
+
+FAKE_RUNTIME_SHA = PINNED_RUNTIME_SHA
+FAKE_JAR_SHA = PINNED_RUNTIME_JAR_SHA256
+CAPTURED_AT = "2026-08-09T13:00:00+09:00"
+APPROVED_C0A_SHA = "a45b3e6dd20d16f207bada8b2ba0f3b6b0862e5c"
+
+
+def fake_raw_values(runtime_sha: str = FAKE_RUNTIME_SHA) -> dict[str, dict[str, str]]:
+    return {
+        "java_code_sha": {
+            "service_active_state": "inactive",
+            "runtime_code_basis": "service not running",
+            "runtime_release_sha": runtime_sha,
+            "runtime_jar_sha256": FAKE_JAR_SHA,
+        },
+        "effective_runtime_config": {
+            "spring_profile": "prod",
+            "scheduling_enabled": "true",
+            "execution_enabled": "false",
+            "operation_mode": "PAPER",
+            "server_binding": "127.0.0.1:8080",
+            "service_sub_state": "dead",
+            "environment_file_contract": "EXPECTED",
+            "exec_start_contract": "EXPECTED",
+            "unit_fragment_contract": "EXPECTED",
+            "drop_in_contract": "EXPECTED",
+            "working_directory_contract": "EXPECTED",
+            "external_config_contract": "EXPECTED",
+            "file_and_unit_override_status": "NO_UNVERIFIED_OVERRIDE",
+            "env_override_contract": "EXPECTED",
+            "decision_config_override_contract": "EXPECTED",
+            "runtime_config_basis": "next start configuration only",
+            "live_process_environment_verification": "UNVERIFIED_BY_APPROVED_ROUTE",
+        },
+        "db_strategy_state": {
+            "latest_as_of_date": "2026-08-08",
+            "signal_symbol": "QQQM",
+            "strategy_on": "1",
+            "version": "2",
+            "weights": "QQQM=100.0000,QLD=0.0000,TQQQ=0.0000",
+            "dd_bucket_parameter": "PROVISIONAL:15 / 25 / 35 / 45%",
+            "recovery_rule_parameter": "PROVISIONAL:최대 DD 15% 이상 + 현재 DD 10% 이하",
+            "rebalance_tolerance_parameter": "PROVISIONAL:5.0%",
+            "vix_threshold_parameter": "PROVISIONAL:35",
+            "ma_200_guard_parameter": "PROVISIONAL:QQQM < MA200 시 공격 버킷 1단계 축소",
+            "order_buffer_retry_policy_parameter": "PROVISIONAL:초기 BUY 0 tick / SELL 0 tick, 재시도 BUY +1 tick / SELL +1 tick, 최대 3회, 대기 2000ms",
+            "max_daily_turnover_parameter": "PROVISIONAL:미정의 (0으로 비활성)",
+            "max_order_notional_parameter": "PROVISIONAL:미정의 (0으로 비활성)",
+            "max_retry_exposure_parameter": "PROVISIONAL:미정의 (0으로 비활성)",
+            "max_slippage_parameter": "PROVISIONAL:미정의 (0으로 비활성)",
+            "registry_semantics": "database record not runtime effective",
+            "database_snapshot_consistency": "double-read-nonatomic",
+        },
+        "eod_state_pair": {
+            "latest_state": "2026-08-08,QQQM,500.0000,480.0000,4.0000,12.0000,NORMAL,LESS_THAN_15,1,2,100.0000,0.0000,0.0000",
+            "latest_date_row_count": "1",
+            "previous_state": "2026-08-07,QQQM,500.0000,475.0000,5.0000,12.0000,NORMAL,LESS_THAN_15,1,2,100.0000,0.0000,0.0000",
+            "previous_date_row_count": "1",
+        },
+        "order_mode_ownership_quantity": {
+            "operating_mode_db": "PAPER",
+            "effective_mode": "PAPER",
+            "effective_mode_source": "database record",
+            "effective_mode_verification": "VERIFIED_DATABASE_RECORD",
+            "execution_enabled": "false",
+            "kill_switch_db": "OFF",
+            "submission_guard_derivation": "BLOCKED_PAPER_MODE",
+            "latest_job": "2026-08-08,COMPLETED",
+            "open_order_count": "0",
+            "ownership_scope_verification": "unverified outside Java host",
+            "strategy_off_order_intent_policy": "zero intents",
+            "quantity_policy": "absolute target notional gap divided by limit price and rounded down",
+            "risk_limit_application": "post-sizing order block",
+            "buy_reference_price_policy": "best ask then last",
+            "sell_reference_price_policy": "best bid then last",
+            "order_price_rounding": "HALF_UP-2-decimals",
+            "quantity_rounding": "DOWN-integer",
+            "fee_pct": "0.25",
+            "sell_proceeds_haircut": "0.995",
+            "sell_quantity_cap": "integer owned position",
+            "buy_quantity_cap": "remaining USD after fee",
+            "cash_source_policy": "KIS USD orderable cash plus fee-adjusted sell proceeds",
+            "fx_quantity_policy": "FX excluded from order quantity",
+            "sell_priority": "TQQQ-QLD-QQQM",
+            "buy_priority": "QQQM-QLD-TQQQ",
+            "unsupported_holding_guard": "QQQ only",
+            "order_contract_source": "pinned deployed Java revision",
+            "order_contract_live_process_environment": "UNVERIFIED_BY_APPROVED_ROUTE",
+        },
+        "production_provider_contract": {
+            "quote_provider": "KIS current-file configuration without a network call",
+            "auxiliary_provider": "Yahoo configured without a network call",
+            "contract_source": "pinned deployed source blobs",
+            "provider_network_call": "none",
+            "provider_contract_verification": "UNVERIFIED_BY_APPROVED_ROUTE",
+            "provider_live_process_environment": "UNVERIFIED_BY_APPROVED_ROUTE",
+            "kis_origin_file_contract": "EXPECTED_PRODUCTION",
+            "kis_quote_contract": "v1_해외주식-009",
+            "kis_quote_method": "GET",
+            "kis_quote_path": "/uapi/overseas-price/v1/quotations/price",
+            "kis_auth_query": "AUTH empty",
+            "kis_exchange_query": "EXCD NAS",
+            "kis_symbol_query": "SYMB runtime signal symbol",
+            "kis_session_scheme_contract": "source scheme verified with credential value omitted",
+            "kis_default_header_contract": "JSON content type and configured application credentials",
+            "kis_quote_transaction_prefix": "HHDFS",
+            "kis_quote_transaction_digits_part_1": "0000",
+            "kis_quote_transaction_digits_part_2": "0300",
+            "kis_price_field": "output.base",
+            "kis_status_validation": "business result code not enforced before output.base use",
+            "kis_connect_timeout_binding": "Netty connect timeout from KIS properties",
+            "kis_response_timeout_binding": "Netty response and blocking timeout from KIS request property",
+            "yahoo_origin": "https://query1.finance.yahoo.com",
+            "yahoo_chart_contract": "v8-chart",
+            "yahoo_chart_method": "GET",
+            "yahoo_chart_path": "/v8/finance/chart/{symbol}",
+            "yahoo_vix_symbol": "^VIX",
+            "yahoo_vix_field": "meta.regularMarketPrice",
+            "yahoo_vix_null_policy": "empty result on missing or failed response",
+            "yahoo_history_symbol": "runtime signal symbol default QQQM",
+            "yahoo_history_range": "1y",
+            "yahoo_history_interval": "1d",
+            "yahoo_history_field": "indicators.quote.close",
+            "yahoo_history_null_policy": "null closes filtered",
+            "yahoo_history_selection": "latest requested count",
+            "yahoo_ma_method": "arithmetic mean scale 4 HALF_UP",
+            "yahoo_price_adjustment": "unadjusted close field",
+            "yahoo_connect_timeout_binding": "Netty connect timeout from Yahoo properties",
+            "yahoo_response_timeout_binding": "Netty response and blocking timeout from Yahoo request property",
+            "yahoo_official_status": "UNVERIFIED_BY_APPROVED_ROUTE",
+            "corporate_action_contract": "UNVERIFIED_BY_APPROVED_ROUTE",
+        },
+        "price_market_time_semantics": {
+            "strategy_price_kind": "previous-close",
+            "market_zone": "America/New_York",
+            "eod_schedule": "16:15-business-days",
+            "market_as_of_date_source": "scheduler-market-date",
+            "upstream_observed_at": "NOT_PERSISTED",
+            "upstream_available_at": "NOT_PERSISTED",
+        },
+        "kis_vix_ma200_semantics": {
+            "base_upstream_date": "NOT_PERSISTED",
+            "base_date_verification": "UNVERIFIED_BY_APPROVED_ROUTE",
+            "vix_source": "Yahoo spot not queried",
+            "vix_observed_at": "NOT_PERSISTED",
+            "ma_period": "200",
+            "ma_session_membership": "NOT_PERSISTED",
+            "ma_price_adjustment": "UNVERIFIED_BY_APPROVED_ROUTE",
+        },
+        "freshness_retry_deadline": {
+            "kis_connect_timeout": "3s",
+            "kis_request_timeout": "10s",
+            "yahoo_connect_timeout": "3s",
+            "yahoo_request_timeout": "5s",
+            "order_max_attempts": "3",
+            "order_retry_wait_ms": "2000",
+            "input_freshness_enforcement": "NOT_IMPLEMENTED",
+            "eod_input_retry_schedule": "NOT_IMPLEMENTED",
+            "rebalance_input_retry_schedule": "NOT_IMPLEMENTED",
+            "eod_deadline": "NOT_IMPLEMENTED",
+            "rebalance_deadline": "NOT_IMPLEMENTED",
+        },
+        "operational_comparison_tolerances": {
+            "rebalance_tolerance_pct": "5.0",
+            "tick_size": "0.01",
+            "price_rounding": "HALF_UP-2-decimals",
+            "quantity_rounding": "DOWN-integer",
+            "buy_priority": "QQQM-QLD-TQQQ",
+            "sell_priority": "TQQQ-QLD-QQQM",
+            "operational_comparison_window": "NOT_IMPLEMENTED",
+            "operational_field_tolerances": "NOT_IMPLEMENTED",
+        },
+    }
+
+
+def raw_protocol(
+    values: dict[str, dict[str, str]] | None = None,
+    runtime_sha: str = FAKE_RUNTIME_SHA,
+) -> bytes:
+    values = values or fake_raw_values(runtime_sha)
+    lines = ["C0B_RAW_V1"]
+    for item_id in ITEM_IDS[:10]:
+        for name in RAW_FACTS[item_id]:
+            lines.append(f"{item_id}\t{name}\t{values[item_id][name]}")
+    lines.append("C0B_RAW_END")
+    return ("\n".join(lines) + "\n").encode()
+
+
+def decision_record(revision: str = APPROVED_C0A_SHA) -> str:
+    rows = []
+    for number in range(1, 11):
+        rows.append(
+            f"| D-{number:02d} | fixture | 조건부 승인 | Inys | "
+            f"2026-08-09T12:00:00+09:00 | 문서={revision}; 코드={revision} |"
+        )
+    scope = (
+        "대상=12개; 접근방법=GitHub Actions PROD SSH로 운영 호스트 shell 조회·DB SELECT; "
+        "권한=읽기 전용; 정제=필수; 저장위치=docs/v2-cutover/evidence/c0b/; "
+        "원문저장=금지; 보존=Git 이력"
+    )
+    rows.append(
+        f"| C0-B 읽기 전용 수집 승인 | {scope} | - | 수집 승인 | Inys | "
+        "2026-08-09T12:30:00+09:00 |"
+    )
+    return "\n".join(rows) + "\n"
+
+
+class C0BToolsTest(unittest.TestCase):
+    def setUp(self) -> None:
+        self.temporary = tempfile.TemporaryDirectory()
+        self.root = Path(self.temporary.name)
+        self.runner_temp = self.root / "runner-temp"
+        self.runner_temp.mkdir()
+        self.fake_repository = self.root / "fake-repository"
+        self.fake_repository.mkdir()
+        subprocess.run(["git", "init", "-q"], cwd=self.fake_repository, check=True)
+        subprocess.run(
+            ["git", "config", "user.name", "Fixture"],
+            cwd=self.fake_repository,
+            check=True,
+        )
+        subprocess.run(
+            ["git", "config", "user.email", "fixture@example.invalid"],
+            cwd=self.fake_repository,
+            check=True,
+        )
+        commit_env = dict(os.environ)
+        commit_env["GIT_AUTHOR_DATE"] = "2026-08-09T00:00:00+09:00"
+        commit_env["GIT_COMMITTER_DATE"] = "2026-08-09T00:00:00+09:00"
+        subprocess.run(
+            ["git", "commit", "-q", "--allow-empty", "-m", "fixture"],
+            cwd=self.fake_repository,
+            env=commit_env,
+            check=True,
+        )
+        self.workflow_sha = subprocess.check_output(
+            ["git", "rev-parse", "HEAD"], cwd=self.fake_repository, text=True
+        ).strip()
+        subprocess.run(
+            [
+                "git",
+                "fetch",
+                "-q",
+                str(SCRIPT_DIR.parents[2]),
+                "HEAD",
+            ],
+            cwd=self.fake_repository,
+            check=True,
+        )
+        self.runtime_sha = PINNED_RUNTIME_SHA
+        self.workflow_context = {
+            "expected_workflow_sha": self.workflow_sha,
+            "expected_workflow_run_id": "12345678901",
+            "expected_workflow_run_attempt": "1",
+        }
+        self.decision_file = self.root / "C0_DECISIONS.md"
+        self.decision_file.write_text(decision_record(), encoding="utf-8")
+        self.known_file = self.root / "known.json"
+        self.known_file.write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "kind": "c0b_known_deployments",
+                    "deployments": [
+                        {
+                            "git_sha": self.runtime_sha,
+                            "jar_sha256": FAKE_JAR_SHA,
+                            "run_id": int(PINNED_DEPLOY_RUN_ID),
+                            "run_head_sha": self.runtime_sha,
+                            "run_conclusion": "success",
+                            "workflow_file": ".github/workflows/deploy-prod.yml",
+                            "run_url": (
+                                "https://github.com/ksi2564/systematic-trading/actions/runs/"
+                                + PINNED_DEPLOY_RUN_ID
+                            ),
+                        }
+                    ],
+                }
+            ),
+            encoding="utf-8",
+        )
+
+    def tearDown(self) -> None:
+        self.temporary.cleanup()
+
+    def sanitize(self, payload: bytes | None = None, output_name: str = "sanitized") -> subprocess.CompletedProcess[bytes]:
+        output_dir = self.runner_temp / output_name
+        env = dict(os.environ)
+        env["RUNNER_TEMP"] = str(self.runner_temp)
+        env["PYTHONDONTWRITEBYTECODE"] = "1"
+        return subprocess.run(
+            [
+                sys.executable,
+                str(SCRIPT_DIR / "sanitize_capture.py"),
+                "--output-dir",
+                str(output_dir),
+                "--captured-at",
+                CAPTURED_AT,
+                "--collector",
+                "github-actions-prod-read-only",
+                "--workflow-sha",
+                self.workflow_sha,
+                "--workflow-run-id",
+                "12345678901",
+                "--workflow-run-attempt",
+                "1",
+                "--repository-root",
+                str(self.fake_repository),
+                "--decision-file",
+                str(self.decision_file),
+                "--known-deployments",
+                str(self.known_file),
+            ],
+            input=payload or raw_protocol(runtime_sha=self.runtime_sha),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            env=env,
+            check=False,
+        )
+
+    def build_bundle(self, output_name: str = "c0b") -> Path:
+        self.assertEqual(self.sanitize().returncode, 0)
+        output = self.root / output_name
+        build_bundle_atomic(
+            capture_dir=self.runner_temp / "sanitized",
+            output_dir=output,
+            decision_file=self.decision_file,
+            snapshot_at="2026-08-09T13:01:00+09:00",
+            compared_at="2026-08-09T13:02:00+09:00",
+            diff_collector="c0b-code-owned-comparison",
+            known_deployments_path=self.known_file,
+            repository_root=self.fake_repository,
+            **self.workflow_context,
+        )
+        return output
+
+    def test_item_order_is_exact(self) -> None:
+        self.assertEqual(
+            ITEM_IDS,
+            (
+                "java_code_sha",
+                "effective_runtime_config",
+                "db_strategy_state",
+                "eod_state_pair",
+                "order_mode_ownership_quantity",
+                "production_provider_contract",
+                "price_market_time_semantics",
+                "kis_vix_ma200_semantics",
+                "freshness_retry_deadline",
+                "operational_comparison_tolerances",
+                "approval_document_code_sha",
+                "c0a_diff_summary",
+            ),
+        )
+
+    def test_order_predicate_requires_a_completed_latest_job(self) -> None:
+        self.assertTrue(_latest_job_is_completed("2026-08-08,COMPLETED"))
+        for value in ("none", "2026-08-08,FAILED", "2026-08-08,RUNNING"):
+            with self.subTest(value=value):
+                self.assertFalse(_latest_job_is_completed(value))
+
+    def test_order_predicate_requires_verified_live_process_environment(self) -> None:
+        config = fake_raw_values(self.runtime_sha)["effective_runtime_config"]
+        order = fake_raw_values(self.runtime_sha)["order_mode_ownership_quantity"]
+        self.assertFalse(_item5_live_environment_verified(config, order))
+        verified_config = dict(config)
+        verified_order = dict(order)
+        verified_config["live_process_environment_verification"] = (
+            "VERIFIED_LIVE_PROCESS_ENVIRONMENT"
+        )
+        verified_order["order_contract_live_process_environment"] = (
+            "VERIFIED_LIVE_PROCESS_ENVIRONMENT"
+        )
+        self.assertTrue(
+            _item5_live_environment_verified(verified_config, verified_order)
+        )
+
+    def test_stream_sanitizer_writes_exact_atomic_capture_directory(self) -> None:
+        result = self.sanitize()
+        self.assertEqual(result.returncode, 0, result.stderr.decode())
+        self.assertEqual(result.stdout, b"")
+        output_dir = self.runner_temp / "sanitized"
+        payloads = validate_capture_directory(
+            output_dir,
+            CAPTURED_AT,
+            known_deployments_path=self.known_file,
+            repository_root=self.fake_repository,
+            **self.workflow_context,
+            decision_file=self.decision_file,
+        )
+        self.assertEqual(tuple(payloads), ITEM_IDS)
+        self.assertEqual(len(list(output_dir.rglob("*.json"))), 12)
+        serialized = "".join(
+            path.read_text(encoding="utf-8") for path in output_dir.rglob("*.json")
+        )
+        self.assertNotIn(self.runtime_sha, serialized)
+        self.assertNotIn(FAKE_JAR_SHA, serialized)
+        self.assertIn("matched known production deployment", serialized)
+
+    def test_raw_stream_never_accepts_secret_or_partial_output(self) -> None:
+        values = fake_raw_values(self.runtime_sha)
+        values["db_strategy_state"]["dd_bucket_parameter"] = (
+            "ADOPTED:password=fixture-value"
+        )
+        result = self.sanitize(raw_protocol(values), "rejected")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertFalse((self.runner_temp / "rejected").exists())
+        self.assertNotIn(b"fixture-value", result.stderr)
+
+    def test_missing_stream_terminator_leaves_no_directory(self) -> None:
+        payload = raw_protocol().replace(b"C0B_RAW_END\n", b"")
+        result = self.sanitize(payload, "partial")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertFalse((self.runner_temp / "partial").exists())
+
+    def test_raw_stream_rejects_duplicate_order_terminator_and_size_attacks(self) -> None:
+        lines = raw_protocol(runtime_sha=self.runtime_sha).splitlines(keepends=True)
+        attacks = {
+            "duplicate-record": b"".join(lines[:2] + [lines[1]] + lines[2:]),
+            "out-of-order": b"".join(
+                lines[:1] + [lines[2], lines[1]] + lines[3:]
+            ),
+            "repeated-terminator": raw_protocol(runtime_sha=self.runtime_sha)
+            + b"C0B_RAW_END\n",
+            "oversized-line": b"C0B_RAW_V1\n" + b"x" * 2049 + b"\n",
+        }
+        for name, payload in attacks.items():
+            with self.subTest(name=name):
+                with self.assertRaises(C0BError):
+                    parse_raw_stream(io.BytesIO(payload))
+
+    def test_existing_or_symlink_output_is_never_overwritten(self) -> None:
+        existing = self.runner_temp / "existing"
+        existing.mkdir()
+        marker = existing / "marker"
+        marker.write_text("preserve", encoding="utf-8")
+        result = self.sanitize(output_name="existing")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(marker.read_text(encoding="utf-8"), "preserve")
+
+        target = self.runner_temp / "target"
+        target.mkdir()
+        link = self.runner_temp / "linked"
+        link.symlink_to(target, target_is_directory=True)
+        result = self.sanitize(output_name="linked")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(list(target.iterdir()), [])
+
+    def test_deployment_requires_both_release_and_jar_match(self) -> None:
+        parsed = parse_raw_stream(io.BytesIO(raw_protocol(runtime_sha=self.runtime_sha)))
+        deployments = load_known_deployments(self.known_file)
+        self.assertEqual(resolve_deployment(parsed, deployments), self.runtime_sha)
+        parsed["java_code_sha"]["runtime_jar_sha256"] = "f" * 64
+        with self.assertRaisesRegex(C0BError, "cannot be resolved"):
+            resolve_deployment(parsed, deployments)
+
+        active = fake_raw_values(self.runtime_sha)
+        active["java_code_sha"]["service_active_state"] = "active"
+        active["java_code_sha"]["runtime_code_basis"] = (
+            "disk jar changed or timestamp ambiguous"
+        )
+        with self.assertRaisesRegex(C0BError, "cannot be proven"):
+            resolve_deployment(
+                parse_raw_stream(io.BytesIO(raw_protocol(active))), deployments
+            )
+
+    def test_known_deployment_provenance_and_local_commit_are_required(self) -> None:
+        payload = json.loads(self.known_file.read_text(encoding="utf-8"))
+        payload["deployments"][0]["run_head_sha"] = "f" * 40
+        invalid_known = self.root / "invalid-known.json"
+        invalid_known.write_text(json.dumps(payload), encoding="utf-8")
+        with self.assertRaises(C0BError):
+            load_known_deployments(invalid_known)
+
+        self.assertEqual(self.sanitize().returncode, 0)
+        unrelated = self.root / "unrelated"
+        unrelated.mkdir()
+        subprocess.run(["git", "init", "-q"], cwd=unrelated, check=True)
+        with self.assertRaisesRegex(C0BError, "local Git commit"):
+            validate_capture_directory(
+                self.runner_temp / "sanitized",
+                CAPTURED_AT,
+                known_deployments_path=self.known_file,
+                repository_root=unrelated,
+                decision_file=self.decision_file,
+            )
+
+    def test_c0a_revision_is_pinned_not_merely_consistent(self) -> None:
+        self.decision_file.write_text(
+            decision_record(self.runtime_sha), encoding="utf-8"
+        )
+        result = self.sanitize(output_name="wrong-approved-revision")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertFalse((self.runner_temp / "wrong-approved-revision").exists())
+
+    def test_state_semantics_and_cross_capture_coherence_fail_closed(self) -> None:
+        values = fake_raw_values(self.runtime_sha)
+        values["eod_state_pair"]["latest_state"] = values["eod_state_pair"][
+            "latest_state"
+        ].replace(",4.0000,12.0000,", ",4.1000,12.0000,")
+        with self.assertRaises(C0BError):
+            parse_raw_stream(io.BytesIO(raw_protocol(values)))
+
+        values = fake_raw_values(self.runtime_sha)
+        values["eod_state_pair"]["previous_state"] = values["eod_state_pair"][
+            "previous_state"
+        ].replace("2026-08-07", "2026-08-08")
+        result = self.sanitize(raw_protocol(values), "same-date")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertFalse((self.runner_temp / "same-date").exists())
+
+        values = fake_raw_values(self.runtime_sha)
+        values["eod_state_pair"]["latest_date_row_count"] = "2"
+        self.assertEqual(self.sanitize(raw_protocol(values)).returncode, 0)
+        output = self.root / "duplicate-date-bundle"
+        build_bundle_atomic(
+            capture_dir=self.runner_temp / "sanitized",
+            output_dir=output,
+            decision_file=self.decision_file,
+            snapshot_at="2026-08-09T13:01:00+09:00",
+            compared_at="2026-08-09T13:02:00+09:00",
+            diff_collector="c0b-code-owned-comparison",
+            known_deployments_path=self.known_file,
+            repository_root=self.fake_repository,
+            **self.workflow_context,
+        )
+        diff = json.loads((output / "diff.json").read_text(encoding="utf-8"))
+        self.assertEqual(diff["items"][2]["result"], "DIFF")
+        self.assertEqual(diff["items"][3]["result"], "DIFF")
+
+    def test_missing_strategy_rows_are_explicit_valid_results(self) -> None:
+        values = fake_raw_values(self.runtime_sha)
+        for name in ("latest_as_of_date", "signal_symbol", "strategy_on", "version", "weights"):
+            values["db_strategy_state"][name] = "MISSING"
+        values["eod_state_pair"]["latest_state"] = "MISSING"
+        values["eod_state_pair"]["latest_date_row_count"] = "0"
+        values["eod_state_pair"]["previous_state"] = "MISSING"
+        values["eod_state_pair"]["previous_date_row_count"] = "0"
+        parse_raw_stream(io.BytesIO(raw_protocol(values)))
+
+    def test_eod_baseline_drift_is_sanitized_and_reported_as_diff(self) -> None:
+        values = fake_raw_values(self.runtime_sha)
+        values["eod_state_pair"]["latest_state"] = values["eod_state_pair"][
+            "latest_state"
+        ].replace("LESS_THAN_15", "FROM_15_TO_25")
+        result = self.sanitize(raw_protocol(values), "baseline-drift")
+        self.assertEqual(result.returncode, 0, result.stderr.decode())
+        output = self.root / "baseline-drift-bundle"
+        build_bundle_atomic(
+            capture_dir=self.runner_temp / "baseline-drift",
+            output_dir=output,
+            decision_file=self.decision_file,
+            snapshot_at="2026-08-09T13:01:00+09:00",
+            compared_at="2026-08-09T13:02:00+09:00",
+            diff_collector="c0b-code-owned-comparison",
+            known_deployments_path=self.known_file,
+            repository_root=self.fake_repository,
+            **self.workflow_context,
+        )
+        diff = json.loads((output / "diff.json").read_text(encoding="utf-8"))
+        self.assertEqual(diff["items"][2]["result"], "DIFF")
+        self.assertEqual(diff["items"][3]["result"], "DIFF")
+
+    def test_sql_guard_allows_only_one_read_query(self) -> None:
+        script = str(SCRIPT_DIR / "collect_remote.sh")
+        self_test = subprocess.run(
+            [script, "--self-test"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            check=False,
+        )
+        self.assertEqual(self_test.returncode, 0)
+        valid = subprocess.run(
+            [
+                script,
+                "--validate-select",
+                "SELECT COUNT(*) FROM execution_order WHERE status IN ('PLANNED','REQUESTED','ACCEPTED','CONFIRMATION_REQUIRED')",
+            ],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            check=False,
+        )
+        self.assertEqual(valid.returncode, 0)
+        for statement in (
+            "UPDATE strategy_state SET version=2",
+            "SELECT 1; DELETE FROM strategy_state",
+            "SELECT SLEEP(1)",
+            "SELECT * FROM mysql.user",
+            "SELECT * FROM strategy_state FOR UPDATE",
+            "SELECT * FROM strategy_state INTO OUTFILE '/tmp/raw'",
+        ):
+            result = subprocess.run(
+                [script, "--validate-select", statement],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
+                check=False,
+            )
+            self.assertNotEqual(result.returncode, 0, statement)
+
+    def test_env_decoder_handles_example_quotes_without_eval(self) -> None:
+        script = str(SCRIPT_DIR / "collect_remote.sh")
+        for encoded, expected in (("'prod'", "prod"), ('"3s"', "3s"), ("false", "false")):
+            result = subprocess.run(
+                [script, "--decode-env-value", encoded],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
+                check=False,
+                text=True,
+            )
+            self.assertEqual(result.returncode, 0)
+            self.assertEqual(result.stdout, expected)
+        malformed = subprocess.run(
+            [script, "--decode-env-value", "'prod"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            check=False,
+        )
+        self.assertNotEqual(malformed.returncode, 0)
+
+    def test_env_file_parser_is_canonical_and_rejects_duplicates(self) -> None:
+        script = str(SCRIPT_DIR / "collect_remote.sh")
+        fixtures = {
+            "valid": ("KEY='prod'\n# comment\nOTHER=value\n", 0),
+            "leading-space": (" KEY=prod\n", 1),
+            "export": ("export KEY=prod\n", 1),
+            "duplicate": ("KEY=prod\nKEY=default\n", 1),
+            "continuation": ("KEY=prod\\\n", 1),
+            "leading-comment": ("  # comment\nKEY=prod\n", 1),
+        }
+        for name, (content, expected_failure) in fixtures.items():
+            path = self.root / f"{name}.env"
+            path.write_text(content, encoding="utf-8")
+            result = subprocess.run(
+                [script, "--validate-env-file", str(path), "KEY"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
+                check=False,
+            )
+            with self.subTest(name=name):
+                self.assertEqual(result.returncode != 0, bool(expected_failure))
+
+    def test_prod_env_key_allowlist_rejects_relaxed_binding_aliases(self) -> None:
+        script = str(SCRIPT_DIR / "collect_remote.sh")
+        accepted = self.root / "prod-accepted.env"
+        accepted.write_text(
+            "SPRING_PROFILES_ACTIVE=prod\n"
+            "SPRING_DATASOURCE_URL=jdbc:mysql://127.0.0.1:3306/trading\n"
+            "KIS_BASE_URL=https://openapi.koreainvestment.com:9443\n"
+            "KIS_CONNECT_TIMEOUT=3s\n"
+            "TRADING_CIRCUIT_BREAKER_MA_PERIOD=200\n",
+            encoding="utf-8",
+        )
+        self.assertEqual(
+            subprocess.run(
+                [script, "--validate-prod-env-file", str(accepted)],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
+                check=False,
+            ).returncode,
+            0,
+        )
+        for index, alias in enumerate(
+            (
+                "KIS_BASEURL=value",
+                "KIS_CONNECTTIMEOUT=3s",
+                "TRADING_CIRCUITBREAKER_MA_PERIOD=200",
+                "TRADING_MARKETCALENDAR_MARKET_ZONE_ID=UTC",
+                "UNKNOWN_KEY=value",
+            )
+        ):
+            rejected = self.root / f"prod-rejected-{index}.env"
+            rejected.write_text(alias + "\n", encoding="utf-8")
+            result = subprocess.run(
+                [script, "--validate-prod-env-file", str(rejected)],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
+                check=False,
+            )
+            with self.subTest(alias=alias):
+                self.assertNotEqual(result.returncode, 0)
+
+    def test_remote_script_has_fixed_read_only_session_and_no_kis_credentials(self) -> None:
+        script = (SCRIPT_DIR / "collect_remote.sh").read_text(encoding="utf-8")
+        self.assertIn("--init-command='SET SESSION TRANSACTION READ ONLY'", script)
+        self.assertNotIn("read_env_raw KIS_APP_KEY", script)
+        self.assertNotIn("read_env_raw KIS_APP_SECRET", script)
+        self.assertNotIn("read_env_raw KIS_ACCOUNT_NO", script)
+        self.assertNotIn("curl ", script)
+        self.assertNotIn("wget ", script)
+        self.assertNotIn("SUM(quantity)", script)
+        self.assertIn("decision_config_override_contract", script)
+        self.assertIn("TRADINGMARKETCALENDAR", script)
+        self.assertIn("service_main_pid_after", script)
+        self.assertIn('"${service_main_pid}" == "${service_main_pid_after}"', script)
+
+    def test_remote_emissions_exactly_match_raw_fact_order(self) -> None:
+        script = (SCRIPT_DIR / "collect_remote.sh").read_text(encoding="utf-8")
+        emitted = re.findall(
+            r"^\s*emit ([a-z0-9_]+) ([a-z0-9_]+)", script, flags=re.MULTILINE
+        )
+        expected = [
+            (item_id, name)
+            for item_id in ITEM_IDS[:10]
+            for name in RAW_FACTS[item_id]
+        ]
+        self.assertEqual(emitted, expected)
+
+    def test_validation_binds_capture_and_bundle_to_expected_workflow_context(self) -> None:
+        self.assertEqual(self.sanitize().returncode, 0)
+        expected = {
+            "expected_workflow_sha": self.workflow_sha,
+            "expected_workflow_run_id": "12345678901",
+            "expected_workflow_run_attempt": "1",
+        }
+        validate_capture_directory(
+            self.runner_temp / "sanitized",
+            CAPTURED_AT,
+            known_deployments_path=self.known_file,
+            repository_root=self.fake_repository,
+            decision_file=self.decision_file,
+            **expected,
+        )
+        with self.assertRaisesRegex(C0BError, "expected workflow context"):
+            validate_capture_directory(
+                self.runner_temp / "sanitized",
+                CAPTURED_AT,
+                known_deployments_path=self.known_file,
+                repository_root=self.fake_repository,
+                decision_file=self.decision_file,
+                expected_workflow_sha=self.workflow_sha,
+                expected_workflow_run_id="12345678902",
+                expected_workflow_run_attempt="1",
+            )
+        output = self.root / "context-bound-bundle"
+        build_bundle_atomic(
+            capture_dir=self.runner_temp / "sanitized",
+            output_dir=output,
+            decision_file=self.decision_file,
+            snapshot_at="2026-08-09T13:01:00+09:00",
+            compared_at="2026-08-09T13:02:00+09:00",
+            diff_collector="c0b-code-owned-comparison",
+            known_deployments_path=self.known_file,
+            repository_root=self.fake_repository,
+            **self.workflow_context,
+        )
+        validate_bundle_directory(
+            output,
+            decision_file=self.decision_file,
+            known_deployments_path=self.known_file,
+            repository_root=self.fake_repository,
+            **expected,
+        )
+
+    def test_bundle_builder_rejects_omitted_or_mismatched_workflow_context(self) -> None:
+        self.assertEqual(self.sanitize().returncode, 0)
+        common = {
+            "capture_dir": self.runner_temp / "sanitized",
+            "decision_file": self.decision_file,
+            "snapshot_at": "2026-08-09T13:01:00+09:00",
+            "compared_at": "2026-08-09T13:02:00+09:00",
+            "diff_collector": "c0b-code-owned-comparison",
+            "known_deployments_path": self.known_file,
+            "repository_root": self.fake_repository,
+        }
+        with self.assertRaises(TypeError):
+            build_bundle_atomic(
+                output_dir=self.root / "omitted-context",
+                **common,
+            )
+        with self.assertRaisesRegex(C0BError, "expected workflow context"):
+            build_bundle_atomic(
+                output_dir=self.root / "mismatched-context",
+                expected_workflow_sha=self.workflow_sha,
+                expected_workflow_run_id="12345678902",
+                expected_workflow_run_attempt="1",
+                **common,
+            )
+        self.assertFalse((self.root / "omitted-context").exists())
+        self.assertFalse((self.root / "mismatched-context").exists())
+
+    def test_validation_clis_require_workflow_context_arguments(self) -> None:
+        capture_command = [
+            sys.executable,
+            str(SCRIPT_DIR / "validate_evidence.py"),
+            "captures",
+            "--capture-dir",
+            str(self.root / "unused-captures"),
+            "--captured-at",
+            CAPTURED_AT,
+        ]
+        build_command = [
+            sys.executable,
+            str(SCRIPT_DIR / "build_evidence.py"),
+            "--capture-dir",
+            str(self.root / "unused-captures"),
+            "--output-dir",
+            str(self.root / "unused-bundle"),
+            "--snapshot-at",
+            CAPTURED_AT,
+            "--compared-at",
+            CAPTURED_AT,
+        ]
+        for command in (capture_command, build_command):
+            with self.subTest(script=Path(command[1]).name):
+                result = subprocess.run(
+                    command,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.DEVNULL,
+                    check=False,
+                )
+                self.assertEqual(result.returncode, 2)
+
+    def test_bundle_builder_generates_checksums_diff_and_real_summary(self) -> None:
+        sanitized = self.runner_temp / "sanitized"
+        self.assertEqual(self.sanitize().returncode, 0)
+        output = self.root / "c0b"
+        build_bundle_atomic(
+            capture_dir=sanitized,
+            output_dir=output,
+            decision_file=self.decision_file,
+            snapshot_at="2026-08-09T13:01:00+09:00",
+            compared_at="2026-08-09T13:02:00+09:00",
+            diff_collector="c0b-code-owned-comparison",
+            known_deployments_path=self.known_file,
+            repository_root=self.fake_repository,
+            **self.workflow_context,
+        )
+        snapshot_sha, diff_sha = validate_bundle_directory(
+            output,
+            decision_file=self.decision_file,
+            known_deployments_path=self.known_file,
+            repository_root=self.fake_repository,
+        )
+        self.assertEqual(len(snapshot_sha), 64)
+        self.assertEqual(len(diff_sha), 64)
+        diff_payload = json.loads((output / "diff.json").read_text(encoding="utf-8"))
+        self.assertEqual(diff_payload["result"], "DIFF")
+        summary_payload = json.loads(
+            (output / "items/c0a_diff_summary.json").read_text(encoding="utf-8")
+        )
+        facts = {fact["name"]: fact["value"] for fact in summary_payload["data"]["facts"]}
+        self.assertEqual(facts["substantive aggregate result"], "DIFF")
+        substantive = diff_payload["items"][:-1]
+        diff_count = sum(item["result"] == "DIFF" for item in substantive)
+        self.assertEqual(facts["different substantive item count"], str(diff_count))
+        self.assertEqual(
+            facts["matching substantive item count"], str(11 - diff_count)
+        )
+        self.assertGreater(diff_count, 0)
+        self.assertNotIn("comparison plan required", json.dumps(summary_payload))
+
+    def test_bundle_time_order_failure_is_atomic(self) -> None:
+        sanitized = self.runner_temp / "sanitized"
+        self.assertEqual(self.sanitize().returncode, 0)
+        output = self.root / "invalid-bundle"
+        with self.assertRaisesRegex(C0BError, "time order"):
+            build_bundle_atomic(
+                capture_dir=sanitized,
+                output_dir=output,
+                decision_file=self.decision_file,
+                snapshot_at="2026-08-09T13:01:00+09:00",
+                compared_at="2026-08-09T12:59:00+09:00",
+                diff_collector="c0b-code-owned-comparison",
+                known_deployments_path=self.known_file,
+                repository_root=self.fake_repository,
+                **self.workflow_context,
+            )
+        self.assertFalse(output.exists())
+
+    def test_bundle_validation_recomputes_code_owned_results_without_plan(self) -> None:
+        output = self.build_bundle()
+        detail_path = output / "diff-items/java_code_sha.json"
+        detail = json.loads(detail_path.read_text(encoding="utf-8"))
+        detail["result"] = "NO_DIFF"
+        detail["summary"] = "Known production deployment and active running JAR evidence match the runtime predicate."
+        detail_bytes = (
+            json.dumps(detail, ensure_ascii=False, separators=(",", ":")) + "\n"
+        ).encode()
+        detail_path.write_bytes(detail_bytes)
+        detail_sha = hashlib.sha256(detail_bytes).hexdigest()
+
+        diff_path = output / "diff.json"
+        diff = json.loads(diff_path.read_text(encoding="utf-8"))
+        java_item = diff["items"][0]
+        java_item["result"] = "NO_DIFF"
+        java_item["details_sha256"] = detail_sha
+        java_item["details_source"] = (
+            "docs/v2-cutover/evidence/c0b/diff-items/java_code_sha.json"
+            f"#sha256={detail_sha}"
+        )
+        diff_path.write_text(
+            json.dumps(diff, ensure_ascii=False, separators=(",", ":")) + "\n",
+            encoding="utf-8",
+        )
+        with self.assertRaisesRegex(C0BError, "deterministic comparison"):
+            validate_bundle_directory(
+                output,
+                decision_file=self.decision_file,
+                known_deployments_path=self.known_file,
+                repository_root=self.fake_repository,
+            )
+
+    def test_bundle_checksum_tamper_and_approval_provenance_tamper_fail(self) -> None:
+        output = self.build_bundle()
+        item_path = output / "items/production_provider_contract.json"
+        item_path.write_bytes(item_path.read_bytes() + b" ")
+        with self.assertRaises(C0BError):
+            validate_bundle_directory(
+                output,
+                decision_file=self.decision_file,
+                known_deployments_path=self.known_file,
+                repository_root=self.fake_repository,
+            )
+
+        approval_path = (
+            self.runner_temp
+            / "sanitized/items/approval_document_code_sha.json"
+        )
+        approval = json.loads(approval_path.read_text(encoding="utf-8"))
+        approval["data"]["facts"][16]["value"] = "fffff"
+        approval_path.write_text(
+            json.dumps(approval, ensure_ascii=False, separators=(",", ":")) + "\n",
+            encoding="utf-8",
+        )
+        with self.assertRaisesRegex(C0BError, "local Git commit"):
+            validate_capture_directory(
+                self.runner_temp / "sanitized",
+                CAPTURED_AT,
+                known_deployments_path=self.known_file,
+                repository_root=self.fake_repository,
+                decision_file=self.decision_file,
+            )
+
+    def test_safe_detector_matches_repository_restrictions(self) -> None:
+        for unsafe in (
+            "password=fixture",
+            "Bearer fixturevalue",
+            "fixture@example.invalid",
+            "1234-5678-9012",
+            "1234.5678.9012",
+            "abcd-efgh-ijkl-mnop-qrst",
+            "A" * 32,
+            "ｐassword=fixture",
+            r"escaped\|pipe",
+        ):
+            with self.assertRaises(C0BError):
+                safe_evidence_text(unsafe, "fixture")
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -118,12 +118,12 @@ PYTHONDONTWRITEBYTECODE=1 python3 "${c0_gate_verifier}" "${repository_root}"
 PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover \
   -s "${documentation_test_dir}" \
   -p 'test_verify_c0_gate.py'
-[[ "$(grep -Ec '^    def test_' "${c0_gate_tests}")" -eq 57 ]]
+[[ "$(grep -Ec '^    def test_' "${c0_gate_tests}")" -eq 58 ]]
 grep -F 'C0 gate 양성/음성 57건' "${cutover_root}/DELIVERY_TRACE.md" >/dev/null
-grep -F 'C0 문서·기록 검사 57/57 로컬 통과' "${board_root}/app.js" >/dev/null
+grep -F 'C0 문서·기록 검사 58/58 로컬 통과' "${board_root}/app.js" >/dev/null
 grep -F 'C0 gate는 51/51이며 이후 추가된 C0-B 수집 승인 검사는 포함하지 않는다.' \
   "${cutover_root}/DELIVERY_TRACE.md" >/dev/null
-grep -F '현재 C0-B 승인 경계 보강본: 로컬 planning 10/10과 C0 gate 57/57' \
+grep -F '현재 C0-B 수집 승인 반영본: 로컬 C0 gate 58/58를 통과했다.' \
   "${cutover_root}/DELIVERY_TRACE.md" >/dev/null
 
 for decision_number in 01 02 03 04 05 06 07 08 09 10; do
@@ -478,7 +478,7 @@ grep -F 'C0-B 결과 재승인 뒤 섀도 가시성 개발·로컬 화면 QA 자
   "${cutover_root}/REQUIREMENTS.md" >/dev/null
 grep -F 'C0-B 결과 재승인 뒤 섀도 상태 개발·로컬 QA 자동, 공유 시험 서버 조회·데이터 생성은 실행 직전 승인 필수' \
   "${cutover_root}/SCREEN_SPEC.md" >/dev/null
-grep -F '| C0-B 읽기 전용 수집 승인 | - | - | 승인 대기 | - | - |' \
+grep -F '| C0-B 읽기 전용 수집 승인 | 대상=12개; 접근방법=GitHub Actions PROD SSH로 운영 호스트 shell 조회·DB SELECT; 권한=읽기 전용; 정제=필수; 저장위치=docs/v2-cutover/evidence/c0b/; 원문저장=금지; 보존=Git 이력 | - | 수집 승인 | Inys | 2026-08-09T22:27:14+09:00 |' \
   "${cutover_root}/C0_DECISIONS.md" >/dev/null
 grep -F '접근방법=GitHub Actions PROD SSH로 운영 호스트 shell 조회·DB SELECT; 권한=읽기 전용; 정제=필수; 저장위치=docs/v2-cutover/evidence/c0b/; 원문저장=금지; 보존=Git 이력' \
   "${cutover_root}/C0_DECISIONS.md" >/dev/null
@@ -727,7 +727,7 @@ for planning_ci_path in \
   '.github/PULL_REQUEST_TEMPLATE/v2-feature.md'; do
   [[ "$(grep -Fc -- "- \"${planning_ci_path}\"" "${v2_ci_workflow}")" -eq 2 ]]
 done
-grep -F '39e1f896720ba8b4a7e33d3148ceb96b3ce284b4f4330e44c037690409483962' \
+grep -F '99926678252b93d9f696a10e1b6e5063b26900f65cb86cc7bdaf1abd86980b43' \
   "${cutover_root}/C0_DECISIONS.md" >/dev/null
 
 printf 'C0 decision, planning board, single trace, feature template, and PR gate contract PASS\n'

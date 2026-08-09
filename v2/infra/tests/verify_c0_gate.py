@@ -1011,6 +1011,71 @@ def _validate_diff_artifact(
     return compared_at
 
 
+def _fixed_c0_b_artifact_reference(
+    repository_root: Path,
+    relative_path: str,
+    context: str,
+) -> str:
+    relative = PurePosixPath(relative_path)
+    if relative.is_absolute() or ".." in relative.parts:
+        raise GateError(f"{context}: preapproval artifact path is invalid")
+    current = repository_root
+    for part in relative.parts:
+        current = current / part
+        if current.is_symlink():
+            raise GateError(f"{context}: symlink artifacts are not allowed")
+    candidate = current
+    if not candidate.is_file():
+        raise GateError(f"{context}: required preapproval artifact does not exist")
+    try:
+        candidate.resolve().relative_to(repository_root.resolve())
+    except ValueError as error:
+        raise GateError(f"{context}: artifact resolves outside the repository") from error
+    digest = hashlib.sha256(candidate.read_bytes()).hexdigest()
+    return f"{relative_path}#sha256={digest}"
+
+
+def _validate_completed_c0_b_artifacts(
+    repository_root: Path,
+    snapshot_ref: str,
+    diff_ref: str,
+    row_records: dict[str, dict[str, object]],
+    approval_document_sha: str | None,
+    approval_code_sha: str | None,
+    latest_c0_a_sha: tuple[str, str] | None,
+) -> datetime:
+    snapshot_path, snapshot_payload, snapshot_digest = _artifact(
+        repository_root,
+        snapshot_ref,
+        "C0-B snapshot manifest",
+    )
+    diff_path, diff_payload, _ = _artifact(
+        repository_root,
+        diff_ref,
+        "C0-B diff artifact",
+    )
+    if snapshot_path == diff_path:
+        raise GateError("C0-B snapshot manifest and diff artifact must be separate files")
+    snapshot_time, document_sha, code_sha = _validate_snapshot_manifest(
+        snapshot_payload, row_records, repository_root
+    )
+    if document_sha != approval_document_sha or code_sha != approval_code_sha:
+        raise GateError("C0-B snapshot document/code SHAs do not match the approval row")
+    if latest_c0_a_sha is None or (document_sha, code_sha) != latest_c0_a_sha:
+        raise GateError(
+            "C0-B document/code SHAs do not match the latest C0-A approval"
+        )
+    diff_time = _validate_diff_artifact(
+        diff_payload,
+        snapshot_digest,
+        row_records,
+        repository_root,
+    )
+    if diff_time < snapshot_time:
+        raise GateError("C0-B diff comparison cannot predate the snapshot manifest")
+    return diff_time
+
+
 def _validate_c0_b(
     c0_text: str,
     repository_root: Path,
@@ -1137,6 +1202,26 @@ def _validate_c0_b(
     if final_state == C0_B_PENDING_STATES[final_item]:
         if [snapshot_ref, diff_ref, owner, timestamp] != ["-", "-", "-", "-"]:
             raise GateError("C0-B final pending row must contain only placeholders")
+        if completed_items == len(C0_B_CAPTURE_ITEMS):
+            preapproval_snapshot_ref = _fixed_c0_b_artifact_reference(
+                repository_root,
+                "docs/v2-cutover/evidence/c0b/snapshot.json",
+                "C0-B snapshot manifest",
+            )
+            preapproval_diff_ref = _fixed_c0_b_artifact_reference(
+                repository_root,
+                "docs/v2-cutover/evidence/c0b/diff.json",
+                "C0-B diff artifact",
+            )
+            _validate_completed_c0_b_artifacts(
+                repository_root,
+                preapproval_snapshot_ref,
+                preapproval_diff_ref,
+                row_records,
+                approval_document_sha,
+                approval_code_sha,
+                latest_c0_a_sha,
+            )
         return False
     if final_state != "재승인 완료":
         raise GateError(f"C0-B final bundle: unsupported state: {final_state}")
@@ -1148,35 +1233,15 @@ def _validate_c0_b(
         raise GateError("C0-B final reapproval requires complete C0-A and C0-B rows")
     _validate_owner(owner, "C0-B final owner")
     final_approval_time = _parse_kst_timestamp(timestamp, "C0-B final approval time")
-    snapshot_path, snapshot_payload, snapshot_digest = _artifact(
+    diff_time = _validate_completed_c0_b_artifacts(
         repository_root,
         snapshot_ref,
-        "C0-B snapshot manifest",
-    )
-    diff_path, diff_payload, _ = _artifact(
-        repository_root,
         diff_ref,
-        "C0-B diff artifact",
-    )
-    if snapshot_path == diff_path:
-        raise GateError("C0-B snapshot manifest and diff artifact must be separate files")
-    snapshot_time, document_sha, code_sha = _validate_snapshot_manifest(
-        snapshot_payload, row_records, repository_root
-    )
-    if document_sha != approval_document_sha or code_sha != approval_code_sha:
-        raise GateError("C0-B snapshot document/code SHAs do not match the approval row")
-    if latest_c0_a_sha is None or (document_sha, code_sha) != latest_c0_a_sha:
-        raise GateError(
-            "C0-B document/code SHAs do not match the latest C0-A approval"
-        )
-    diff_time = _validate_diff_artifact(
-        diff_payload,
-        snapshot_digest,
         row_records,
-        repository_root,
+        approval_document_sha,
+        approval_code_sha,
+        latest_c0_a_sha,
     )
-    if diff_time < snapshot_time:
-        raise GateError("C0-B diff comparison cannot predate the snapshot manifest")
     if final_approval_time < diff_time:
         raise GateError("C0-B final reapproval cannot predate the completed diff")
     return True

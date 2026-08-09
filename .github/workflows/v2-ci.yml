@@ -28,6 +28,8 @@ on:
       - "src/test/resources/strategy-parity/**"
       - ".github/workflows/v2-ci.yml"
       - ".github/workflows/v2-release-candidate.yml"
+      - ".github/workflows/deploy-prod.yml"
+      - ".github/scripts/c0b/**"
   pull_request:
     paths:
       - "v2/**"
@@ -55,6 +57,8 @@ on:
       - "src/test/resources/strategy-parity/**"
       - ".github/workflows/v2-ci.yml"
       - ".github/workflows/v2-release-candidate.yml"
+      - ".github/workflows/deploy-prod.yml"
+      - ".github/scripts/c0b/**"
 
 permissions:
   contents: read
@@ -62,8 +66,13 @@ permissions:
 jobs:
   infra:
     runs-on: ubuntu-latest
+    env:
+      PYTHONDONTWRITEBYTECODE: "1"
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
       - name: Validate deployment scripts and Compose config
         env:
           WALLANT_MYSQL_PASSWORD: ci-placeholder
@@ -82,6 +91,17 @@ jobs:
           bash v2/infra/tests/release_switch_test.sh
           bash v2/infra/tests/deploy_staging_fault_injection_test.sh
           bash v2/infra/tests/documentation_contract_test.sh
+          bash -n .github/scripts/c0b/collect_remote.sh
+          bash .github/scripts/c0b/collect_remote.sh --self-test
+          python3 -m unittest discover \
+            -s .github/scripts/c0b \
+            -p 'test_*.py'
+          python3 -m py_compile \
+            .github/scripts/c0b/contract.py \
+            .github/scripts/c0b/sanitize_capture.py \
+            .github/scripts/c0b/validate_evidence.py \
+            .github/scripts/c0b/build_evidence.py
+          python3 -m json.tool .github/scripts/c0b/known_deployments.json >/dev/null
           docker compose -f v2/infra/compose.yaml config --quiet
           grep -F \
             'ExecStart=/opt/wallant/current/venv/bin/python -m uvicorn' \

@@ -97,7 +97,7 @@ src/main/java/my/side/trading
 
 새 대화 세션에서 개발을 시작할 때는 아래 순서를 기본 절차로 따른다.
 
-1. `.codex/handoff/current.md`를 먼저 읽고 현재 handoff를 기준으로 삼는다.
+1. `docs/v2-cutover/HANDOFF.md`를 먼저 읽고 현재 handoff를 기준으로 삼는다.
 2. 현재 브랜치가 로컬 `master`인지 확인한다.
 3. `master`가 아니면 로컬 `master`로 이동한 뒤 시작한다.
 4. 원격 `master`와 로컬 `master`가 맞는지 `fetch`로 확인하고, 필요하면 먼저 최신 상태로 맞춘다.
@@ -106,12 +106,12 @@ src/main/java/my/side/trading
 7. handoff에 적힌 다음 개발 항목을 진행할 새 로컬 기능 브랜치를 만든다.
 8. 실제 개발은 반드시 그 로컬 기능 브랜치에서 진행한다.
 9. 개발이 끝나면 로컬 기능 브랜치에서 원격 기능 브랜치를 push하고 PR까지 생성한다.
-10. PR 생성까지 완료되면 `.codex/handoff/current.md`를 최신 상태로 갱신하고, 이전 버전은 `.codex/handoff/archive/`로 보관한다.
+10. PR 생성까지 완료되면 `docs/v2-cutover/HANDOFF.md`를 최신 상태로 갱신하고, 이전 버전은 Git 이력으로 보존한다.
 
 추가 원칙:
 
 - 특별한 이유가 없는 한 `master`에서 직접 개발하지 않는다.
-- handoff 기준 파일은 `docs/`가 아니라 `.codex/handoff/current.md`다.
+- handoff 기준 파일은 `docs/v2-cutover/HANDOFF.md`다.
 - handoff는 제품 문서가 아니라 세션 전환용 작업 메모로 다룬다.
 - 브랜치가 바뀌면 대화 세션도 새로 시작하는 것을 기본 원칙으로 삼는다.
 - 기능 단위와 브랜치 단위, 세션 단위를 가능한 한 일치시킨다.

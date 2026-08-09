@@ -49,6 +49,7 @@ class VerifyC0GateTest(unittest.TestCase):
         self.trace = self.source_trace
         self.board = self.source_board
         self._reset_c0_a_fixture_to_pending()
+        self._reset_c0_b_fixture_to_pending()
         self._write_documents()
 
     def tearDown(self) -> None:
@@ -87,6 +88,20 @@ class VerifyC0GateTest(unittest.TestCase):
             count=1,
         )
         self.assertEqual(board_replacements, 1)
+
+    def _reset_c0_b_fixture_to_pending(self) -> None:
+        pending_row = (
+            f"| {C0_B_COLLECTION_APPROVAL_ITEM} | - | - | 승인 대기 | - | - |"
+        )
+        if pending_row in self.c0:
+            return
+        pattern = re.compile(
+            rf"(?m)^\| {re.escape(C0_B_COLLECTION_APPROVAL_ITEM)} \| "
+            rf"{re.escape(C0_B_COLLECTION_SCOPE)} \| - \| 수집 승인 \| "
+            r"[^|]+ \| [^|]+ \|$"
+        )
+        self.c0, replacements = pattern.subn(pending_row, self.c0, count=1)
+        self.assertEqual(replacements, 1)
 
     def _approve_decision(self, decision_id: str, choice_index: int = 0) -> None:
         choice = _decision_sections(self.c0)[decision_id][1][choice_index]
@@ -486,6 +501,23 @@ class VerifyC0GateTest(unittest.TestCase):
         self._set_trace_status("D-03", "부분")
         self._set_trace_status("C2 종합", "부분")
         self._verify()
+
+    def test_complete_artifacts_are_validated_before_final_reapproval(self) -> None:
+        self._approve_all()
+        self._complete_c0_b()
+        self.c0, replacements = re.subn(
+            r"(?m)^\| C0-B 최종 bundle \| .* \| 재승인 완료 \| [^|]+ \| [^|]+ \|$",
+            "| C0-B 최종 bundle | - | - | 재승인 대기 | - | - |",
+            self.c0,
+            count=1,
+        )
+        self.assertEqual(replacements, 1)
+        self._verify()
+
+        snapshot_path = self.root / "docs/v2-cutover/evidence/c0b/snapshot.json"
+        snapshot_path.write_text("{}\n", encoding="utf-8")
+        with self.assertRaisesRegex(GateError, "artifact JSON object must not be empty"):
+            self._verify()
 
     def test_snapshot_checksum_mismatch_fails(self) -> None:
         self._approve_all()

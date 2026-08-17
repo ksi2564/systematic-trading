@@ -5,6 +5,7 @@ import hashlib
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tarfile
@@ -552,11 +553,31 @@ class C0BToolsTest(unittest.TestCase):
             "MAC_BACKUP_SSH_KEY='/home/ubuntu/.ssh/trading-backup'",
             "MAC_BACKUP_SSH_KEY='/fixture-backup-key-secret'",
         )
-        if failure == "precondition":
+        if failure == "env-shape":
+            env_text += "SPRING_PROFILES_ACTIVE=duplicate\n"
+        elif failure == "env-allowlist":
             env_text += "UNKNOWN_KEY='rejected'\n"
+        elif failure == "db-env":
+            env_text = re.sub(
+                r"^SPRING_DATASOURCE_USERNAME=.*\n",
+                "",
+                env_text,
+                flags=re.MULTILINE,
+            )
+        elif failure == "db-url":
+            env_text = re.sub(
+                r"^SPRING_DATASOURCE_URL=.*$",
+                "SPRING_DATASOURCE_URL='jdbc:mysql://db.invalid:3306/trading'",
+                env_text,
+                flags=re.MULTILINE,
+            )
         elif failure == "config":
             env_text += "SERVER_ADDRESS='0.0.0.0'\n"
         env_file.write_text(env_text, encoding="utf-8")
+        if failure == "env-file":
+            env_target = env_file.with_name("trading.env.target")
+            env_file.replace(env_target)
+            env_file.symlink_to(env_target)
         unit_file.write_bytes(
             subprocess.check_output(
                 [
@@ -570,6 +591,10 @@ class C0BToolsTest(unittest.TestCase):
         )
         jar_file = app_dir / "trading.jar"
         jar_file.write_bytes(b"synthetic collector fixture jar\n")
+        if failure == "jar-file":
+            jar_target = jar_file.with_name("trading.jar.target")
+            jar_file.replace(jar_target)
+            jar_file.symlink_to(jar_target)
         release_dir = dashboard_releases / PINNED_RUNTIME_SHA
         release_dir.mkdir()
         dashboard_current = dashboard_releases.parent / "current"
@@ -597,6 +622,35 @@ class C0BToolsTest(unittest.TestCase):
             jar_file: jar_file.read_bytes(),
         }
         dashboard_target = os.readlink(dashboard_current)
+
+        support_commands = {
+            "bash": shutil.which("bash"),
+            "python3": sys.executable,
+            "tr": shutil.which("tr"),
+            "sed": shutil.which("sed"),
+        }
+        for command_name, command_path in support_commands.items():
+            self.assertIsNotNone(command_path)
+            (bin_dir / command_name).symlink_to(Path(command_path).resolve())
+        real_awk = shutil.which("awk")
+        self.assertIsNotNone(real_awk)
+        self._write_fixture_command(
+            bin_dir / "awk",
+            r'''
+            #!/usr/bin/env python3
+            import os
+            import sys
+
+            if (
+                os.environ.get("C0B_FIXTURE_FAILURE") == "override-scan"
+                and len(sys.argv) > 1
+                and sys.argv[1] == "-F="
+            ):
+                raise SystemExit(70)
+            real_awk = os.environ["C0B_FIXTURE_REAL_AWK"]
+            os.execv(real_awk, [real_awk, *sys.argv[1:]])
+            ''',
+        )
 
         self._write_fixture_command(
             bin_dir / "mysql",
@@ -745,6 +799,8 @@ class C0BToolsTest(unittest.TestCase):
             }
             if path not in allowed:
                 raise SystemExit(70)
+            if os.environ.get("C0B_FIXTURE_FAILURE") == "fingerprint":
+                raise SystemExit(70)
             with Path(os.environ["C0B_FIXTURE_STAT_LOG"]).open(
                 "a", encoding="utf-8"
             ) as handle:
@@ -798,6 +854,15 @@ class C0BToolsTest(unittest.TestCase):
             ''',
         )
 
+        missing_command_by_failure = {
+            "mysql-client": "mysql",
+            "systemctl": "systemctl",
+            "inspection-tools": "tr",
+        }
+        missing_command = missing_command_by_failure.get(failure)
+        if missing_command is not None:
+            (bin_dir / missing_command).unlink()
+
         collector_source = (SCRIPT_DIR / "collect_remote.sh").read_text(encoding="utf-8")
         path_replacements = (
             ("/opt/trading/admin-dashboard/current", str(dashboard_current)),
@@ -818,10 +883,11 @@ class C0BToolsTest(unittest.TestCase):
 
         sql_responses, expected_order = self._collector_fixture_sql()
         command_env = {
-                "PATH": str(bin_dir) + os.pathsep + "/usr/bin:/bin",
+                "PATH": str(bin_dir),
                 "BASH_ENV": "/dev/null",
                 "PYTHONDONTWRITEBYTECODE": "1",
                 "C0B_FIXTURE_FAILURE": failure,
+                "C0B_FIXTURE_REAL_AWK": str(real_awk),
                 "C0B_FIXTURE_ACTIVE": "1" if active else "0",
                 "C0B_FIXTURE_SQL_RESPONSES": json.dumps(sql_responses),
                 "C0B_FIXTURE_MYSQL_LOG": str(mysql_log),
@@ -843,9 +909,12 @@ class C0BToolsTest(unittest.TestCase):
                     "ce2418aa7144cd82694d95863de6e3e"
                 ),
             }
+        collector_command = [str(fixture_collector)]
+        if failure == "invocation":
+            collector_command.append("unexpected-argument")
         if failure == "closed-pipe":
             process = subprocess.Popen(
-                [str(fixture_collector)],
+                collector_command,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.DEVNULL,
                 env=command_env,
@@ -860,7 +929,7 @@ class C0BToolsTest(unittest.TestCase):
             )
         else:
             result = subprocess.run(
-                [str(fixture_collector)],
+                collector_command,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 env=command_env,
@@ -1456,9 +1525,42 @@ class C0BToolsTest(unittest.TestCase):
             ),
         )
 
+    def test_collector_diagnostic_exit_codes_are_unique_and_fixed(self) -> None:
+        source = (SCRIPT_DIR / "collect_remote.sh").read_text(encoding="utf-8")
+        observed = {
+            name: int(value)
+            for name, value in re.findall(
+                r"^readonly (C0B_EXIT_[A-Z_]+)=([0-9]+)$",
+                source,
+                re.MULTILINE,
+            )
+        }
+        expected = {
+            "C0B_EXIT_INVOCATION": 41,
+            "C0B_EXIT_RUNTIME": 42,
+            "C0B_EXIT_CONFIG": 43,
+            "C0B_EXIT_DB_INITIAL": 44,
+            "C0B_EXIT_DB_CONSISTENCY": 45,
+            "C0B_EXIT_HOST_STABILITY": 46,
+            "C0B_EXIT_PROTOCOL": 47,
+            "C0B_EXIT_ENV_FILE": 48,
+            "C0B_EXIT_JAR_FILE": 49,
+            "C0B_EXIT_ENV_SHAPE": 50,
+            "C0B_EXIT_ENV_ALLOWLIST": 51,
+            "C0B_EXIT_MYSQL_CLIENT": 52,
+            "C0B_EXIT_SYSTEMCTL": 53,
+            "C0B_EXIT_INSPECTION_TOOLS": 54,
+            "C0B_EXIT_FINGERPRINT": 55,
+            "C0B_EXIT_OVERRIDE_SCAN": 56,
+            "C0B_EXIT_DB_ENV": 57,
+            "C0B_EXIT_DB_URL": 58,
+        }
+        self.assertEqual(observed, expected)
+        self.assertEqual(len(set(observed.values())), len(observed))
+
     def test_collector_failures_are_phase_coded_secret_free_and_atomic(self) -> None:
         failures = {
-            "precondition": 41,
+            "invocation": 41,
             "runtime": 42,
             "config": 43,
             "database": 44,
@@ -1466,10 +1568,35 @@ class C0BToolsTest(unittest.TestCase):
             "host-stability": 46,
             "protocol": 47,
             "closed-pipe": 47,
+            "env-file": 48,
+            "jar-file": 49,
+            "env-shape": 50,
+            "env-allowlist": 51,
+            "mysql-client": 52,
+            "systemctl": 53,
+            "inspection-tools": 54,
+            "fingerprint": 55,
+            "override-scan": 56,
+            "db-env": 57,
+            "db-url": 58,
+        }
+        pre_read_failures = {
+            "invocation",
+            "env-file",
+            "jar-file",
+            "env-shape",
+            "env-allowlist",
+            "mysql-client",
+            "systemctl",
+            "inspection-tools",
+            "fingerprint",
+            "override-scan",
+            "db-env",
+            "db-url",
         }
         for failure, expected_status in failures.items():
             with self.subTest(failure=failure):
-                result, fixture, _ = self._run_collector_fixture(failure)
+                result, fixture, observed_order = self._run_collector_fixture(failure)
                 self.assertEqual(result.returncode, expected_status)
                 self.assertNotIn(b"C0B_RAW_END", result.stdout)
                 if failure == "protocol":
@@ -1499,6 +1626,12 @@ class C0BToolsTest(unittest.TestCase):
                     + (fixture / "systemctl.calls").read_bytes()
                 )
                 self._assert_fixture_secrets_absent(observable)
+                if failure in pre_read_failures:
+                    self.assertEqual(observed_order, [])
+                    self.assertEqual(
+                        (fixture / "systemctl.calls").read_text(encoding="utf-8"),
+                        "",
+                    )
 
                 output_name = f"collector-failure-{failure}"
                 sanitized = self.sanitize(result.stdout, output_name)
@@ -1509,7 +1642,13 @@ class C0BToolsTest(unittest.TestCase):
                 )
 
     def test_pipeline_status_capture_preserves_both_exit_codes(self) -> None:
-        for left, right in ((44, 1), (141, 1), (0, 1), (255, 1), (0, 0)):
+        pairs = tuple((status, 1) for status in range(41, 59)) + (
+            (141, 1),
+            (0, 1),
+            (255, 1),
+            (0, 0),
+        )
+        for left, right in pairs:
             result = subprocess.run(
                 [
                     "bash",

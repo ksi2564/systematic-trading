@@ -19,21 +19,36 @@ readonly SQL_LATEST_JOB="SELECT COALESCE((SELECT CONCAT(DATE_FORMAT(signal_date,
 readonly SQL_OPEN_ORDER_COUNT="SELECT COUNT(*) FROM execution_order WHERE status IN ('PLANNED','REQUESTED','ACCEPTED','CONFIRMATION_REQUIRED')"
 readonly REGISTRY_KEYS=(DD_BUCKET RECOVERY_RULE REBALANCE_TOLERANCE VIX_THRESHOLD MA_200_GUARD ORDER_BUFFER_RETRY_POLICY MAX_DAILY_TURNOVER_PCT MAX_ORDER_NOTIONAL_USD MAX_RETRY_EXPOSURE_USD MAX_SLIPPAGE_PCT)
 
-readonly C0B_EXIT_PRECONDITION=41
+readonly C0B_EXIT_INVOCATION=41
 readonly C0B_EXIT_RUNTIME=42
 readonly C0B_EXIT_CONFIG=43
 readonly C0B_EXIT_DB_INITIAL=44
 readonly C0B_EXIT_DB_CONSISTENCY=45
 readonly C0B_EXIT_HOST_STABILITY=46
 readonly C0B_EXIT_PROTOCOL=47
+readonly C0B_EXIT_ENV_FILE=48
+readonly C0B_EXIT_JAR_FILE=49
+readonly C0B_EXIT_ENV_SHAPE=50
+readonly C0B_EXIT_ENV_ALLOWLIST=51
+readonly C0B_EXIT_MYSQL_CLIENT=52
+readonly C0B_EXIT_SYSTEMCTL=53
+readonly C0B_EXIT_INSPECTION_TOOLS=54
+readonly C0B_EXIT_FINGERPRINT=55
+readonly C0B_EXIT_OVERRIDE_SCAN=56
+readonly C0B_EXIT_DB_ENV=57
+readonly C0B_EXIT_DB_URL=58
 collection_phase_exit=0
 
 finish_with_phase_status() {
   local status=$?
   trap - EXIT
-  if [[ "${status}" != 0 && "${collection_phase_exit}" -ge 41 && "${collection_phase_exit}" -le 47 ]]; then
-    printf '%s\n' "C0-B remote collection failed at a fixed diagnostic phase" >&2
-    exit "${collection_phase_exit}"
+  if [[ "${status}" != 0 ]]; then
+    case "${collection_phase_exit}" in
+      41|42|43|44|45|46|47|48|49|50|51|52|53|54|55|56|57|58)
+        printf '%s\n' "C0-B remote collection failed at a fixed diagnostic phase" >&2
+        exit "${collection_phase_exit}"
+        ;;
+    esac
   fi
   exit "${status}"
 }
@@ -196,18 +211,35 @@ if [[ "${1-}" == "--validate-prod-env-file" ]]; then
   exit $?
 fi
 
-collection_phase_exit=${C0B_EXIT_PRECONDITION}
+collection_phase_exit=${C0B_EXIT_INVOCATION}
 trap 'exit "${collection_phase_exit}"' PIPE
 [[ "$#" == 0 ]] || die
 [[ "${EUID}" == 0 ]] || die
-[[ -r "${ENV_FILE}" && -f "${ENV_FILE}" && ! -L "${ENV_FILE}" && -f "${PROD_JAR}" && ! -L "${PROD_JAR}" ]] || die
+
+collection_phase_exit=${C0B_EXIT_ENV_FILE}
+[[ -r "${ENV_FILE}" && -f "${ENV_FILE}" && ! -L "${ENV_FILE}" ]] || die
+
+collection_phase_exit=${C0B_EXIT_JAR_FILE}
+[[ -r "${PROD_JAR}" && -f "${PROD_JAR}" && ! -L "${PROD_JAR}" ]] || die
+
+collection_phase_exit=${C0B_EXIT_INSPECTION_TOOLS}
+for inspection_tool in awk sha256sum stat date tr readlink sed; do
+  command -v "${inspection_tool}" >/dev/null 2>&1 || die
+done
+
+collection_phase_exit=${C0B_EXIT_ENV_SHAPE}
 validate_env_file_shape "${ENV_FILE}" || die
+
+collection_phase_exit=${C0B_EXIT_ENV_ALLOWLIST}
 validate_prod_env_key_allowlist "${ENV_FILE}" || die
+
+collection_phase_exit=${C0B_EXIT_MYSQL_CLIENT}
 command -v mysql >/dev/null 2>&1 || die
+
+collection_phase_exit=${C0B_EXIT_SYSTEMCTL}
 command -v systemctl >/dev/null 2>&1 || die
-command -v sha256sum >/dev/null 2>&1 || die
-command -v stat >/dev/null 2>&1 || die
-command -v date >/dev/null 2>&1 || die
+
+collection_phase_exit=${C0B_EXIT_FINGERPRINT}
 env_stat_before=$(stat --format='%Y:%s' "${ENV_FILE}" 2>/dev/null) || die
 env_sha_before=$(sha256sum "${ENV_FILE}" 2>/dev/null | awk '{print $1}') || die
 jar_stat_before=$(stat --format='%Y:%s' "${PROD_JAR}" 2>/dev/null) || die
@@ -249,6 +281,7 @@ safe_config_value() {
   printf '%s' "${value}"
 }
 
+collection_phase_exit=${C0B_EXIT_OVERRIDE_SCAN}
 env_override_count=$(awk -F= '
   /^(SPRING_APPLICATION_JSON|SPRING_CONFIG_(NAME|LOCATION|ADDITIONAL_LOCATION|IMPORT)|SPRING_PROFILES_(INCLUDE|DEFAULT)|SPRING_PROFILES_GROUP_[A-Z0-9_]+|JAVA_TOOL_OPTIONS|_JAVA_OPTIONS|JDK_JAVA_OPTIONS)=/ { count++ }
   END { print count + 0 }
@@ -284,10 +317,13 @@ fi
 readonly env_override_count decision_config_override_count env_override_contract
 readonly decision_config_override_contract
 
+collection_phase_exit=${C0B_EXIT_DB_ENV}
 DB_URL=$(read_env_raw SPRING_DATASOURCE_URL) || die
 DB_USER=$(read_env_raw SPRING_DATASOURCE_USERNAME) || die
 DB_PASSWORD=$(read_env_raw SPRING_DATASOURCE_PASSWORD) || die
 readonly DB_URL DB_USER DB_PASSWORD
+
+collection_phase_exit=${C0B_EXIT_DB_URL}
 if [[ ! "${DB_URL}" =~ ^jdbc:mysql://(localhost|127\.0\.0\.1):([0-9]{1,5})/([A-Za-z0-9_]+)(\?.*)?$ ]]; then
   die
 fi

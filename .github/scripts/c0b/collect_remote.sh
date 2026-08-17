@@ -19,9 +19,25 @@ readonly SQL_LATEST_JOB="SELECT COALESCE((SELECT CONCAT(DATE_FORMAT(signal_date,
 readonly SQL_OPEN_ORDER_COUNT="SELECT COUNT(*) FROM execution_order WHERE status IN ('PLANNED','REQUESTED','ACCEPTED','CONFIRMATION_REQUIRED')"
 readonly REGISTRY_KEYS=(DD_BUCKET RECOVERY_RULE REBALANCE_TOLERANCE VIX_THRESHOLD MA_200_GUARD ORDER_BUFFER_RETRY_POLICY MAX_DAILY_TURNOVER_PCT MAX_ORDER_NOTIONAL_USD MAX_RETRY_EXPOSURE_USD MAX_SLIPPAGE_PCT)
 
-failed=0
-trap 'failed=1' ERR
-trap 'if [[ "${failed}" == 1 ]]; then printf "%s\n" "C0-B remote collection failed" >&2; fi' EXIT
+readonly C0B_EXIT_PRECONDITION=41
+readonly C0B_EXIT_RUNTIME=42
+readonly C0B_EXIT_CONFIG=43
+readonly C0B_EXIT_DB_INITIAL=44
+readonly C0B_EXIT_DB_CONSISTENCY=45
+readonly C0B_EXIT_HOST_STABILITY=46
+readonly C0B_EXIT_PROTOCOL=47
+collection_phase_exit=0
+
+finish_with_phase_status() {
+  local status=$?
+  trap - EXIT
+  if [[ "${status}" != 0 && "${collection_phase_exit}" -ge 41 && "${collection_phase_exit}" -le 47 ]]; then
+    printf '%s\n' "C0-B remote collection failed at a fixed diagnostic phase" >&2
+    exit "${collection_phase_exit}"
+  fi
+  exit "${status}"
+}
+trap finish_with_phase_status EXIT
 
 die() {
   printf '%s\n' "C0-B remote collection rejected by safety guard" >&2
@@ -180,6 +196,8 @@ if [[ "${1-}" == "--validate-prod-env-file" ]]; then
   exit $?
 fi
 
+collection_phase_exit=${C0B_EXIT_PRECONDITION}
+trap 'exit "${collection_phase_exit}"' PIPE
 [[ "$#" == 0 ]] || die
 [[ "${EUID}" == 0 ]] || die
 [[ -r "${ENV_FILE}" && -f "${ENV_FILE}" && ! -L "${ENV_FILE}" && -f "${PROD_JAR}" && ! -L "${PROD_JAR}" ]] || die
@@ -288,6 +306,7 @@ mysql_select() {
     --user="${DB_USER}" --database="${DB_NAME}" --execute="${sql}" 2>/dev/null
 }
 
+collection_phase_exit=${C0B_EXIT_RUNTIME}
 service_load_state=$(systemctl show trading --property=LoadState --value 2>/dev/null) || die
 readonly service_load_state
 [[ "${service_load_state}" != not-found && -n "${service_load_state}" ]] || die
@@ -407,8 +426,9 @@ jar_sha=$(sha256sum "${PROD_JAR}" 2>/dev/null | awk '{print $1}') || die
 readonly jar_sha
 [[ "${jar_sha}" =~ ^[0-9a-f]{64}$ ]] || die
 
+collection_phase_exit=${C0B_EXIT_CONFIG}
 spring_profile=$(safe_config_value SPRING_PROFILES_ACTIVE default) || die
-spring_profile=${spring_profile,,}
+spring_profile=$(printf '%s' "${spring_profile}" | tr '[:upper:]' '[:lower:]') || die
 default_scheduling_enabled=false
 if [[ "${spring_profile}" == prod ]]; then
   default_scheduling_enabled=true
@@ -417,9 +437,9 @@ readonly default_scheduling_enabled
 scheduling_enabled=$(safe_config_value TRADING_SCHEDULING_ENABLED "${default_scheduling_enabled}") || die
 execution_enabled=$(safe_config_value TRADING_EXECUTION_ENABLED false) || die
 operation_mode=$(safe_config_value TRADING_OPERATION_MODE PAPER) || die
-scheduling_enabled=${scheduling_enabled,,}
-execution_enabled=${execution_enabled,,}
-operation_mode=${operation_mode^^}
+scheduling_enabled=$(printf '%s' "${scheduling_enabled}" | tr '[:upper:]' '[:lower:]') || die
+execution_enabled=$(printf '%s' "${execution_enabled}" | tr '[:upper:]' '[:lower:]') || die
+operation_mode=$(printf '%s' "${operation_mode}" | tr '[:lower:]' '[:upper:]') || die
 server_port=$(safe_config_value SERVER_PORT 8080) || die
 server_address=UNVERIFIED_NON_PROD_PROFILE
 if explicit_server_address=$(read_env_raw SERVER_ADDRESS); then
@@ -451,6 +471,7 @@ readonly server_address server_port connect_timeout request_timeout kis_origin k
 readonly yahoo_connect_timeout yahoo_request_timeout max_attempts retry_wait_ms
 readonly tolerance_pct tick_size ma_period
 
+collection_phase_exit=${C0B_EXIT_DB_INITIAL}
 readonly latest_sql=${SQL_LATEST_STATE}
 latest_row=$(mysql_select "${latest_sql}") || die
 readonly latest_row
@@ -557,6 +578,7 @@ readonly open_count_sql=${SQL_OPEN_ORDER_COUNT}
 open_order_count=$(mysql_select "${open_count_sql}") || die
 readonly open_order_count
 
+collection_phase_exit=${C0B_EXIT_DB_CONSISTENCY}
 latest_row_after=$(mysql_select "${latest_sql}") || die
 state_pair_after=$(mysql_select "${state_pair_sql}") || die
 dd_bucket_parameter_after=$(registry_value DD_BUCKET) || die
@@ -594,6 +616,7 @@ readonly max_order_notional_parameter_after max_retry_exposure_parameter_after
 readonly max_slippage_parameter_after db_mode_after kill_switch_db_after
 readonly latest_job_after open_order_count_after
 
+collection_phase_exit=${C0B_EXIT_HOST_STABILITY}
 env_stat_after=$(stat --format='%Y:%s' "${ENV_FILE}" 2>/dev/null) || die
 env_sha_after=$(sha256sum "${ENV_FILE}" 2>/dev/null | awk '{print $1}') || die
 jar_stat_after=$(stat --format='%Y:%s' "${PROD_JAR}" 2>/dev/null) || die
@@ -647,6 +670,7 @@ external_config_candidates_after=(
 shopt -u nullglob
 [[ "${external_config_presence_before}" == "${#external_config_candidates_after[@]}" ]] || die
 
+collection_phase_exit=${C0B_EXIT_PROTOCOL}
 printf '%s\n' C0B_RAW_V1
 emit java_code_sha service_active_state "${service_active}"
 emit java_code_sha runtime_code_basis "${runtime_code_basis}"
@@ -805,3 +829,4 @@ emit operational_comparison_tolerances sell_priority TQQQ-QLD-QQQM
 emit operational_comparison_tolerances operational_comparison_window NOT_IMPLEMENTED
 emit operational_comparison_tolerances operational_field_tolerances NOT_IMPLEMENTED
 printf '%s\n' C0B_RAW_END
+collection_phase_exit=0

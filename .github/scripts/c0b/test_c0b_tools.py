@@ -9,6 +9,7 @@ import subprocess
 import sys
 import tarfile
 import tempfile
+import textwrap
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -41,6 +42,58 @@ FAKE_RUNTIME_SHA = PINNED_RUNTIME_SHA
 FAKE_JAR_SHA = PINNED_RUNTIME_JAR_SHA256
 CAPTURED_AT = "2026-08-09T13:00:00+09:00"
 APPROVED_C0A_SHA = "a45b3e6dd20d16f207bada8b2ba0f3b6b0862e5c"
+FIXTURE_SECRET_SENTINELS = (
+    "fixture-db-secret",
+    "fixture-kis-app-key-secret",
+    "fixture-kis-app-secret",
+    "fixture-kis-account-secret",
+    "fixture-kis-cano-secret",
+    "fixture-kis-product-secret",
+    "fixture-api-secret",
+    "fixture-webhook-secret",
+    "fixture-backup-user-secret",
+    "fixture-backup-host-secret",
+    "fixture-backup-key-secret",
+)
+APPROVED_COLLECTOR_SQL = {
+    "SQL_LATEST_STATE": (
+        "SELECT DATE_FORMAT(as_of_date,'%Y-%m-%d'), signal_symbol, "
+        "CAST(strategy_on AS UNSIGNED), version, "
+        "CONCAT('QQQM=',CAST(w_base AS CHAR),',QLD=',CAST(w_qld AS CHAR),"
+        "',TQQQ=',CAST(w_tqqq AS CHAR)) FROM strategy_state "
+        "ORDER BY as_of_date DESC, id DESC LIMIT 1"
+    ),
+    "SQL_EOD_PAIR": (
+        "SELECT CONCAT(DATE_FORMAT(s.as_of_date,'%Y-%m-%d'),',',"
+        "s.signal_symbol,',',CAST(s.ath AS CHAR),',',CAST(s.last_close AS CHAR),"
+        "',',CAST(s.drawdown_pct AS CHAR),',',"
+        "CAST(s.max_drawdown_pct_since_ath AS CHAR),',',s.phase,',',"
+        "s.dd_bucket,',',CAST(s.strategy_on AS UNSIGNED),',',s.version,',',"
+        "CAST(s.w_base AS CHAR),',',CAST(s.w_qld AS CHAR),',',"
+        "CAST(s.w_tqqq AS CHAR)),CAST(d.row_count AS UNSIGNED) "
+        "FROM strategy_state s JOIN (SELECT as_of_date,MAX(id) AS id,"
+        "COUNT(*) AS row_count FROM strategy_state GROUP BY as_of_date "
+        "ORDER BY as_of_date DESC LIMIT 2) d ON d.id=s.id "
+        "ORDER BY s.as_of_date DESC,s.id DESC"
+    ),
+    "SQL_OPERATING_MODE": (
+        "SELECT COALESCE((SELECT control_value FROM trading_control "
+        "WHERE control_key='OPERATING_MODE' LIMIT 1),'NOT_PERSISTED')"
+    ),
+    "SQL_KILL_SWITCH": (
+        "SELECT COALESCE((SELECT UPPER(control_value) FROM trading_control "
+        "WHERE control_key='KILL_SWITCH' LIMIT 1),'NOT_PERSISTED')"
+    ),
+    "SQL_LATEST_JOB": (
+        "SELECT COALESCE((SELECT CONCAT(DATE_FORMAT(signal_date,'%Y-%m-%d'),"
+        "',',status) FROM execution_job ORDER BY signal_date DESC, "
+        "execute_after DESC, id DESC LIMIT 1),'none')"
+    ),
+    "SQL_OPEN_ORDER_COUNT": (
+        "SELECT COUNT(*) FROM execution_order WHERE status IN "
+        "('PLANNED','REQUESTED','ACCEPTED','CONFIRMATION_REQUIRED')"
+    ),
+}
 
 
 def fake_raw_values(runtime_sha: str = FAKE_RUNTIME_SHA) -> dict[str, dict[str, str]]:
@@ -215,7 +268,7 @@ def raw_protocol(
     values: dict[str, dict[str, str]] | None = None,
     runtime_sha: str = FAKE_RUNTIME_SHA,
 ) -> bytes:
-    values = values or fake_raw_values(runtime_sha)
+    values = fake_raw_values(runtime_sha) if values is None else values
     lines = ["C0B_RAW_V1"]
     for item_id in ITEM_IDS[:10]:
         for name in RAW_FACTS[item_id]:
@@ -321,7 +374,9 @@ class C0BToolsTest(unittest.TestCase):
     def tearDown(self) -> None:
         self.temporary.cleanup()
 
-    def sanitize(self, payload: bytes | None = None, output_name: str = "sanitized") -> subprocess.CompletedProcess[bytes]:
+    def sanitize(
+        self, payload: bytes | None = None, output_name: str = "sanitized"
+    ) -> subprocess.CompletedProcess[bytes]:
         output_dir = self.runner_temp / output_name
         env = dict(os.environ)
         env["RUNNER_TEMP"] = str(self.runner_temp)
@@ -349,12 +404,561 @@ class C0BToolsTest(unittest.TestCase):
                 "--known-deployments",
                 str(self.known_file),
             ],
-            input=payload or raw_protocol(runtime_sha=self.runtime_sha),
+            input=(
+                raw_protocol(runtime_sha=self.runtime_sha)
+                if payload is None
+                else payload
+            ),
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             env=env,
             check=False,
         )
+
+    def _write_fixture_command(self, path: Path, source: str) -> None:
+        path.write_text(textwrap.dedent(source).lstrip(), encoding="utf-8")
+        path.chmod(0o755)
+
+    def _collector_fixture_sql(self) -> tuple[dict[str, tuple[str, str]], list[str]]:
+        source = (SCRIPT_DIR / "collect_remote.sh").read_text(encoding="utf-8")
+
+        def constant(name: str) -> str:
+            match = re.search(rf'^readonly {name}="([^"]+)"$', source, re.MULTILINE)
+            self.assertIsNotNone(match, name)
+            return match.group(1)
+
+        for name, approved_sql in APPROVED_COLLECTOR_SQL.items():
+            self.assertEqual(constant(name), approved_sql)
+
+        expected = fake_raw_values(self.runtime_sha)
+        registry_names = {
+            "DD_BUCKET": "dd_bucket_parameter",
+            "RECOVERY_RULE": "recovery_rule_parameter",
+            "REBALANCE_TOLERANCE": "rebalance_tolerance_parameter",
+            "VIX_THRESHOLD": "vix_threshold_parameter",
+            "MA_200_GUARD": "ma_200_guard_parameter",
+            "ORDER_BUFFER_RETRY_POLICY": "order_buffer_retry_policy_parameter",
+            "MAX_DAILY_TURNOVER_PCT": "max_daily_turnover_parameter",
+            "MAX_ORDER_NOTIONAL_USD": "max_order_notional_parameter",
+            "MAX_RETRY_EXPOSURE_USD": "max_retry_exposure_parameter",
+            "MAX_SLIPPAGE_PCT": "max_slippage_parameter",
+        }
+        registry_ids = [f"registry_{key}" for key in registry_names]
+        responses: dict[str, tuple[str, str]] = {
+            APPROVED_COLLECTOR_SQL["SQL_LATEST_STATE"]: (
+                "latest_state",
+                "\t".join(
+                    (
+                        expected["db_strategy_state"]["latest_as_of_date"],
+                        expected["db_strategy_state"]["signal_symbol"],
+                        expected["db_strategy_state"]["strategy_on"],
+                        expected["db_strategy_state"]["version"],
+                        expected["db_strategy_state"]["weights"],
+                    )
+                ),
+            ),
+            APPROVED_COLLECTOR_SQL["SQL_EOD_PAIR"]: (
+                "eod_pair",
+                "\n".join(
+                    (
+                        expected["eod_state_pair"]["latest_state"]
+                        + "\t"
+                        + expected["eod_state_pair"]["latest_date_row_count"],
+                        expected["eod_state_pair"]["previous_state"]
+                        + "\t"
+                        + expected["eod_state_pair"]["previous_date_row_count"],
+                    )
+                ),
+            ),
+            APPROVED_COLLECTOR_SQL["SQL_OPERATING_MODE"]: ("operating_mode", "PAPER"),
+            APPROVED_COLLECTOR_SQL["SQL_KILL_SWITCH"]: ("kill_switch", "OFF"),
+            APPROVED_COLLECTOR_SQL["SQL_LATEST_JOB"]: (
+                "latest_job",
+                expected["order_mode_ownership_quantity"]["latest_job"],
+            ),
+            APPROVED_COLLECTOR_SQL["SQL_OPEN_ORDER_COUNT"]: ("open_count", "0"),
+        }
+        for key, fact_name in registry_names.items():
+            sql = (
+                "SELECT COALESCE((SELECT CONCAT(status,':',effective_value) "
+                "FROM parameter_registry_record WHERE registry_key='"
+                + key
+                + "' LIMIT 1),'MISSING')"
+            )
+            responses[sql] = (
+                f"registry_{key}",
+                expected["db_strategy_state"][fact_name],
+            )
+        expected_order = (
+            ["latest_state"]
+            + registry_ids
+            + ["eod_pair", "operating_mode", "kill_switch", "latest_job", "open_count"]
+            + ["latest_state", "eod_pair"]
+            + registry_ids
+            + ["operating_mode", "kill_switch", "latest_job", "open_count"]
+        )
+        return responses, expected_order
+
+    def _run_collector_fixture(
+        self, failure: str = "", *, active: bool = False
+    ) -> tuple[subprocess.CompletedProcess[bytes], Path, list[str]]:
+        fixture_name = failure or ("active-success" if active else "success")
+        fixture = self.root / ("collector-" + fixture_name)
+        bin_dir = fixture / "bin"
+        app_dir = fixture / "opt/trading/app"
+        dashboard_releases = fixture / "opt/trading/admin-dashboard/releases"
+        env_file = fixture / "etc/trading/trading.env"
+        unit_file = fixture / "etc/systemd/system/trading.service"
+        for directory in (bin_dir, app_dir, dashboard_releases, env_file.parent, unit_file.parent):
+            directory.mkdir(parents=True, exist_ok=True)
+
+        repository_root = SCRIPT_DIR.parents[2]
+        env_text = subprocess.check_output(
+            [
+                "git",
+                "--no-replace-objects",
+                "show",
+                f"{PINNED_RUNTIME_SHA}:deploy/env/trading.env.example",
+            ],
+            cwd=repository_root,
+            text=True,
+        )
+        secret_values = {
+            "SPRING_DATASOURCE_PASSWORD": "fixture-db-secret",
+            "KIS_APP_KEY": "fixture-kis-app-key-secret",
+            "KIS_APP_SECRET": "fixture-kis-app-secret",
+            "KIS_ACCOUNT_NO": "fixture-kis-account-secret",
+            "KIS_CANO": "fixture-kis-cano-secret",
+            "KIS_ACNT_PRDT_CD": "fixture-kis-product-secret",
+            "TRADING_API_KEY": "fixture-api-secret",
+        }
+        for key, sentinel in secret_values.items():
+            env_text = env_text.replace(
+                f"{key}='change-me'", f"{key}='{sentinel}'"
+            )
+        env_text = env_text.replace(
+            "TRADING_DISCORD_WEBHOOK_URL=''",
+            "TRADING_DISCORD_WEBHOOK_URL='https://fixture.invalid/fixture-webhook-secret'",
+        )
+        env_text = env_text.replace(
+            "MAC_BACKUP_SSH_USER='backup'",
+            "MAC_BACKUP_SSH_USER='fixture-backup-user-secret'",
+        )
+        env_text = env_text.replace(
+            "MAC_BACKUP_SSH_HOST='mac-mini.tailnet.ts.net'",
+            "MAC_BACKUP_SSH_HOST='fixture-backup-host-secret.invalid'",
+        )
+        env_text = env_text.replace(
+            "MAC_BACKUP_SSH_KEY='/home/ubuntu/.ssh/trading-backup'",
+            "MAC_BACKUP_SSH_KEY='/fixture-backup-key-secret'",
+        )
+        if failure == "precondition":
+            env_text += "UNKNOWN_KEY='rejected'\n"
+        elif failure == "config":
+            env_text += "SERVER_ADDRESS='0.0.0.0'\n"
+        env_file.write_text(env_text, encoding="utf-8")
+        unit_file.write_bytes(
+            subprocess.check_output(
+                [
+                    "git",
+                    "--no-replace-objects",
+                    "show",
+                    f"{PINNED_RUNTIME_SHA}:deploy/systemd/trading.service",
+                ],
+                cwd=repository_root,
+            )
+        )
+        jar_file = app_dir / "trading.jar"
+        jar_file.write_bytes(b"synthetic collector fixture jar\n")
+        release_dir = dashboard_releases / PINNED_RUNTIME_SHA
+        release_dir.mkdir()
+        dashboard_current = dashboard_releases.parent / "current"
+        dashboard_current.symlink_to(release_dir)
+
+        mysql_log = fixture / "mysql.calls"
+        systemctl_log = fixture / "systemctl.calls"
+        sha256sum_log = fixture / "sha256sum.calls"
+        stat_log = fixture / "stat.calls"
+        readlink_log = fixture / "readlink.calls"
+        date_log = fixture / "date.calls"
+        for log_path in (
+            mysql_log,
+            systemctl_log,
+            sha256sum_log,
+            stat_log,
+            readlink_log,
+            date_log,
+        ):
+            log_path.write_text("", encoding="utf-8")
+
+        immutable_files = {
+            env_file: env_file.read_bytes(),
+            unit_file: unit_file.read_bytes(),
+            jar_file: jar_file.read_bytes(),
+        }
+        dashboard_target = os.readlink(dashboard_current)
+
+        self._write_fixture_command(
+            bin_dir / "mysql",
+            r'''
+            #!/usr/bin/env python3
+            import json
+            import os
+            import sys
+            from pathlib import Path
+
+            expected_prefix = [
+                "--no-defaults",
+                "--batch",
+                "--skip-column-names",
+                "--raw",
+                "--init-command=SET SESSION TRANSACTION READ ONLY",
+                "--connect-timeout=5",
+                "--host=127.0.0.1",
+                "--port=3306",
+                "--user=trading",
+                "--database=trading",
+            ]
+            if os.environ.get("MYSQL_PWD") != "fixture-db-secret":
+                raise SystemExit(70)
+            if sys.argv[1:-1] != expected_prefix or not sys.argv[-1].startswith("--execute="):
+                raise SystemExit(70)
+            sql = sys.argv[-1][len("--execute="):]
+            responses = json.loads(os.environ["C0B_FIXTURE_SQL_RESPONSES"])
+            if sql not in responses:
+                raise SystemExit(70)
+            query_id, response = responses[sql]
+            log_path = Path(os.environ["C0B_FIXTURE_MYSQL_LOG"])
+            prior = log_path.read_text(encoding="utf-8").splitlines()
+            with log_path.open("a", encoding="utf-8") as handle:
+                handle.write(query_id + "\n")
+            failure = os.environ.get("C0B_FIXTURE_FAILURE", "")
+            if failure == "database" and not prior:
+                raise SystemExit(70)
+            if (
+                failure == "consistency"
+                and query_id == "latest_state"
+                and prior.count(query_id) == 1
+            ):
+                response = response.replace("\t2\t", "\t3\t", 1)
+            if failure == "protocol" and query_id == "registry_MAX_SLIPPAGE_PCT":
+                response = "PROVISIONAL:" + ("x" * 501)
+            sys.stdout.buffer.write(response.encode("utf-8") + b"\n")
+            ''',
+        )
+        self._write_fixture_command(
+            bin_dir / "systemctl",
+            r'''
+            #!/usr/bin/env python3
+            import os
+            import sys
+            from pathlib import Path
+
+            if (
+                len(sys.argv) != 5
+                or sys.argv[1:3] != ["show", "trading"]
+                or sys.argv[4] != "--value"
+            ):
+                raise SystemExit(70)
+            if not sys.argv[3].startswith("--property="):
+                raise SystemExit(70)
+            prop = sys.argv[3][len("--property="):]
+            log_path = Path(os.environ["C0B_FIXTURE_SYSTEMCTL_LOG"])
+            prior = log_path.read_text(encoding="utf-8").splitlines()
+            with log_path.open("a", encoding="utf-8") as handle:
+                handle.write(prop + "\n")
+            failure = os.environ.get("C0B_FIXTURE_FAILURE", "")
+            active = os.environ.get("C0B_FIXTURE_ACTIVE") == "1"
+            if failure == "runtime" and not prior:
+                raise SystemExit(70)
+            values = {
+                "LoadState": "loaded",
+                "ActiveState": "active" if active else "inactive",
+                "SubState": "running" if active else "dead",
+                "MainPID": "1234" if active else "0",
+                "FragmentPath": os.environ["C0B_FIXTURE_UNIT_FILE"],
+                "DropInPaths": "",
+                "EnvironmentFiles": os.environ["C0B_FIXTURE_ENV_FILE"],
+                "ExecStart": (
+                    "/usr/bin/java -Xms256m -Xmx1024m -jar "
+                    + os.environ["C0B_FIXTURE_JAR_FILE"]
+                ),
+                "WorkingDirectory": os.environ["C0B_FIXTURE_APP_DIR"],
+                "ExecMainStartTimestamp": os.environ["C0B_FIXTURE_START_TEXT"],
+            }
+            if prop not in values:
+                raise SystemExit(70)
+            value = values[prop]
+            if failure == "host-stability" and prop == "MainPID" and prior.count(prop) == 1:
+                value = "1"
+            sys.stdout.buffer.write(value.encode("utf-8") + b"\n")
+            ''',
+        )
+        self._write_fixture_command(
+            bin_dir / "sha256sum",
+            r'''
+            #!/usr/bin/env python3
+            import hashlib
+            import os
+            import sys
+            from pathlib import Path
+
+            if len(sys.argv) != 2:
+                raise SystemExit(70)
+            path = Path(sys.argv[1])
+            allowed = {
+                Path(os.environ["C0B_FIXTURE_ENV_FILE"]),
+                Path(os.environ["C0B_FIXTURE_JAR_FILE"]),
+                Path(os.environ["C0B_FIXTURE_UNIT_FILE"]),
+            }
+            if path not in allowed:
+                raise SystemExit(70)
+            with Path(os.environ["C0B_FIXTURE_SHA256SUM_LOG"]).open(
+                "a", encoding="utf-8"
+            ) as handle:
+                handle.write(str(path) + "\n")
+            if path == Path(os.environ["C0B_FIXTURE_JAR_FILE"]):
+                digest = os.environ["C0B_FIXTURE_JAR_SHA256"]
+            elif path == Path(os.environ["C0B_FIXTURE_UNIT_FILE"]):
+                digest = os.environ["C0B_FIXTURE_UNIT_SHA256"]
+            else:
+                digest = hashlib.sha256(path.read_bytes()).hexdigest()
+            sys.stdout.write(f"{digest}  {path}\n")
+            ''',
+        )
+        self._write_fixture_command(
+            bin_dir / "stat",
+            r'''
+            #!/usr/bin/env python3
+            import os
+            import sys
+            from pathlib import Path
+
+            if len(sys.argv) != 3 or not sys.argv[1].startswith("--format="):
+                raise SystemExit(70)
+            format_value = sys.argv[1][len("--format="):]
+            path = Path(sys.argv[2])
+            allowed = {
+                Path(os.environ["C0B_FIXTURE_ENV_FILE"]),
+                Path(os.environ["C0B_FIXTURE_JAR_FILE"]),
+                Path(os.environ["C0B_FIXTURE_UNIT_FILE"]),
+            }
+            if path not in allowed:
+                raise SystemExit(70)
+            with Path(os.environ["C0B_FIXTURE_STAT_LOG"]).open(
+                "a", encoding="utf-8"
+            ) as handle:
+                handle.write(format_value + "\t" + str(path) + "\n")
+            if format_value == "%Y:%s":
+                sys.stdout.write(f"1000:{path.stat().st_size}\n")
+            elif format_value == "%Y":
+                sys.stdout.write("1000\n")
+            else:
+                raise SystemExit(70)
+            ''',
+        )
+        self._write_fixture_command(
+            bin_dir / "readlink",
+            r'''
+            #!/usr/bin/env python3
+            import os
+            import sys
+            from pathlib import Path
+
+            if len(sys.argv) != 3 or sys.argv[1] != "-f":
+                raise SystemExit(70)
+            if sys.argv[2] != os.environ["C0B_FIXTURE_DASHBOARD_CURRENT"]:
+                raise SystemExit(70)
+            with Path(os.environ["C0B_FIXTURE_READLINK_LOG"]).open(
+                "a", encoding="utf-8"
+            ) as handle:
+                handle.write(sys.argv[2] + "\n")
+            sys.stdout.write(os.environ["C0B_FIXTURE_DASHBOARD_RELEASE"] + "\n")
+            ''',
+        )
+        self._write_fixture_command(
+            bin_dir / "date",
+            r'''
+            #!/usr/bin/env python3
+            import os
+            import sys
+            from pathlib import Path
+
+            expected = [
+                "--date=" + os.environ["C0B_FIXTURE_START_TEXT"],
+                "+%s",
+            ]
+            if sys.argv[1:] != expected:
+                raise SystemExit(70)
+            with Path(os.environ["C0B_FIXTURE_DATE_LOG"]).open(
+                "a", encoding="utf-8"
+            ) as handle:
+                handle.write("\t".join(sys.argv[1:]) + "\n")
+            sys.stdout.write("2000\n")
+            ''',
+        )
+
+        collector_source = (SCRIPT_DIR / "collect_remote.sh").read_text(encoding="utf-8")
+        path_replacements = (
+            ("/opt/trading/admin-dashboard/current", str(dashboard_current)),
+            ("/etc/systemd/system/trading.service", str(unit_file)),
+            ("/etc/trading/trading.env", str(env_file)),
+            ("/opt/trading/app", str(app_dir)),
+        )
+        for original, replacement in path_replacements:
+            self.assertIn(original, collector_source)
+            self.assertRegex(replacement, r"^/[A-Za-z0-9._/-]+$")
+            collector_source = collector_source.replace(original, replacement)
+        root_guard = '[[ "${EUID}" == 0 ]] || die'
+        self.assertEqual(collector_source.count(root_guard), 1)
+        collector_source = collector_source.replace(root_guard, ":")
+        fixture_collector = fixture / "collect_remote.sh"
+        fixture_collector.write_text(collector_source, encoding="utf-8")
+        fixture_collector.chmod(0o755)
+
+        sql_responses, expected_order = self._collector_fixture_sql()
+        command_env = {
+                "PATH": str(bin_dir) + os.pathsep + "/usr/bin:/bin",
+                "BASH_ENV": "/dev/null",
+                "PYTHONDONTWRITEBYTECODE": "1",
+                "C0B_FIXTURE_FAILURE": failure,
+                "C0B_FIXTURE_ACTIVE": "1" if active else "0",
+                "C0B_FIXTURE_SQL_RESPONSES": json.dumps(sql_responses),
+                "C0B_FIXTURE_MYSQL_LOG": str(mysql_log),
+                "C0B_FIXTURE_SYSTEMCTL_LOG": str(systemctl_log),
+                "C0B_FIXTURE_SHA256SUM_LOG": str(sha256sum_log),
+                "C0B_FIXTURE_STAT_LOG": str(stat_log),
+                "C0B_FIXTURE_READLINK_LOG": str(readlink_log),
+                "C0B_FIXTURE_DATE_LOG": str(date_log),
+                "C0B_FIXTURE_ENV_FILE": str(env_file),
+                "C0B_FIXTURE_UNIT_FILE": str(unit_file),
+                "C0B_FIXTURE_JAR_FILE": str(jar_file),
+                "C0B_FIXTURE_APP_DIR": str(app_dir),
+                "C0B_FIXTURE_DASHBOARD_CURRENT": str(dashboard_current),
+                "C0B_FIXTURE_DASHBOARD_RELEASE": str(release_dir),
+                "C0B_FIXTURE_START_TEXT": "1970-01-01 00:33:20 UTC",
+                "C0B_FIXTURE_JAR_SHA256": FAKE_JAR_SHA,
+                "C0B_FIXTURE_UNIT_SHA256": (
+                    "4a2c8593bef542aea068b85d2a6b8b044"
+                    "ce2418aa7144cd82694d95863de6e3e"
+                ),
+            }
+        if failure == "closed-pipe":
+            process = subprocess.Popen(
+                [str(fixture_collector)],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
+                env=command_env,
+            )
+            self.assertIsNotNone(process.stdout)
+            process.stdout.close()
+            result = subprocess.CompletedProcess(
+                process.args,
+                process.wait(timeout=20),
+                stdout=b"",
+                stderr=b"",
+            )
+        else:
+            result = subprocess.run(
+                [str(fixture_collector)],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                env=command_env,
+                check=False,
+                timeout=20,
+            )
+        for path, original_bytes in immutable_files.items():
+            self.assertEqual(path.read_bytes(), original_bytes)
+        self.assertTrue(dashboard_current.is_symlink())
+        self.assertEqual(os.readlink(dashboard_current), dashboard_target)
+        observed_order = mysql_log.read_text(encoding="utf-8").splitlines()
+        return result, fixture, observed_order
+
+    def _assert_collector_host_call_vectors(
+        self, fixture: Path, *, active: bool
+    ) -> None:
+        env_file = fixture / "etc/trading/trading.env"
+        unit_file = fixture / "etc/systemd/system/trading.service"
+        jar_file = fixture / "opt/trading/app/trading.jar"
+        dashboard_current = fixture / "opt/trading/admin-dashboard/current"
+
+        first_systemctl = [
+            "LoadState",
+            "ActiveState",
+            "SubState",
+            "MainPID",
+            "FragmentPath",
+            "DropInPaths",
+            "EnvironmentFiles",
+            "ExecStart",
+            "WorkingDirectory",
+        ]
+        second_systemctl = [
+            "ActiveState",
+            "SubState",
+            "MainPID",
+            "FragmentPath",
+            "DropInPaths",
+            "EnvironmentFiles",
+            "ExecStart",
+            "WorkingDirectory",
+        ]
+        if active:
+            first_systemctl.append("ExecMainStartTimestamp")
+            second_systemctl.append("ExecMainStartTimestamp")
+        self.assertEqual(
+            (fixture / "systemctl.calls").read_text(encoding="utf-8").splitlines(),
+            first_systemctl + second_systemctl,
+        )
+        self.assertEqual(
+            (fixture / "sha256sum.calls").read_text(encoding="utf-8").splitlines(),
+            [
+                str(env_file),
+                str(unit_file),
+                str(jar_file),
+                str(env_file),
+                str(jar_file),
+                str(unit_file),
+            ],
+        )
+        expected_stat = [
+            f"%Y:%s\t{env_file}",
+            f"%Y:%s\t{jar_file}",
+            f"%Y:%s\t{unit_file}",
+        ]
+        if active:
+            expected_stat.extend(
+                [
+                    f"%Y\t{env_file}",
+                    f"%Y\t{jar_file}",
+                    f"%Y\t{unit_file}",
+                ]
+            )
+        expected_stat.extend(
+            [
+                f"%Y:%s\t{env_file}",
+                f"%Y:%s\t{jar_file}",
+                f"%Y:%s\t{unit_file}",
+            ]
+        )
+        self.assertEqual(
+            (fixture / "stat.calls").read_text(encoding="utf-8").splitlines(),
+            expected_stat,
+        )
+        self.assertEqual(
+            (fixture / "readlink.calls").read_text(encoding="utf-8").splitlines(),
+            [str(dashboard_current), str(dashboard_current)],
+        )
+        date_calls = (fixture / "date.calls").read_text(encoding="utf-8").splitlines()
+        if active:
+            self.assertEqual(date_calls, ["--date=1970-01-01 00:33:20 UTC\t+%s"])
+        else:
+            self.assertEqual(date_calls, [])
+
+    def _assert_fixture_secrets_absent(self, *payloads: bytes) -> None:
+        observable = b"".join(payloads)
+        for sentinel in FIXTURE_SECRET_SENTINELS:
+            self.assertNotIn(sentinel.encode("utf-8"), observable)
 
     def build_bundle(self, output_name: str = "c0b") -> Path:
         self.assertEqual(self.sanitize().returncode, 0)
@@ -445,11 +1049,24 @@ class C0BToolsTest(unittest.TestCase):
         self.assertFalse((self.runner_temp / "rejected").exists())
         self.assertNotIn(b"fixture-value", result.stderr)
 
-    def test_missing_stream_terminator_leaves_no_directory(self) -> None:
-        payload = raw_protocol().replace(b"C0B_RAW_END\n", b"")
-        result = self.sanitize(payload, "partial")
-        self.assertNotEqual(result.returncode, 0)
-        self.assertFalse((self.runner_temp / "partial").exists())
+    def test_empty_and_partial_streams_are_distinct_and_leave_no_directory(self) -> None:
+        cases = {
+            "empty": (b"", b"raw stream is empty"),
+            "header-only": (
+                b"C0B_RAW_V1\n",
+                b"raw stream ended before its terminator",
+            ),
+            "partial": (
+                raw_protocol().replace(b"C0B_RAW_END\n", b""),
+                b"raw stream ended before its terminator",
+            ),
+        }
+        for name, (payload, diagnostic) in cases.items():
+            with self.subTest(name=name):
+                result = self.sanitize(payload, name)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn(diagnostic, result.stderr)
+                self.assertFalse((self.runner_temp / name).exists())
 
     def test_raw_stream_rejects_duplicate_order_terminator_and_size_attacks(self) -> None:
         lines = raw_protocol(runtime_sha=self.runtime_sha).splitlines(keepends=True)
@@ -730,6 +1347,190 @@ class C0BToolsTest(unittest.TestCase):
         self.assertIn("TRADINGMARKETCALENDAR", script)
         self.assertIn("service_main_pid_after", script)
         self.assertIn('"${service_main_pid}" == "${service_main_pid_after}"', script)
+        self.assertIn("readonly ENV_FILE=/etc/trading/trading.env", script)
+        self.assertIn("readonly PROD_JAR=/opt/trading/app/trading.jar", script)
+        self.assertIn(
+            "readonly DASHBOARD_CURRENT=/opt/trading/admin-dashboard/current", script
+        )
+        self.assertIn('[[ "${EUID}" == 0 ]] || die', script)
+        self.assertNotIn("C0B_FIXTURE", script)
+
+    def test_collector_main_fixture_emits_complete_sanitizable_stream(self) -> None:
+        result, fixture, observed_order = self._run_collector_fixture()
+        self.assertEqual(result.returncode, 0, result.stderr.decode())
+        self.assertEqual(result.stderr, b"")
+
+        expected = fake_raw_values(self.runtime_sha)
+        expected["effective_runtime_config"]["decision_config_override_contract"] = (
+            "UNVERIFIED_OVERRIDE_PRESENT"
+        )
+        expected["effective_runtime_config"]["file_and_unit_override_status"] = (
+            "UNVERIFIED_OVERRIDE_PRESENT"
+        )
+        expected_protocol = raw_protocol(expected, self.runtime_sha)
+        self.assertEqual(result.stdout, expected_protocol)
+        self.assertEqual(len(result.stdout.splitlines()), 145)
+        self.assertEqual(parse_raw_stream(io.BytesIO(result.stdout)), expected)
+        self.assertEqual(observed_order, self._collector_fixture_sql()[1])
+        self._assert_collector_host_call_vectors(fixture, active=False)
+
+        observable = (
+            result.stdout
+            + result.stderr
+            + (fixture / "mysql.calls").read_bytes()
+            + (fixture / "systemctl.calls").read_bytes()
+        )
+        self._assert_fixture_secrets_absent(observable)
+
+        sanitized = self.sanitize(result.stdout, "collector-main")
+        self.assertEqual(sanitized.returncode, 0, sanitized.stderr.decode())
+        payloads = validate_capture_directory(
+            self.runner_temp / "collector-main",
+            CAPTURED_AT,
+            known_deployments_path=self.known_file,
+            repository_root=self.fake_repository,
+            decision_file=self.decision_file,
+            **self.workflow_context,
+        )
+        self.assertEqual(tuple(payloads), ITEM_IDS)
+        self.assertEqual(
+            len(list((self.runner_temp / "collector-main").rglob("*.json"))), 12
+        )
+        self._assert_fixture_secrets_absent(
+            sanitized.stdout,
+            sanitized.stderr,
+            *(
+                path.read_bytes()
+                for path in sorted(
+                    (self.runner_temp / "collector-main").rglob("*.json")
+                )
+            ),
+        )
+
+    def test_collector_active_main_fixture_covers_timestamp_branch(self) -> None:
+        result, fixture, observed_order = self._run_collector_fixture(active=True)
+        self.assertEqual(result.returncode, 0, result.stderr.decode())
+        self.assertEqual(result.stderr, b"")
+
+        expected = fake_raw_values(self.runtime_sha)
+        expected["java_code_sha"]["service_active_state"] = "active"
+        expected["java_code_sha"]["runtime_code_basis"] = (
+            "running process jar predates start"
+        )
+        expected["effective_runtime_config"]["service_sub_state"] = "running"
+        expected["effective_runtime_config"]["runtime_config_basis"] = (
+            "running process matches file timestamps"
+        )
+        expected["effective_runtime_config"]["decision_config_override_contract"] = (
+            "UNVERIFIED_OVERRIDE_PRESENT"
+        )
+        expected["effective_runtime_config"]["file_and_unit_override_status"] = (
+            "UNVERIFIED_OVERRIDE_PRESENT"
+        )
+        self.assertEqual(result.stdout, raw_protocol(expected, self.runtime_sha))
+        self.assertEqual(parse_raw_stream(io.BytesIO(result.stdout)), expected)
+        self.assertEqual(observed_order, self._collector_fixture_sql()[1])
+        self._assert_collector_host_call_vectors(fixture, active=True)
+
+        sanitized = self.sanitize(result.stdout, "collector-active-main")
+        self.assertEqual(sanitized.returncode, 0, sanitized.stderr.decode())
+        payloads = validate_capture_directory(
+            self.runner_temp / "collector-active-main",
+            CAPTURED_AT,
+            known_deployments_path=self.known_file,
+            repository_root=self.fake_repository,
+            decision_file=self.decision_file,
+            **self.workflow_context,
+        )
+        self.assertEqual(tuple(payloads), ITEM_IDS)
+        self._assert_fixture_secrets_absent(
+            result.stdout,
+            result.stderr,
+            sanitized.stdout,
+            sanitized.stderr,
+            *(
+                path.read_bytes()
+                for path in sorted(
+                    (self.runner_temp / "collector-active-main").rglob("*.json")
+                )
+            ),
+        )
+
+    def test_collector_failures_are_phase_coded_secret_free_and_atomic(self) -> None:
+        failures = {
+            "precondition": 41,
+            "runtime": 42,
+            "config": 43,
+            "database": 44,
+            "consistency": 45,
+            "host-stability": 46,
+            "protocol": 47,
+            "closed-pipe": 47,
+        }
+        for failure, expected_status in failures.items():
+            with self.subTest(failure=failure):
+                result, fixture, _ = self._run_collector_fixture(failure)
+                self.assertEqual(result.returncode, expected_status)
+                self.assertNotIn(b"C0B_RAW_END", result.stdout)
+                if failure == "protocol":
+                    self.assertTrue(result.stdout.startswith(b"C0B_RAW_V1\n"))
+                else:
+                    self.assertEqual(result.stdout, b"")
+                if failure != "closed-pipe":
+                    stderr_lines = result.stderr.decode().splitlines()
+                    self.assertEqual(
+                        stderr_lines.count(
+                            "C0-B remote collection failed at a fixed diagnostic phase"
+                        ),
+                        1,
+                    )
+                    self.assertTrue(
+                        set(stderr_lines).issubset(
+                            {
+                                "C0-B remote collection rejected by safety guard",
+                                "C0-B remote collection failed at a fixed diagnostic phase",
+                            }
+                        )
+                    )
+                observable = (
+                    result.stdout
+                    + result.stderr
+                    + (fixture / "mysql.calls").read_bytes()
+                    + (fixture / "systemctl.calls").read_bytes()
+                )
+                self._assert_fixture_secrets_absent(observable)
+
+                output_name = f"collector-failure-{failure}"
+                sanitized = self.sanitize(result.stdout, output_name)
+                self.assertNotEqual(sanitized.returncode, 0)
+                self.assertFalse((self.runner_temp / output_name).exists())
+                self._assert_fixture_secrets_absent(
+                    sanitized.stdout, sanitized.stderr
+                )
+
+    def test_pipeline_status_capture_preserves_both_exit_codes(self) -> None:
+        for left, right in ((44, 1), (141, 1), (0, 1), (255, 1), (0, 0)):
+            result = subprocess.run(
+                [
+                    "bash",
+                    "-c",
+                    (
+                        'set +e; (exit "$1") | (exit "$2"); '
+                        'statuses=("${PIPESTATUS[@]}"); '
+                        'printf "%s %s\\n" "${statuses[0]}" "${statuses[1]}"'
+                    ),
+                    "fixture",
+                    str(left),
+                    str(right),
+                ],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                check=False,
+                text=True,
+            )
+            with self.subTest(left=left, right=right):
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(result.stdout.strip(), f"{left} {right}")
 
     def test_remote_emissions_exactly_match_raw_fact_order(self) -> None:
         script = (SCRIPT_DIR / "collect_remote.sh").read_text(encoding="utf-8")

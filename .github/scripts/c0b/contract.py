@@ -896,8 +896,10 @@ def parse_raw_stream(stream: BinaryIO) -> dict[str, dict[str, str]]:
             raise C0BError("raw stream contains a non-allowlisted record")
         _clean_text(value, f"raw {item_id}.{name}")
         records.append((item_id, name, value))
+    if total == 0:
+        raise C0BError("raw stream is empty")
     if not ended:
-        raise C0BError("raw stream terminator is missing")
+        raise C0BError("raw stream ended before its terminator")
 
     expected = [
         (item_id, name)

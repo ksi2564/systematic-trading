@@ -1403,6 +1403,163 @@ class C0BToolsTest(unittest.TestCase):
             with self.subTest(alias=alias):
                 self.assertNotEqual(result.returncode, 0)
 
+    def test_unapproved_env_key_diagnostic_emits_only_bounded_sorted_names(self) -> None:
+        script = str(SCRIPT_DIR / "collect_remote.sh")
+        fixture = self.root / "diagnostic.env"
+        command_marker = self.root / "must-not-exist"
+        secrets = (
+            "never-print-db-password",
+            "never-print-kis-secret",
+            "never-print-unknown-value",
+            "::add-mask::never-run-as-workflow-command",
+            "value=with=equals",
+            f"$(touch {command_marker})",
+            "`id`",
+            "${GITHUB_TOKEN}",
+        )
+        fixture.write_text(
+            "SPRING_DATASOURCE_PASSWORD=" + secrets[0] + "\n"
+            "KIS_APP_SECRET=" + secrets[1] + "\n"
+            "TRADING_API_KEY=" + secrets[3] + "\n"
+            "TRADING_DISCORD_WEBHOOK_URL=" + secrets[4] + "\n"
+            "KIS_APP_KEY=" + secrets[5] + "\n"
+            "KIS_ACCOUNT_NO=" + secrets[6] + "\n"
+            "KIS_CANO=" + secrets[7] + "\n"
+            "ZZZ_UNKNOWN=" + secrets[2] + "\n"
+            "AAA_UNKNOWN=another-hidden-value\n"
+            "EMPTY_UNKNOWN=\n",
+            encoding="utf-8",
+        )
+        result = subprocess.run(
+            [script, "--list-unapproved-prod-env-keys", str(fixture)],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=False,
+            text=True,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(
+            result.stdout,
+            "C0B_ENV_KEY_DIAGNOSTIC_V1\n"
+            "unapproved_key_count\t3\n"
+            "unapproved_key\tAAA_UNKNOWN\n"
+            "unapproved_key\tEMPTY_UNKNOWN\n"
+            "unapproved_key\tZZZ_UNKNOWN\n"
+            "C0B_ENV_KEY_DIAGNOSTIC_END\n",
+        )
+        self.assertEqual(result.stderr, "")
+        self.assertNotIn("=", result.stdout)
+        self.assertFalse(command_marker.exists())
+        for secret in (*secrets, "another-hidden-value"):
+            self.assertNotIn(secret, result.stdout)
+            self.assertNotIn(secret, result.stderr)
+
+    def test_unapproved_env_key_diagnostic_rejects_unsafe_or_oversized_input(self) -> None:
+        script = str(SCRIPT_DIR / "collect_remote.sh")
+        fixtures = {
+            "duplicate": "UNKNOWN=value\nUNKNOWN=other\n",
+            "malformed": "export UNKNOWN=value\n",
+            "partial-then-malformed": "VALID_UNKNOWN=hidden\nnot-valid=secret\n",
+            "carriage-return": "UNKNOWN=hidden\r\n",
+            "tab": "UNKNOWN=hidden\tvalue\n",
+            "continuation": "UNKNOWN=hidden\\\n",
+            "too-many-keys": "".join(
+                f"UNKNOWN_{index}=hidden\n" for index in range(17)
+            ),
+            "too-many-lines": "".join(
+                f"SPRING_PROFILES_ACTIVE_{index}=hidden\n" for index in range(129)
+            ),
+            "long-key": "A" * 65 + "=hidden\n",
+            "large-file": "#" + "x" * 4094 + "\n" + "# comment\n" * 65536,
+        }
+        for name, content in fixtures.items():
+            fixture = self.root / f"diagnostic-{name}.env"
+            fixture.write_text(content, encoding="utf-8")
+            result = subprocess.run(
+                [script, "--list-unapproved-prod-env-keys", str(fixture)],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                check=False,
+                text=True,
+            )
+            with self.subTest(name=name):
+                self.assertNotEqual(result.returncode, 0)
+                self.assertEqual(result.stdout, "")
+                self.assertEqual(result.stderr, "")
+
+        regular = self.root / "diagnostic-regular.env"
+        regular.write_text("UNKNOWN=hidden\n", encoding="utf-8")
+        symlink = self.root / "diagnostic-symlink.env"
+        symlink.symlink_to(regular)
+        symlink_result = subprocess.run(
+            [script, "--list-unapproved-prod-env-keys", str(symlink)],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=False,
+            text=True,
+        )
+        self.assertNotEqual(symlink_result.returncode, 0)
+        self.assertEqual(symlink_result.stdout, "")
+        self.assertEqual(symlink_result.stderr, "")
+
+    def test_unapproved_env_key_diagnostic_empty_result_is_canonical(self) -> None:
+        script = str(SCRIPT_DIR / "collect_remote.sh")
+        fixture = self.root / "diagnostic-allowed.env"
+        fixture.write_text(
+            "SPRING_PROFILES_ACTIVE=prod\nKIS_APP_SECRET=hidden\n",
+            encoding="utf-8",
+        )
+        result = subprocess.run(
+            [script, "--list-unapproved-prod-env-keys", str(fixture)],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=False,
+            text=True,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(
+            result.stdout,
+            "C0B_ENV_KEY_DIAGNOSTIC_V1\n"
+            "unapproved_key_count\t0\n"
+            "C0B_ENV_KEY_DIAGNOSTIC_END\n",
+        )
+
+    def test_env_key_diagnostic_remote_mode_stops_before_operational_collection(self) -> None:
+        source = (SCRIPT_DIR / "collect_remote.sh").read_text(encoding="utf-8")
+        diagnostic_branch = source.index(
+            'if [[ "${1-}" == "--diagnose-prod-env-keys" ]]'
+        )
+        operational_branch = source.index(
+            "collection_phase_exit=${C0B_EXIT_INVOCATION}"
+        )
+        self.assertLess(diagnostic_branch, operational_branch)
+        block = source[diagnostic_branch:operational_branch]
+        self.assertIn('emit_unapproved_prod_env_keys "${ENV_FILE}"', block)
+        self.assertIn('[[ "$#" == 1 && "${EUID}" == 0 ]]', block)
+        for forbidden in (
+            "mysql",
+            "systemctl",
+            "PROD_JAR",
+            "KIS_APP_KEY",
+            "KIS_APP_SECRET",
+            "SQL_",
+            "curl",
+            "wget",
+        ):
+            self.assertNotIn(forbidden, block)
+        extra_argument = subprocess.run(
+            [
+                str(SCRIPT_DIR / "collect_remote.sh"),
+                "--diagnose-prod-env-keys",
+                "/tmp/not-approved",
+            ],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=False,
+        )
+        self.assertEqual(extra_argument.returncode, 2)
+        self.assertEqual(extra_argument.stdout, b"")
+
     def test_remote_script_has_fixed_read_only_session_and_no_kis_credentials(self) -> None:
         script = (SCRIPT_DIR / "collect_remote.sh").read_text(encoding="utf-8")
         self.assertIn("--init-command='SET SESSION TRANSACTION READ ONLY'", script)

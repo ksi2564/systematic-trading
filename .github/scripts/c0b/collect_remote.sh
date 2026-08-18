@@ -37,6 +37,7 @@ readonly C0B_EXIT_FINGERPRINT=55
 readonly C0B_EXIT_OVERRIDE_SCAN=56
 readonly C0B_EXIT_DB_ENV=57
 readonly C0B_EXIT_DB_URL=58
+readonly PROD_ENV_ALLOWED_KEYS="SPRING_PROFILES_ACTIVE SERVER_ADDRESS SERVER_PORT SPRING_DATASOURCE_URL SPRING_DATASOURCE_USERNAME SPRING_DATASOURCE_PASSWORD SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE SPRING_DATASOURCE_HIKARI_MAX_LIFETIME_MS SPRING_DATASOURCE_HIKARI_IDLE_TIMEOUT_MS SPRING_DATASOURCE_HIKARI_KEEPALIVE_TIME_MS SPRING_DATASOURCE_HIKARI_CONNECTION_TIMEOUT_MS SPRING_DATASOURCE_HIKARI_VALIDATION_TIMEOUT_MS SPRING_FLYWAY_BASELINE_ON_MIGRATE SPRING_FLYWAY_BASELINE_VERSION KIS_BASE_URL KIS_APP_KEY KIS_APP_SECRET KIS_ACCOUNT_NO KIS_CANO KIS_ACNT_PRDT_CD KIS_CONNECT_TIMEOUT KIS_REQUEST_TIMEOUT REALTIME_QUOTE_ENABLED TRADING_API_KEY TRADING_PUBLIC_READ_ALLOWED_ORIGINS TRADING_PUBLIC_CLIENT_IP_HEADER TRADING_PUBLIC_TRUSTED_PROXY_RANGES TRADING_DISCORD_WEBHOOK_URL TRADING_DISCORD_CONNECT_TIMEOUT TRADING_DISCORD_REQUEST_TIMEOUT TRADING_SCHEDULING_ENABLED TRADING_EXECUTION_ENABLED TRADING_OPERATION_MODE TRADING_FX_YAHOO_CONNECT_TIMEOUT TRADING_FX_YAHOO_REQUEST_TIMEOUT TRADING_PRICING_MAX_ATTEMPTS TRADING_PRICING_RETRY_WAIT_MS TRADING_STRATEGY_TOLERANCE_PCT TRADING_PRICING_TICK_SIZE TRADING_CIRCUIT_BREAKER_MA_PERIOD BACKUP_DIR BACKUP_KEEP_DAYS BACKUP_CONFIG_DIR MAC_BACKUP_ENABLED MAC_BACKUP_SSH_USER MAC_BACKUP_SSH_HOST MAC_BACKUP_SSH_PORT MAC_BACKUP_SSH_KEY MAC_BACKUP_REMOTE_DIR"
 collection_phase_exit=0
 
 finish_with_phase_status() {
@@ -149,26 +150,8 @@ validate_env_file_shape() {
 validate_prod_env_key_allowlist() {
   local source_file=$1
   [[ -f "${source_file}" && ! -L "${source_file}" ]] || return 1
-  awk '
+  awk -v allowed_text="${PROD_ENV_ALLOWED_KEYS}" '
     BEGIN {
-      allowed_text = "SPRING_PROFILES_ACTIVE SERVER_ADDRESS SERVER_PORT " \
-        "SPRING_DATASOURCE_URL SPRING_DATASOURCE_USERNAME SPRING_DATASOURCE_PASSWORD " \
-        "SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE " \
-        "SPRING_DATASOURCE_HIKARI_MAX_LIFETIME_MS SPRING_DATASOURCE_HIKARI_IDLE_TIMEOUT_MS " \
-        "SPRING_DATASOURCE_HIKARI_KEEPALIVE_TIME_MS SPRING_DATASOURCE_HIKARI_CONNECTION_TIMEOUT_MS " \
-        "SPRING_DATASOURCE_HIKARI_VALIDATION_TIMEOUT_MS SPRING_FLYWAY_BASELINE_ON_MIGRATE " \
-        "SPRING_FLYWAY_BASELINE_VERSION KIS_BASE_URL KIS_APP_KEY KIS_APP_SECRET KIS_ACCOUNT_NO " \
-        "KIS_CANO KIS_ACNT_PRDT_CD KIS_CONNECT_TIMEOUT KIS_REQUEST_TIMEOUT REALTIME_QUOTE_ENABLED " \
-        "TRADING_API_KEY TRADING_PUBLIC_READ_ALLOWED_ORIGINS TRADING_PUBLIC_CLIENT_IP_HEADER " \
-        "TRADING_PUBLIC_TRUSTED_PROXY_RANGES TRADING_DISCORD_WEBHOOK_URL " \
-        "TRADING_DISCORD_CONNECT_TIMEOUT TRADING_DISCORD_REQUEST_TIMEOUT " \
-        "TRADING_SCHEDULING_ENABLED TRADING_EXECUTION_ENABLED TRADING_OPERATION_MODE " \
-        "TRADING_FX_YAHOO_CONNECT_TIMEOUT TRADING_FX_YAHOO_REQUEST_TIMEOUT " \
-        "TRADING_PRICING_MAX_ATTEMPTS TRADING_PRICING_RETRY_WAIT_MS " \
-        "TRADING_STRATEGY_TOLERANCE_PCT TRADING_PRICING_TICK_SIZE " \
-        "TRADING_CIRCUIT_BREAKER_MA_PERIOD BACKUP_DIR BACKUP_KEEP_DAYS BACKUP_CONFIG_DIR " \
-        "MAC_BACKUP_ENABLED MAC_BACKUP_SSH_USER MAC_BACKUP_SSH_HOST MAC_BACKUP_SSH_PORT " \
-        "MAC_BACKUP_SSH_KEY MAC_BACKUP_REMOTE_DIR"
       count = split(allowed_text, names, " ")
       for (i = 1; i <= count; i++) allowed[names[i]] = 1
     }
@@ -179,6 +162,96 @@ validate_prod_env_key_allowlist() {
       if (!(key in allowed)) exit 15
     }
   ' "${source_file}" >/dev/null 2>&1
+}
+
+emit_unapproved_prod_env_keys() {
+  local source_file=$1
+  [[ -r "${source_file}" && -f "${source_file}" && ! -L "${source_file}" ]] || return 1
+  command -v stat >/dev/null 2>&1 || return 1
+  local source_fd_path source_size path_before fd_before fd_after path_after
+  local diagnostic_output
+  exec 3<"${source_file}" || return 1
+  source_fd_path=/dev/fd/3
+  if stat -L --format='%d:%i:%s:%y:%z' "${source_file}" >/dev/null 2>&1; then
+    path_before=$(stat -L --format='%d:%i:%s:%y:%z' "${source_file}" 2>/dev/null) || return 1
+    fd_before=$(stat -L --format='%d:%i:%s:%y:%z' "${source_fd_path}" 2>/dev/null) || return 1
+    source_size=$(stat -L --format='%s' "${source_fd_path}" 2>/dev/null) || return 1
+  else
+    path_before=$(stat -L -f '%i:%z:%m:%c' "${source_file}" 2>/dev/null) || return 1
+    fd_before=$(stat -L -f '%i:%z:%m:%c' "${source_fd_path}" 2>/dev/null) || return 1
+    source_size=$(stat -L -f '%z' "${source_fd_path}" 2>/dev/null) || return 1
+  fi
+  [[ "${path_before}" == "${fd_before}" \
+    && "${source_size}" =~ ^[0-9]+$ \
+    && "${source_size}" -le 262144 ]] || return 1
+  diagnostic_output=$(awk -v allowed_text="${PROD_ENV_ALLOWED_KEYS}" '
+    BEGIN {
+      count = split(allowed_text, names, " ")
+      for (i = 1; i <= count; i++) allowed[names[i]] = 1
+    }
+    {
+      total_bytes += length($0) + 1
+      if (total_bytes > 262144 || length($0) > 4096 ||
+          index($0, "\r") || index($0, "\t")) {
+        failed = 1
+        exit 18
+      }
+    }
+    $0 == "" || $0 ~ /^#/ { next }
+    {
+      if ($0 !~ /^[A-Z_][A-Z0-9_]*=/ || $0 ~ /\\$/) {
+        failed = 1
+        exit 13
+      }
+      key = $0
+      sub(/=.*/, "", key)
+      if (++seen[key] > 1 || ++total > 128 || length(key) > 64) {
+        failed = 1
+        exit 14
+      }
+      if (!(key in allowed)) {
+        if (++unknown_count > 16) {
+          failed = 1
+          exit 17
+        }
+        unknown[unknown_count] = key
+      }
+    }
+    END {
+      if (failed) exit
+      for (i = 2; i <= unknown_count; i++) {
+        candidate = unknown[i]
+        j = i - 1
+        while (j >= 1 && unknown[j] > candidate) {
+          unknown[j + 1] = unknown[j]
+          j--
+        }
+        unknown[j + 1] = candidate
+      }
+      print "C0B_ENV_KEY_DIAGNOSTIC_V1"
+      printf "unapproved_key_count\t%d\n", unknown_count
+      for (i = 1; i <= unknown_count; i++) {
+        printf "unapproved_key\t%s\n", unknown[i]
+      }
+      print "C0B_ENV_KEY_DIAGNOSTIC_END"
+    }
+  ' "${source_fd_path}") || return 1
+  [[ -r "${source_file}" && -f "${source_file}" && ! -L "${source_file}" ]] || return 1
+  if stat -L --format='%d:%i:%s:%y:%z' "${source_file}" >/dev/null 2>&1; then
+    fd_after=$(stat -L --format='%d:%i:%s:%y:%z' "${source_fd_path}" 2>/dev/null) || return 1
+    path_after=$(stat -L --format='%d:%i:%s:%y:%z' "${source_file}" 2>/dev/null) || return 1
+  else
+    fd_after=$(stat -L -f '%i:%z:%m:%c' "${source_fd_path}" 2>/dev/null) || return 1
+    path_after=$(stat -L -f '%i:%z:%m:%c' "${source_file}" 2>/dev/null) || return 1
+  fi
+  exec 3<&-
+  [[ "${path_before}" == "${fd_before}" \
+    && "${fd_before}" == "${fd_after}" \
+    && "${fd_after}" == "${path_after}" \
+    && -r "${source_file}" \
+    && -f "${source_file}" \
+    && ! -L "${source_file}" ]] || return 1
+  printf '%s\n' "${diagnostic_output}"
 }
 
 if [[ "${1-}" == "--validate-select" ]]; then
@@ -208,6 +281,17 @@ fi
 if [[ "${1-}" == "--validate-prod-env-file" ]]; then
   [[ "$#" == 2 ]] || exit 2
   validate_env_file_shape "$2" && validate_prod_env_key_allowlist "$2"
+  exit $?
+fi
+if [[ "${1-}" == "--list-unapproved-prod-env-keys" ]]; then
+  [[ "$#" == 2 ]] || exit 2
+  emit_unapproved_prod_env_keys "$2"
+  exit $?
+fi
+if [[ "${1-}" == "--diagnose-prod-env-keys" ]]; then
+  [[ "$#" == 1 && "${EUID}" == 0 ]] || exit 2
+  command -v awk >/dev/null 2>&1 || exit 1
+  emit_unapproved_prod_env_keys "${ENV_FILE}"
   exit $?
 fi
 

@@ -10,9 +10,9 @@ on:
         type: choice
         options:
           - deploy
-          - c0b-read-only
+          - c0b-env-keys-read-only
       expected_sha:
-        description: Exact 40-character commit SHA required for C0-B collection
+        description: Exact 40-character commit SHA required for an approved C0-B operation
         required: false
         type: string
 
@@ -43,7 +43,7 @@ jobs:
             (
               github.repository == 'ksi2564/systematic-trading' &&
               github.ref == 'refs/heads/codex/v2-cutover-foundation' &&
-              inputs.operation == 'c0b-read-only' &&
+              inputs.operation == 'c0b-env-keys-read-only' &&
               inputs.expected_sha == github.sha &&
               github.actor == 'ksi2564' &&
               github.triggering_actor == 'ksi2564'
@@ -298,6 +298,585 @@ jobs:
             | grep -Ei "ERROR|Exception|No operations allowed after connection closed" || true
           REMOTE
 
+  diagnose-c0b-env-keys-read-only:
+    name: Diagnose unapproved C0-B environment keys (read-only)
+    if: >-
+      ${{
+        github.event_name == 'workflow_dispatch' &&
+        github.repository == 'ksi2564/systematic-trading' &&
+        github.ref == 'refs/heads/codex/v2-cutover-foundation' &&
+        inputs.operation == 'c0b-env-keys-read-only' &&
+        inputs.expected_sha == github.sha &&
+        github.actor == 'ksi2564' &&
+        github.triggering_actor == 'ksi2564'
+      }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment: production
+    permissions:
+      actions: read
+      contents: read
+    env:
+      BASH_ENV: /dev/null
+      C0B_DIAGNOSTIC_TOOL_COMMIT: 8576d6d4648624c02847892373cb358e0fb0d5be
+      C0B_DIAGNOSTIC_TOOL_PARENT: 9eac215e6f460587ee90d33a3bb9e1dedbb49313
+      EXPECTED_SHA: ${{ inputs.expected_sha }}
+      GIT_NO_REPLACE_OBJECTS: "1"
+      PYTHONDONTWRITEBYTECODE: "1"
+      SELECTED_OPERATION: ${{ inputs.operation }}
+
+    steps:
+      - name: Checkout pinned environment-key diagnostic commit
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Verify diagnostic authorization and locked tool
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          expected_tool_commit=8576d6d4648624c02847892373cb358e0fb0d5be
+          expected_tool_parent=9eac215e6f460587ee90d33a3bb9e1dedbb49313
+          if [[ "${GITHUB_EVENT_NAME}" != "workflow_dispatch" \
+            || "${GITHUB_REPOSITORY}" != "ksi2564/systematic-trading" \
+            || "${GITHUB_REF}" != "refs/heads/codex/v2-cutover-foundation" \
+            || "${SELECTED_OPERATION}" != "c0b-env-keys-read-only" \
+            || "${GITHUB_ACTOR}" != "ksi2564" \
+            || "${GITHUB_TRIGGERING_ACTOR}" != "ksi2564" \
+            || "${GITHUB_RUN_ATTEMPT}" != "1" \
+            || "${C0B_DIAGNOSTIC_TOOL_COMMIT}" != "${expected_tool_commit}" \
+            || "${C0B_DIAGNOSTIC_TOOL_PARENT}" != "${expected_tool_parent}" \
+            || ! "${EXPECTED_SHA}" =~ ^[0-9a-f]{40}$ \
+            || "${EXPECTED_SHA}" != "${GITHUB_SHA}" \
+            || "$(git --no-replace-objects rev-parse HEAD)" != "${GITHUB_SHA}" ]]; then
+            echo "The environment-key diagnostic authorization context is not allowed."
+            exit 1
+          fi
+
+          git --no-replace-objects cat-file -e "${C0B_DIAGNOSTIC_TOOL_COMMIT}^{commit}"
+          git --no-replace-objects cat-file -e "${C0B_DIAGNOSTIC_TOOL_PARENT}^{commit}"
+          read -r -a tool_commit_and_parents <<<"$(
+            git --no-replace-objects rev-list --parents -n 1 \
+              "${C0B_DIAGNOSTIC_TOOL_COMMIT}"
+          )"
+          mapfile -t tool_commit_paths < <(
+            git --no-replace-objects diff --name-only \
+              "${C0B_DIAGNOSTIC_TOOL_PARENT}" "${C0B_DIAGNOSTIC_TOOL_COMMIT}"
+          )
+          expected_tool_commit_paths=(
+            .github/scripts/c0b/collect_remote.sh
+            .github/scripts/c0b/test_c0b_tools.py
+          )
+          if [[ "${#tool_commit_and_parents[@]}" -ne 2 \
+            || "${tool_commit_and_parents[0]}" != "${C0B_DIAGNOSTIC_TOOL_COMMIT}" \
+            || "${tool_commit_and_parents[1]}" != "${C0B_DIAGNOSTIC_TOOL_PARENT}" \
+            || "${#tool_commit_paths[@]}" -ne "${#expected_tool_commit_paths[@]}" ]]; then
+            echo "The diagnostic tool commit ancestry is invalid."
+            exit 1
+          fi
+          for index in "${!expected_tool_commit_paths[@]}"; do
+            if [[ "${tool_commit_paths[index]}" != "${expected_tool_commit_paths[index]}" ]]; then
+              echo "The diagnostic tool commit changed an unexpected path."
+              exit 1
+            fi
+          done
+
+          read -r -a workflow_commit_and_parents <<<"$(
+            git --no-replace-objects rev-list --parents -n 1 "${GITHUB_SHA}"
+          )"
+          mapfile -t workflow_commit_paths < <(
+            git --no-replace-objects diff --name-only \
+              "${C0B_DIAGNOSTIC_TOOL_COMMIT}" "${GITHUB_SHA}"
+          )
+          if [[ "${#workflow_commit_and_parents[@]}" -ne 2 \
+            || "${workflow_commit_and_parents[0]}" != "${GITHUB_SHA}" \
+            || "${workflow_commit_and_parents[1]}" != "${C0B_DIAGNOSTIC_TOOL_COMMIT}" \
+            || "${#workflow_commit_paths[@]}" -ne 1 \
+            || "${workflow_commit_paths[0]}" != ".github/workflows/deploy-prod.yml" ]]; then
+            echo "The diagnostic workflow lock commit is invalid."
+            exit 1
+          fi
+
+          if ! git --no-replace-objects diff --no-ext-diff --quiet \
+              "${C0B_DIAGNOSTIC_TOOL_COMMIT}" "${GITHUB_SHA}" \
+              -- .github/scripts/c0b \
+            || [[ -n "$(git status --porcelain=v1 --untracked-files=all)" ]] \
+            || [[ -e docs/v2-cutover/evidence/c0b ]]; then
+            echo "The diagnostic checkout violates the approved boundary."
+            exit 1
+          fi
+
+          locked_root="${RUNNER_TEMP}/c0b-env-key-tool"
+          if [[ -e "${locked_root}" || -L "${locked_root}" ]]; then
+            echo "The locked diagnostic worktree path already exists."
+            exit 1
+          fi
+          git --no-replace-objects worktree add --detach \
+            "${locked_root}" "${C0B_DIAGNOSTIC_TOOL_COMMIT}" >/dev/null
+
+          expected_tools=(
+            .github/scripts/c0b/build_evidence.py
+            .github/scripts/c0b/collect_remote.sh
+            .github/scripts/c0b/contract.py
+            .github/scripts/c0b/known_deployments.json
+            .github/scripts/c0b/sanitize_capture.py
+            .github/scripts/c0b/test_c0b_tools.py
+            .github/scripts/c0b/transport_bundle.py
+            .github/scripts/c0b/validate_evidence.py
+          )
+          mapfile -t observed_tools < <(
+            git --no-replace-objects ls-tree -r --name-only \
+              "${C0B_DIAGNOSTIC_TOOL_COMMIT}" -- .github/scripts/c0b
+          )
+          if [[ "${#observed_tools[@]}" -ne "${#expected_tools[@]}" ]]; then
+            echo "The locked diagnostic tool tree has an unexpected file count."
+            exit 1
+          fi
+          for index in "${!expected_tools[@]}"; do
+            if [[ "${observed_tools[index]}" != "${expected_tools[index]}" ]]; then
+              echo "The locked diagnostic tool tree is not allowlisted."
+              exit 1
+            fi
+            locked_file="${locked_root}/${expected_tools[index]}"
+            if [[ ! -f "${locked_file}" || -L "${locked_file}" ]]; then
+              echo "A locked diagnostic tool is not a regular file."
+              exit 1
+            fi
+          done
+          if [[ "$(git -C "${locked_root}" --no-replace-objects rev-parse HEAD)" \
+                != "${C0B_DIAGNOSTIC_TOOL_COMMIT}" \
+            || -n "$(git -C "${locked_root}" status --porcelain=v1 --untracked-files=all)" \
+            || -e "${locked_root}/docs/v2-cutover/evidence/c0b" \
+            || -n "$(find "${locked_root}/.github/scripts/c0b" -type l -print -quit)" ]]; then
+            echo "The locked diagnostic worktree is not clean and exact."
+            exit 1
+          fi
+
+          python3 -B -E -S \
+            "${locked_root}/v2/infra/tests/verify_c0_gate.py" "${locked_root}"
+          bash -n "${locked_root}/.github/scripts/c0b/collect_remote.sh"
+          bash "${locked_root}/.github/scripts/c0b/collect_remote.sh" --self-test
+          (
+            cd "${locked_root}"
+            python3 -B -E -S -m unittest discover \
+              -s .github/scripts/c0b \
+              -p 'test_*.py'
+          )
+          python3 -B -E -S - <<'PY'
+          from pathlib import Path
+
+          source = Path(".github/scripts/c0b/collect_remote.sh").read_text(
+              encoding="utf-8"
+          )
+          diagnostic = source.index(
+              'if [[ "${1-}" == "--diagnose-prod-env-keys" ]]'
+          )
+          operational = source.index(
+              "collection_phase_exit=${C0B_EXIT_INVOCATION}"
+          )
+          block = source[diagnostic:operational]
+          required = (
+              '[[ "$#" == 1 && "${EUID}" == 0 ]]',
+              'emit_unapproved_prod_env_keys "${ENV_FILE}"',
+          )
+          forbidden = (
+              "mysql",
+              "systemctl",
+              "PROD_JAR",
+              "KIS_APP_KEY",
+              "KIS_APP_SECRET",
+              "SQL_",
+              "curl",
+              "wget",
+          )
+          if (
+              diagnostic >= operational
+              or any(value not in block for value in required)
+              or any(value in block for value in forbidden)
+          ):
+              raise SystemExit("The diagnostic route is not isolated.")
+          PY
+
+      - name: Verify one-shot run and pinned deployment provenance
+        shell: bash
+        env:
+          GH_HOST: github.com
+          GH_PROMPT_DISABLED: "1"
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          current_run="$(
+            gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          )"
+          branch_refs="$(
+            gh api -H "X-GitHub-Api-Version: 2026-03-10" \
+              "repos/${GITHUB_REPOSITORY}/git/refs?per_page=100"
+          )"
+          same_sha_runs="$(
+            gh api -H "X-GitHub-Api-Version: 2026-03-10" --method GET \
+              "repos/${GITHUB_REPOSITORY}/actions/workflows/deploy-prod.yml/runs" \
+              -f event=workflow_dispatch \
+              -f head_sha="${GITHUB_SHA}" \
+              -f per_page=100
+          )"
+          pinned_deploy_run="$(
+            gh api "repos/${GITHUB_REPOSITORY}/actions/runs/26564469535"
+          )"
+          latest_successful_deploy="$(
+            gh api --method GET \
+              "repos/${GITHUB_REPOSITORY}/actions/workflows/deploy-prod.yml/runs" \
+              -f branch=master \
+              -f event=workflow_dispatch \
+              -f status=success \
+              -f per_page=1
+          )"
+          if ! jq -e \
+              --argjson run_id "${GITHUB_RUN_ID}" \
+              --argjson run_attempt "${GITHUB_RUN_ATTEMPT}" \
+              --arg head_sha "${GITHUB_SHA}" '
+                .id == $run_id and
+                .run_attempt == $run_attempt and
+                .event == "workflow_dispatch" and
+                .head_branch == "codex/v2-cutover-foundation" and
+                .head_sha == $head_sha and
+                .path == ".github/workflows/deploy-prod.yml" and
+                .actor.login == "ksi2564" and
+                .triggering_actor.login == "ksi2564" and
+                .repository.full_name == "ksi2564/systematic-trading" and
+                (.status == "queued" or .status == "in_progress") and
+                .conclusion == null
+              ' <<<"${current_run}" >/dev/null \
+            || ! jq -e --arg head_sha "${GITHUB_SHA}" '
+                type == "array" and
+                length < 100 and
+                ([.[] | select(
+                  .ref == "refs/heads/codex/v2-cutover-foundation" and
+                  .object.type == "commit" and
+                  .object.sha == $head_sha
+                )] | length) == 1
+              ' <<<"${branch_refs}" >/dev/null \
+            || ! jq -e \
+              --argjson run_id "${GITHUB_RUN_ID}" \
+              --argjson run_attempt "${GITHUB_RUN_ATTEMPT}" \
+              --arg head_sha "${GITHUB_SHA}" '
+                .total_count == 1 and
+                (.workflow_runs | length) == 1 and
+                .workflow_runs[0].id == $run_id and
+                .workflow_runs[0].run_attempt == $run_attempt and
+                .workflow_runs[0].event == "workflow_dispatch" and
+                .workflow_runs[0].head_sha == $head_sha and
+                .workflow_runs[0].path == ".github/workflows/deploy-prod.yml"
+              ' <<<"${same_sha_runs}" >/dev/null \
+            || ! jq -e '
+                .id == 26564469535 and
+                .run_attempt == 1 and
+                .event == "workflow_dispatch" and
+                .head_branch == "master" and
+                .head_sha == "5510399f8a576efc6450a47a195f0cb61869675e" and
+                .path == ".github/workflows/deploy-prod.yml" and
+                .status == "completed" and
+                .conclusion == "success"
+              ' <<<"${pinned_deploy_run}" >/dev/null \
+            || ! jq -e '
+                (.workflow_runs | length) == 1 and
+                .workflow_runs[0].id == 26564469535 and
+                .workflow_runs[0].head_sha ==
+                  "5510399f8a576efc6450a47a195f0cb61869675e" and
+                .workflow_runs[0].path == ".github/workflows/deploy-prod.yml" and
+                .workflow_runs[0].conclusion == "success"
+              ' <<<"${latest_successful_deploy}" >/dev/null; then
+            echo "The one-shot diagnostic or deployment provenance is invalid."
+            exit 1
+          fi
+
+      - name: Connect diagnostic runner to Tailscale
+        uses: tailscale/github-action@306e68a486fd2350f2bfc3b19fcd143891a4a2d8
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          tags: tag:github-actions
+          ping: ${{ env.PROD_HOST }}
+          use-cache: false
+          version: 1.94.2
+
+      - name: Prepare read-only diagnostic SSH
+        shell: bash
+        env:
+          C0B_SSH_PRIVATE_KEY: ${{ secrets.PROD_SSH_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+
+          locked_root="${RUNNER_TEMP}/c0b-env-key-tool"
+          if [[ "$(git --no-replace-objects rev-parse HEAD)" != "${GITHUB_SHA}" \
+            || "$(git -C "${locked_root}" --no-replace-objects rev-parse HEAD)" \
+                != "${C0B_DIAGNOSTIC_TOOL_COMMIT}" \
+            || -n "$(git status --porcelain=v1 --untracked-files=all)" \
+            || -n "$(git -C "${locked_root}" status --porcelain=v1 --untracked-files=all)" \
+            || -e docs/v2-cutover/evidence/c0b \
+            || -z "${C0B_SSH_PRIVATE_KEY}" ]]; then
+            echo "The diagnostic SSH preparation boundary is invalid."
+            exit 1
+          fi
+
+          ssh_dir="${RUNNER_TEMP}/c0b-env-key-ssh"
+          if [[ -e "${ssh_dir}" || -L "${ssh_dir}" ]]; then
+            echo "The diagnostic SSH path already exists."
+            exit 1
+          fi
+          install -d -m 700 "${ssh_dir}"
+          printf '%s\n' "${C0B_SSH_PRIVATE_KEY}" > "${ssh_dir}/key"
+          chmod 600 "${ssh_dir}/key"
+          if ! ssh-keyscan -T 10 -H "${PROD_HOST}" \
+              > "${ssh_dir}/known_hosts" 2>/dev/null \
+            || [[ ! -s "${ssh_dir}/known_hosts" ]]; then
+            echo "The diagnostic SSH host key could not be read."
+            exit 1
+          fi
+          chmod 600 "${ssh_dir}/known_hosts"
+
+      - name: Read and validate unapproved environment key names
+        shell: bash
+        env:
+          GH_HOST: github.com
+          GH_PROMPT_DISABLED: "1"
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          locked_root="${RUNNER_TEMP}/c0b-env-key-tool"
+          locked_collector="${locked_root}/.github/scripts/c0b/collect_remote.sh"
+          ssh_dir="${RUNNER_TEMP}/c0b-env-key-ssh"
+          diagnostic_path="${RUNNER_TEMP}/c0b-env-key-diagnostic.json"
+          if [[ ! -f "${locked_collector}" || -L "${locked_collector}" \
+            || ! -f "${ssh_dir}/key" || -L "${ssh_dir}/key" \
+            || ! -f "${ssh_dir}/known_hosts" || -L "${ssh_dir}/known_hosts" \
+            || -e "${diagnostic_path}" || -L "${diagnostic_path}" \
+            || -e docs/v2-cutover/evidence/c0b ]]; then
+            echo "The diagnostic input boundary is invalid."
+            exit 1
+          fi
+
+          branch_refs="$(
+            gh api -H "X-GitHub-Api-Version: 2026-03-10" \
+              "repos/${GITHUB_REPOSITORY}/git/refs?per_page=100"
+          )"
+          current_run="$(
+            gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          )"
+          same_sha_runs="$(
+            gh api -H "X-GitHub-Api-Version: 2026-03-10" --method GET \
+              "repos/${GITHUB_REPOSITORY}/actions/workflows/deploy-prod.yml/runs" \
+              -f event=workflow_dispatch \
+              -f head_sha="${GITHUB_SHA}" \
+              -f per_page=100
+          )"
+          if ! jq -e --arg head_sha "${GITHUB_SHA}" '
+                type == "array" and
+                length < 100 and
+                ([.[] | select(
+                  .ref == "refs/heads/codex/v2-cutover-foundation" and
+                  .object.type == "commit" and
+                  .object.sha == $head_sha
+                )] | length) == 1
+              ' <<<"${branch_refs}" >/dev/null \
+            || ! jq -e \
+              --argjson run_id "${GITHUB_RUN_ID}" \
+              --argjson run_attempt "${GITHUB_RUN_ATTEMPT}" \
+              --arg head_sha "${GITHUB_SHA}" '
+                .id == $run_id and
+                .run_attempt == $run_attempt and
+                .event == "workflow_dispatch" and
+                .head_branch == "codex/v2-cutover-foundation" and
+                .head_sha == $head_sha and
+                .path == ".github/workflows/deploy-prod.yml" and
+                .actor.login == "ksi2564" and
+                .triggering_actor.login == "ksi2564" and
+                .status == "in_progress" and
+                .conclusion == null
+              ' <<<"${current_run}" >/dev/null \
+            || ! jq -e \
+              --argjson run_id "${GITHUB_RUN_ID}" \
+              --argjson run_attempt "${GITHUB_RUN_ATTEMPT}" \
+              --arg head_sha "${GITHUB_SHA}" '
+                .total_count == 1 and
+                (.workflow_runs | length) == 1 and
+                .workflow_runs[0].id == $run_id and
+                .workflow_runs[0].run_attempt == $run_attempt and
+                .workflow_runs[0].head_sha == $head_sha
+              ' <<<"${same_sha_runs}" >/dev/null; then
+            echo "The one-shot diagnostic binding changed before production SSH."
+            exit 1
+          fi
+
+          validator_source="$(cat <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          import re
+          import sys
+
+          output_path = Path(sys.argv[1])
+          collector_path = Path(sys.argv[2])
+          raw = sys.stdin.buffer.read(4097)
+          if len(raw) > 4096 or not raw.endswith(b"\n") or b"=" in raw:
+              raise SystemExit("The environment-key diagnostic stream is invalid.")
+          try:
+              text = raw.decode("ascii")
+          except UnicodeDecodeError:
+              raise SystemExit(
+                  "The environment-key diagnostic stream is invalid."
+              ) from None
+          lines = text[:-1].split("\n")
+          if len(lines) < 3:
+              raise SystemExit("The environment-key diagnostic stream is invalid.")
+          if (
+              lines[0] != "C0B_ENV_KEY_DIAGNOSTIC_V1"
+              or lines[-1] != "C0B_ENV_KEY_DIAGNOSTIC_END"
+              or not lines[1].startswith("unapproved_key_count\t")
+          ):
+              raise SystemExit("The environment-key diagnostic stream is invalid.")
+          count_text = lines[1].removeprefix("unapproved_key_count\t")
+          if re.fullmatch(r"0|[1-9][0-9]?", count_text) is None:
+              raise SystemExit("The environment-key diagnostic stream is invalid.")
+          count = int(count_text)
+          if count > 16 or len(lines) != count + 3:
+              raise SystemExit("The environment-key diagnostic stream is invalid.")
+
+          source = collector_path.read_text(encoding="utf-8")
+          match = re.search(
+              r'^readonly PROD_ENV_ALLOWED_KEYS="([A-Z0-9_ ]+)"$',
+              source,
+              re.MULTILINE,
+          )
+          if match is None:
+              raise SystemExit("The locked diagnostic allowlist is missing.")
+          allowed = set(match.group(1).split())
+          keys = []
+          for line in lines[2:-1]:
+              if not line.startswith("unapproved_key\t"):
+                  raise SystemExit(
+                      "The environment-key diagnostic stream is invalid."
+                  )
+              key = line.removeprefix("unapproved_key\t")
+              if (
+                  len(key) > 64
+                  or re.fullmatch(r"[A-Z_][A-Z0-9_]*", key) is None
+                  or key in allowed
+              ):
+                  raise SystemExit(
+                      "The environment-key diagnostic stream is invalid."
+                  )
+              keys.append(key)
+          if keys != sorted(keys) or len(keys) != len(set(keys)):
+              raise SystemExit("The environment-key diagnostic stream is invalid.")
+
+          payload = {
+              "schema_version": 1,
+              "kind": "c0b_unapproved_environment_keys",
+              "unapproved_key_count": count,
+              "unapproved_keys": keys,
+          }
+          descriptor = os.open(
+              output_path,
+              os.O_WRONLY | os.O_CREAT | os.O_EXCL,
+              0o600,
+          )
+          with os.fdopen(descriptor, "w", encoding="utf-8", newline="\n") as handle:
+              json.dump(payload, handle, ensure_ascii=True, sort_keys=True, separators=(",", ":"))
+              handle.write("\n")
+          PY
+          )"
+
+          set +e
+          ssh -F /dev/null \
+              -i "${ssh_dir}/key" \
+              -o BatchMode=yes \
+              -o CanonicalizeHostname=no \
+              -o ClearAllForwardings=yes \
+              -o ConnectionAttempts=1 \
+              -o ConnectTimeout=10 \
+              -o ExitOnForwardFailure=yes \
+              -o ForwardAgent=no \
+              -o ForwardX11=no \
+              -o GlobalKnownHostsFile=/dev/null \
+              -o IdentitiesOnly=yes \
+              -o KbdInteractiveAuthentication=no \
+              -o LogLevel=ERROR \
+              -o NumberOfPasswordPrompts=0 \
+              -o PasswordAuthentication=no \
+              -o PermitLocalCommand=no \
+              -o PreferredAuthentications=publickey \
+              -o RequestTTY=no \
+              -o ServerAliveCountMax=2 \
+              -o ServerAliveInterval=15 \
+              -o StrictHostKeyChecking=yes \
+              -o "UserKnownHostsFile=${ssh_dir}/known_hosts" \
+              "${PROD_USER}@${PROD_HOST}" \
+              'sudo -n /bin/bash --noprofile --norc -s -- --diagnose-prod-env-keys' \
+              < "${locked_collector}" \
+              2>/dev/null \
+            | python3 -B -E -S -c "${validator_source}" \
+                "${diagnostic_path}" "${locked_collector}"
+          pipeline_status=("${PIPESTATUS[@]}")
+          set -e
+          unset validator_source
+          if [[ "${#pipeline_status[@]}" -ne 2 \
+            || "${pipeline_status[0]}" != 0 \
+            || "${pipeline_status[1]}" != 0 ]]; then
+            echo "The read-only environment-key diagnostic failed."
+            exit 1
+          fi
+
+          if [[ ! -f "${diagnostic_path}" || -L "${diagnostic_path}" ]]; then
+            echo "The validated environment-key diagnostic result is missing."
+            exit 1
+          fi
+          jq -e '
+            .schema_version == 1 and
+            .kind == "c0b_unapproved_environment_keys" and
+            (.unapproved_key_count | type) == "number" and
+            .unapproved_key_count >= 0 and
+            .unapproved_key_count <= 16 and
+            (.unapproved_keys | type) == "array" and
+            (.unapproved_keys | length) == .unapproved_key_count
+          ' "${diagnostic_path}" >/dev/null
+          echo "C0-B unapproved environment key count: $(
+            jq -r '.unapproved_key_count' "${diagnostic_path}"
+          )"
+          jq -r \
+            '.unapproved_keys[] | "C0-B unapproved environment key: \(.)"' \
+            "${diagnostic_path}"
+
+      - name: Remove diagnostic credentials and validated result
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          diagnostic_path="${RUNNER_TEMP}/c0b-env-key-diagnostic.json"
+          ssh_dir="${RUNNER_TEMP}/c0b-env-key-ssh"
+          if [[ -f "${diagnostic_path}" && ! -L "${diagnostic_path}" ]]; then
+            rm -f -- "${diagnostic_path}"
+          elif [[ -e "${diagnostic_path}" || -L "${diagnostic_path}" ]]; then
+            echo "The diagnostic result cleanup target is unsafe."
+            exit 1
+          fi
+          if [[ -d "${ssh_dir}" && ! -L "${ssh_dir}" ]]; then
+            rm -rf -- "${ssh_dir}"
+          elif [[ -e "${ssh_dir}" || -L "${ssh_dir}" ]]; then
+            echo "The diagnostic SSH cleanup target is unsafe."
+            exit 1
+          fi
+          if [[ -e "${diagnostic_path}" || -L "${diagnostic_path}" \
+            || -e "${ssh_dir}" || -L "${ssh_dir}" ]]; then
+            echo "Diagnostic material was not removed."
+            exit 1
+          fi
+
   collect-c0b-read-only:
     name: Collect sanitized C0-B evidence (read-only)
     if: >-
@@ -305,6 +884,7 @@ jobs:
         github.event_name == 'workflow_dispatch' &&
         github.repository == 'ksi2564/systematic-trading' &&
         github.ref == 'refs/heads/codex/v2-cutover-foundation' &&
+        github.sha == '9eac215e6f460587ee90d33a3bb9e1dedbb49313' &&
         inputs.operation == 'c0b-read-only' &&
         inputs.expected_sha == github.sha &&
         github.actor == 'ksi2564' &&
@@ -1051,6 +1631,7 @@ jobs:
         github.event_name == 'workflow_dispatch' &&
         github.repository == 'ksi2564/systematic-trading' &&
         github.ref == 'refs/heads/codex/v2-cutover-foundation' &&
+        github.sha == '9eac215e6f460587ee90d33a3bb9e1dedbb49313' &&
         inputs.operation == 'c0b-read-only' &&
         inputs.expected_sha == github.sha &&
         github.actor == 'ksi2564' &&

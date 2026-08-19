@@ -1,0 +1,1 @@
+{"captured_at":"2026-08-19T15:11:09+09:00","collector":"c0b-code-owned-comparison","id":"eod_state_pair","kind":"c0b_diff_detail","result":"DIFF","sanitized":true,"schema_version":1,"summary":"The EOD pair is non-atomic, duplicated, missing, or not chronologically coherent."}

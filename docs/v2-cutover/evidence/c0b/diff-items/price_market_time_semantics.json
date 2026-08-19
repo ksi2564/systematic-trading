@@ -1,0 +1,1 @@
+{"captured_at":"2026-08-19T15:11:09+09:00","collector":"c0b-code-owned-comparison","id":"price_market_time_semantics","kind":"c0b_diff_detail","result":"DIFF","sanitized":true,"schema_version":1,"summary":"Legacy price or timestamp semantics differ from the C0-A confirmed raw-close contract."}

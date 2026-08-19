@@ -1,0 +1,1 @@
+{"captured_at":"2026-08-19T15:11:09+09:00","collector":"c0b-code-owned-comparison","id":"db_strategy_state","kind":"c0b_diff_detail","result":"DIFF","sanitized":true,"schema_version":1,"summary":"The DB read is non-atomic, duplicated, missing, or differs from the code-owned C0-A baseline."}

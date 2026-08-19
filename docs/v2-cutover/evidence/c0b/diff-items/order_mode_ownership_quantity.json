@@ -1,0 +1,1 @@
+{"captured_at":"2026-08-19T15:11:09+09:00","collector":"c0b-code-owned-comparison","id":"order_mode_ownership_quantity","kind":"c0b_diff_detail","result":"DIFF","sanitized":true,"schema_version":1,"summary":"Live order settings, exclusive ownership, or arbitrary unsupported-holding protection are unverified, or another D-05 rule differs."}

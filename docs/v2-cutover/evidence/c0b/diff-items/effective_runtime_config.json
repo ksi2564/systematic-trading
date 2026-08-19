@@ -1,0 +1,1 @@
+{"captured_at":"2026-08-19T15:11:09+09:00","collector":"c0b-code-owned-comparison","id":"effective_runtime_config","kind":"c0b_diff_detail","result":"DIFF","sanitized":true,"schema_version":1,"summary":"A current-file risk limit differs from C0-A, the live JVM environment is unverified, or a file, unit, or setting contract differs from the baseline."}

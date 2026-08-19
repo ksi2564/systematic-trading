@@ -106,6 +106,10 @@ RAW_FACTS: dict[str, tuple[str, ...]] = {
         "scheduling_enabled",
         "execution_enabled",
         "operation_mode",
+        "current_file_max_daily_turnover_pct",
+        "current_file_max_order_notional_usd",
+        "current_file_max_retry_exposure_usd",
+        "current_file_max_slippage_pct",
         "server_binding",
         "service_sub_state",
         "environment_file_contract",
@@ -262,7 +266,7 @@ RAW_FACTS: dict[str, tuple[str, ...]] = {
 
 SUMMARIES: dict[str, str] = {
     "java_code_sha": "운영 JAR 배포 상관관계와 서비스 실행 상태별 검증 근거를 함께 기록했다.",
-    "effective_runtime_config": "운영 서비스 상태와 허용 설정 및 설치 계약의 일치 여부를 확인했다.",
+    "effective_runtime_config": "운영 서비스 상태, 현재 설정파일의 주문 위험 한도 및 설치 계약의 일치 여부를 확인했다.",
     "db_strategy_state": "전략 상태와 DB registry 기록값을 SELECT했으며 runtime effective로 간주하지 않는다.",
     "eod_state_pair": "최신 및 직전 EOD 행을 SELECT했으며 행 부재는 MISSING으로 기록했다.",
     "order_mode_ownership_quantity": "주문 모드와 DB 주문 집계의 안전 경계를 확인했다.",
@@ -278,6 +282,19 @@ SUMMARIES: dict[str, str] = {
 FACT_DISPLAY_NAMES: dict[str, dict[str, str]] = {
     item_id: {name: name.replace("_", " ") for name in names}
     for item_id, names in RAW_FACTS.items()
+}
+
+CURRENT_FILE_RISK_LIMIT_FACTS = frozenset(
+    {
+        "current_file_max_daily_turnover_pct",
+        "current_file_max_order_notional_usd",
+        "current_file_max_retry_exposure_usd",
+        "current_file_max_slippage_pct",
+    }
+)
+CURRENT_FILE_RISK_LIMIT_DISPLAY_TO_RAW = {
+    FACT_DISPLAY_NAMES["effective_runtime_config"][name]: name
+    for name in CURRENT_FILE_RISK_LIMIT_FACTS
 }
 
 KST_OFFSET = timedelta(hours=9)
@@ -681,6 +698,12 @@ def _raw_value_allowed(item_id: str, name: str, value: str) -> bool:
         return HEX64.fullmatch(value) is not None
     if name == "spring_profile":
         return value in {"prod", "default"}
+    if item_id == "effective_runtime_config" and name in CURRENT_FILE_RISK_LIMIT_FACTS:
+        if re.fullmatch(r"(?:0|[1-9][0-9]{0,11})(?:\.[0-9]{1,6})?", value) is None:
+            return False
+        if "." in value and value.endswith("0"):
+            return False
+        return True
     if name == "server_binding":
         if value == "UNVERIFIED_NON_PROD_PROFILE":
             return True
@@ -835,6 +858,24 @@ def safe_evidence_text(value: object, context: str) -> str:
     return cleaned
 
 
+def safe_capture_fact_value(
+    item_id: str, fact_name: str, value: object, context: str
+) -> str:
+    """Permit only the four approved typed risk-limit facts past numeric-ID scan."""
+
+    raw_name = (
+        CURRENT_FILE_RISK_LIMIT_DISPLAY_TO_RAW.get(fact_name)
+        if item_id == "effective_runtime_config"
+        else None
+    )
+    if raw_name is None:
+        return safe_evidence_text(value, context)
+    cleaned = _clean_text(value, context)
+    if not _raw_value_allowed(item_id, raw_name, cleaned):
+        raise C0BError(f"{context}: value violates the risk-limit contract")
+    return cleaned
+
+
 def _strict_object(pairs: list[tuple[str, object]]) -> dict[str, object]:
     result: dict[str, object] = {}
     for key, value in pairs:
@@ -918,6 +959,11 @@ def parse_raw_stream(stream: BinaryIO) -> dict[str, dict[str, str]]:
         elif name in {"runtime_jar_sha256"}:
             if not HEX64.fullmatch(value):
                 raise C0BError("runtime JAR digest is malformed")
+        elif item_id == "effective_runtime_config" and name in CURRENT_FILE_RISK_LIMIT_FACTS:
+            # These exact four approved fields are bounded typed decimals.  Do
+            # not relax the generic numeric-identifier detector for any other
+            # evidence field.
+            _clean_text(value, f"raw {item_id}.{name}")
         else:
             safe_evidence_text(value, f"raw {item_id}.{name}")
         if not _raw_value_allowed(item_id, name, value):
@@ -1287,10 +1333,18 @@ def capture_payload(
     for index, fact in enumerate(facts):
         if set(fact) != {"name", "value"}:
             raise C0BError(f"{item_id}: fact keys are not exact")
+        fact_name = safe_evidence_text(
+            fact["name"], f"{item_id} fact {index} name"
+        )
         normalized_facts.append(
             {
-                "name": safe_evidence_text(fact["name"], f"{item_id} fact {index} name"),
-                "value": safe_evidence_text(fact["value"], f"{item_id} fact {index} value"),
+                "name": fact_name,
+                "value": safe_capture_fact_value(
+                    item_id,
+                    fact_name,
+                    fact["value"],
+                    f"{item_id} fact {index} value",
+                ),
             }
         )
     return {
@@ -1455,11 +1509,17 @@ def validate_capture(
         if not isinstance(fact, dict):
             raise C0BError(f"capture {expected_id}: fact must be an object")
         exact_keys(fact, {"name", "value"}, f"capture {expected_id} fact")
-        observed_names.append(
-            safe_evidence_text(fact.get("name"), f"capture {expected_id} fact {index} name")
+        fact_name = safe_evidence_text(
+            fact.get("name"), f"capture {expected_id} fact {index} name"
         )
+        observed_names.append(fact_name)
         observed_values.append(
-            safe_evidence_text(fact.get("value"), f"capture {expected_id} fact {index} value")
+            safe_capture_fact_value(
+                expected_id,
+                fact_name,
+                fact.get("value"),
+                f"capture {expected_id} fact {index} value",
+            )
         )
     if observed_names != _expected_fact_names(expected_id, final_bundle):
         raise C0BError(f"capture {expected_id}: fact names must be exact and ordered")
@@ -1735,6 +1795,7 @@ def validate_capture_directory(
         if item_path.is_symlink() or not stat.S_ISREG(mode):
             raise C0BError("capture artifacts must be regular files")
         payload = load_json(item_path, f"capture {item_id}")
+        require_canonical_json_file(item_path, payload, f"capture {item_id}")
         parsed_time = validate_capture(payload, item_id, final_bundle=final_bundle)
         if expected_time is not None and parsed_time != parse_kst(expected_time, "expected capture time"):
             raise C0BError(f"capture {item_id}: time does not match expected value")
@@ -1753,7 +1814,14 @@ def validate_capture_directory(
 
 
 def canonical_bytes(payload: dict[str, object]) -> bytes:
-    return (json.dumps(payload, ensure_ascii=False, sort_keys=False, separators=(",", ":")) + "\n").encode("utf-8")
+    return (json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
+
+
+def require_canonical_json_file(
+    path: Path, payload: dict[str, object], context: str
+) -> None:
+    if path.read_bytes() != canonical_bytes(payload):
+        raise C0BError(f"{context}: canonical JSON bytes required")
 
 
 def write_capture_directory_atomic(
@@ -1804,8 +1872,8 @@ COMPARISON_SUMMARIES: dict[str, dict[bool, str]] = {
         False: "The service is not active with an unambiguous running JAR basis.",
     },
     "effective_runtime_config": {
-        True: "Effective production safety settings and installed service contracts match the approved baseline.",
-        False: "The live JVM environment is unverified, or a file, unit, or setting contract differs from the baseline.",
+        True: "Current-file risk limits, production safety settings, and installed service contracts match the approved baseline.",
+        False: "A current-file risk limit differs from C0-A, the live JVM environment is unverified, or a file, unit, or setting contract differs from the baseline.",
     },
     "db_strategy_state": {
         True: "The complete DB strategy record matches the code-owned C0-A parameter baseline.",
@@ -1913,6 +1981,10 @@ def _canonical_no_diff(
             "scheduling_enabled": "true",
             "execution_enabled": "false",
             "operation_mode": "PAPER",
+            "current_file_max_daily_turnover_pct": "0",
+            "current_file_max_order_notional_usd": "0",
+            "current_file_max_retry_exposure_usd": "0",
+            "current_file_max_slippage_pct": "0",
             "server_binding": "127.0.0.1:8080",
             "service_sub_state": "running",
             "environment_file_contract": "EXPECTED",
@@ -2416,6 +2488,7 @@ def validate_bundle_directory(
 
     snapshot_path = path / "snapshot.json"
     snapshot = load_json(snapshot_path, "snapshot")
+    require_canonical_json_file(snapshot_path, snapshot, "snapshot")
     exact_keys(
         snapshot,
         {"schema_version", "kind", "captured_at", "document_sha", "code_sha", "items"},
@@ -2454,7 +2527,9 @@ def validate_bundle_directory(
             raise C0BError("snapshot item digest mismatch")
 
     snapshot_sha = sha256_file(snapshot_path)
-    diff = load_json(path / "diff.json", "diff")
+    diff_path = path / "diff.json"
+    diff = load_json(diff_path, "diff")
+    require_canonical_json_file(diff_path, diff, "diff")
     exact_keys(
         diff,
         {"schema_version", "kind", "snapshot_manifest_sha256", "compared_at", "result", "items"},
@@ -2502,6 +2577,7 @@ def validate_bundle_directory(
         if item.get("details_sha256") != digest or sha256_file(detail_path) != digest:
             raise C0BError("diff detail digest mismatch")
         detail = load_json(detail_path, f"diff detail {item_id}")
+        require_canonical_json_file(detail_path, detail, f"diff detail {item_id}")
         _validate_diff_detail(detail, item_id, capture_times[item_id], str(result))
         expected_item = deterministic_expected[index]
         if result != expected_item["result"] or detail.get("summary") != expected_item["summary"]:
@@ -2557,6 +2633,7 @@ def validate_capture_directory_for_bundle(
         if item_path.is_symlink() or not item_path.is_file():
             raise C0BError("bundle capture must be a regular file")
         payload = load_json(item_path, f"capture {item_id}")
+        require_canonical_json_file(item_path, payload, f"capture {item_id}")
         validate_capture(payload, item_id, final_bundle=True)
         payloads[item_id] = payload
     _validate_cross_capture_coherence(payloads)

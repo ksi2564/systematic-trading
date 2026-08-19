@@ -37,7 +37,7 @@ readonly C0B_EXIT_FINGERPRINT=55
 readonly C0B_EXIT_OVERRIDE_SCAN=56
 readonly C0B_EXIT_DB_ENV=57
 readonly C0B_EXIT_DB_URL=58
-readonly PROD_ENV_ALLOWED_KEYS="SPRING_PROFILES_ACTIVE SERVER_ADDRESS SERVER_PORT SPRING_DATASOURCE_URL SPRING_DATASOURCE_USERNAME SPRING_DATASOURCE_PASSWORD SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE SPRING_DATASOURCE_HIKARI_MAX_LIFETIME_MS SPRING_DATASOURCE_HIKARI_IDLE_TIMEOUT_MS SPRING_DATASOURCE_HIKARI_KEEPALIVE_TIME_MS SPRING_DATASOURCE_HIKARI_CONNECTION_TIMEOUT_MS SPRING_DATASOURCE_HIKARI_VALIDATION_TIMEOUT_MS SPRING_FLYWAY_BASELINE_ON_MIGRATE SPRING_FLYWAY_BASELINE_VERSION KIS_BASE_URL KIS_APP_KEY KIS_APP_SECRET KIS_ACCOUNT_NO KIS_CANO KIS_ACNT_PRDT_CD KIS_CONNECT_TIMEOUT KIS_REQUEST_TIMEOUT REALTIME_QUOTE_ENABLED TRADING_API_KEY TRADING_PUBLIC_READ_ALLOWED_ORIGINS TRADING_PUBLIC_CLIENT_IP_HEADER TRADING_PUBLIC_TRUSTED_PROXY_RANGES TRADING_DISCORD_WEBHOOK_URL TRADING_DISCORD_CONNECT_TIMEOUT TRADING_DISCORD_REQUEST_TIMEOUT TRADING_SCHEDULING_ENABLED TRADING_EXECUTION_ENABLED TRADING_OPERATION_MODE TRADING_FX_YAHOO_CONNECT_TIMEOUT TRADING_FX_YAHOO_REQUEST_TIMEOUT TRADING_PRICING_MAX_ATTEMPTS TRADING_PRICING_RETRY_WAIT_MS TRADING_STRATEGY_TOLERANCE_PCT TRADING_PRICING_TICK_SIZE TRADING_CIRCUIT_BREAKER_MA_PERIOD BACKUP_DIR BACKUP_KEEP_DAYS BACKUP_CONFIG_DIR MAC_BACKUP_ENABLED MAC_BACKUP_SSH_USER MAC_BACKUP_SSH_HOST MAC_BACKUP_SSH_PORT MAC_BACKUP_SSH_KEY MAC_BACKUP_REMOTE_DIR"
+readonly PROD_ENV_ALLOWED_KEYS="SPRING_PROFILES_ACTIVE SERVER_ADDRESS SERVER_PORT SPRING_DATASOURCE_URL SPRING_DATASOURCE_USERNAME SPRING_DATASOURCE_PASSWORD SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE SPRING_DATASOURCE_HIKARI_MAX_LIFETIME_MS SPRING_DATASOURCE_HIKARI_IDLE_TIMEOUT_MS SPRING_DATASOURCE_HIKARI_KEEPALIVE_TIME_MS SPRING_DATASOURCE_HIKARI_CONNECTION_TIMEOUT_MS SPRING_DATASOURCE_HIKARI_VALIDATION_TIMEOUT_MS SPRING_FLYWAY_BASELINE_ON_MIGRATE SPRING_FLYWAY_BASELINE_VERSION KIS_BASE_URL KIS_APP_KEY KIS_APP_SECRET KIS_ACCOUNT_NO KIS_CANO KIS_ACNT_PRDT_CD KIS_CONNECT_TIMEOUT KIS_REQUEST_TIMEOUT REALTIME_QUOTE_ENABLED TRADING_API_KEY TRADING_PUBLIC_READ_ALLOWED_ORIGINS TRADING_PUBLIC_CLIENT_IP_HEADER TRADING_PUBLIC_TRUSTED_PROXY_RANGES TRADING_DISCORD_WEBHOOK_URL TRADING_DISCORD_CONNECT_TIMEOUT TRADING_DISCORD_REQUEST_TIMEOUT TRADING_SCHEDULING_ENABLED TRADING_EXECUTION_ENABLED TRADING_OPERATION_MODE TRADING_OPERATION_RISK_LIMITS_MAX_DAILY_TURNOVER_PCT TRADING_OPERATION_RISK_LIMITS_MAX_ORDER_NOTIONAL_USD TRADING_OPERATION_RISK_LIMITS_MAX_RETRY_EXPOSURE_USD TRADING_OPERATION_RISK_LIMITS_MAX_SLIPPAGE_PCT TRADING_FX_YAHOO_CONNECT_TIMEOUT TRADING_FX_YAHOO_REQUEST_TIMEOUT TRADING_PRICING_MAX_ATTEMPTS TRADING_PRICING_RETRY_WAIT_MS TRADING_STRATEGY_TOLERANCE_PCT TRADING_PRICING_TICK_SIZE TRADING_CIRCUIT_BREAKER_MA_PERIOD BACKUP_DIR BACKUP_KEEP_DAYS BACKUP_CONFIG_DIR MAC_BACKUP_ENABLED MAC_BACKUP_SSH_USER MAC_BACKUP_SSH_HOST MAC_BACKUP_SSH_PORT MAC_BACKUP_SSH_KEY MAC_BACKUP_REMOTE_DIR"
 collection_phase_exit=0
 
 finish_with_phase_status() {
@@ -109,6 +109,22 @@ decode_env_value() {
     return 1
   fi
   [[ "${value}" != *$'\n'* && "${value}" != *$'\r'* && "${value}" != *$'\t'* ]] || return 1
+  printf '%s' "${value}"
+}
+
+normalize_risk_limit_value() {
+  local value=${1-}
+  # Match the already-approved DB contract: at most 12 integer digits and
+  # 6 fractional digits.  Exponents, signs, leading zeroes, and whitespace
+  # remain forbidden so this cannot become a general-purpose value channel.
+  [[ "${value}" =~ ^(0|[1-9][0-9]{0,11})(\.[0-9]{1,6})?$ ]] || return 1
+  if [[ "${value}" == *.* ]]; then
+    while [[ "${value}" == *0 ]]; do
+      value=${value%0}
+    done
+    value=${value%.}
+  fi
+  [[ -n "${value}" ]] || return 1
   printf '%s' "${value}"
 }
 
@@ -264,6 +280,11 @@ if [[ "${1-}" == "--decode-env-value" ]]; then
   decode_env_value "$2"
   exit $?
 fi
+if [[ "${1-}" == "--normalize-risk-limit" ]]; then
+  [[ "$#" == 2 ]] || exit 2
+  normalize_risk_limit_value "$2"
+  exit $?
+fi
 if [[ "${1-}" == "--self-test" ]]; then
   [[ "$#" == 1 ]] || exit 2
   validate_select_sql "${SQL_OPEN_ORDER_COUNT}"
@@ -271,6 +292,13 @@ if [[ "${1-}" == "--self-test" ]]; then
   ! validate_select_sql "SELECT * FROM mysql.user"
   ! validate_select_sql "UPDATE strategy_state SET version=2"
   [[ $(decode_env_value "'prod'") == prod ]]
+  [[ $(normalize_risk_limit_value 0.000000) == 0 ]]
+  [[ $(normalize_risk_limit_value 1234.5000) == 1234.5 ]]
+  ! normalize_risk_limit_value -1
+  ! normalize_risk_limit_value 1e3
+  [[ $(normalize_risk_limit_value 123456789012.123456) == 123456789012.123456 ]]
+  ! normalize_risk_limit_value 1234567890123
+  ! normalize_risk_limit_value 1.1234567
   exit 0
 fi
 if [[ "${1-}" == "--validate-env-file" ]]; then
@@ -365,6 +393,20 @@ safe_config_value() {
   printf '%s' "${value}"
 }
 
+safe_risk_limit_value() {
+  local key=$1
+  local value
+  case "${key}" in
+    TRADING_OPERATION_RISK_LIMITS_MAX_DAILY_TURNOVER_PCT|TRADING_OPERATION_RISK_LIMITS_MAX_ORDER_NOTIONAL_USD|TRADING_OPERATION_RISK_LIMITS_MAX_RETRY_EXPOSURE_USD|TRADING_OPERATION_RISK_LIMITS_MAX_SLIPPAGE_PCT)
+      ;;
+    *)
+      die
+      ;;
+  esac
+  value=$(read_env_raw "${key}") || die
+  normalize_risk_limit_value "${value}"
+}
+
 collection_phase_exit=${C0B_EXIT_OVERRIDE_SCAN}
 env_override_count=$(awk -F= '
   /^(SPRING_APPLICATION_JSON|SPRING_CONFIG_(NAME|LOCATION|ADDITIONAL_LOCATION|IMPORT)|SPRING_PROFILES_(INCLUDE|DEFAULT)|SPRING_PROFILES_GROUP_[A-Z0-9_]+|JAVA_TOOL_OPTIONS|_JAVA_OPTIONS|JDK_JAVA_OPTIONS)=/ { count++ }
@@ -381,7 +423,11 @@ decision_config_override_count=$(awk -F= '
         key != "TRADING_PRICING_RETRY_WAIT_MS" &&
         key != "TRADING_PRICING_TICK_SIZE" &&
         key != "TRADING_CIRCUIT_BREAKER_MA_PERIOD" &&
-        key != "TRADING_OPERATION_MODE") {
+        key != "TRADING_OPERATION_MODE" &&
+        key != "TRADING_OPERATION_RISK_LIMITS_MAX_DAILY_TURNOVER_PCT" &&
+        key != "TRADING_OPERATION_RISK_LIMITS_MAX_ORDER_NOTIONAL_USD" &&
+        key != "TRADING_OPERATION_RISK_LIMITS_MAX_RETRY_EXPOSURE_USD" &&
+        key != "TRADING_OPERATION_RISK_LIMITS_MAX_SLIPPAGE_PCT") {
       count++
     }
     if (key == "REALTIME_QUOTE_ENABLED") {
@@ -557,6 +603,10 @@ readonly default_scheduling_enabled
 scheduling_enabled=$(safe_config_value TRADING_SCHEDULING_ENABLED "${default_scheduling_enabled}") || die
 execution_enabled=$(safe_config_value TRADING_EXECUTION_ENABLED false) || die
 operation_mode=$(safe_config_value TRADING_OPERATION_MODE PAPER) || die
+current_file_max_daily_turnover_pct=$(safe_risk_limit_value TRADING_OPERATION_RISK_LIMITS_MAX_DAILY_TURNOVER_PCT) || die
+current_file_max_order_notional_usd=$(safe_risk_limit_value TRADING_OPERATION_RISK_LIMITS_MAX_ORDER_NOTIONAL_USD) || die
+current_file_max_retry_exposure_usd=$(safe_risk_limit_value TRADING_OPERATION_RISK_LIMITS_MAX_RETRY_EXPOSURE_USD) || die
+current_file_max_slippage_pct=$(safe_risk_limit_value TRADING_OPERATION_RISK_LIMITS_MAX_SLIPPAGE_PCT) || die
 scheduling_enabled=$(printf '%s' "${scheduling_enabled}" | tr '[:upper:]' '[:lower:]') || die
 execution_enabled=$(printf '%s' "${execution_enabled}" | tr '[:upper:]' '[:lower:]') || die
 operation_mode=$(printf '%s' "${operation_mode}" | tr '[:lower:]' '[:upper:]') || die
@@ -587,6 +637,8 @@ tolerance_pct=$(safe_config_value TRADING_STRATEGY_TOLERANCE_PCT 5.0) || die
 tick_size=$(safe_config_value TRADING_PRICING_TICK_SIZE 0.01) || die
 ma_period=$(safe_config_value TRADING_CIRCUIT_BREAKER_MA_PERIOD 200) || die
 readonly spring_profile scheduling_enabled execution_enabled operation_mode
+readonly current_file_max_daily_turnover_pct current_file_max_order_notional_usd
+readonly current_file_max_retry_exposure_usd current_file_max_slippage_pct
 readonly server_address server_port connect_timeout request_timeout kis_origin kis_origin_contract
 readonly yahoo_connect_timeout yahoo_request_timeout max_attempts retry_wait_ms
 readonly tolerance_pct tick_size ma_period
@@ -801,6 +853,10 @@ emit effective_runtime_config spring_profile "${spring_profile}"
 emit effective_runtime_config scheduling_enabled "${scheduling_enabled}"
 emit effective_runtime_config execution_enabled "${execution_enabled}"
 emit effective_runtime_config operation_mode "${operation_mode}"
+emit effective_runtime_config current_file_max_daily_turnover_pct "${current_file_max_daily_turnover_pct}"
+emit effective_runtime_config current_file_max_order_notional_usd "${current_file_max_order_notional_usd}"
+emit effective_runtime_config current_file_max_retry_exposure_usd "${current_file_max_retry_exposure_usd}"
+emit effective_runtime_config current_file_max_slippage_pct "${current_file_max_slippage_pct}"
 server_binding=${server_address}
 if [[ "${server_address}" != UNVERIFIED_NON_PROD_PROFILE ]]; then
   server_binding="${server_address}:${server_port}"

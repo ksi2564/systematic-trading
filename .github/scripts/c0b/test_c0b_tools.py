@@ -110,6 +110,10 @@ def fake_raw_values(runtime_sha: str = FAKE_RUNTIME_SHA) -> dict[str, dict[str, 
             "scheduling_enabled": "true",
             "execution_enabled": "false",
             "operation_mode": "PAPER",
+            "current_file_max_daily_turnover_pct": "0",
+            "current_file_max_order_notional_usd": "0",
+            "current_file_max_retry_exposure_usd": "0",
+            "current_file_max_slippage_pct": "0",
             "server_binding": "127.0.0.1:8080",
             "service_sub_state": "dead",
             "environment_file_contract": "EXPECTED",
@@ -501,9 +505,15 @@ class C0BToolsTest(unittest.TestCase):
         return responses, expected_order
 
     def _run_collector_fixture(
-        self, failure: str = "", *, active: bool = False
+        self,
+        failure: str = "",
+        *,
+        active: bool = False,
+        risk_limits: dict[str, str] | None = None,
     ) -> tuple[subprocess.CompletedProcess[bytes], Path, list[str]]:
-        fixture_name = failure or ("active-success" if active else "success")
+        fixture_name = failure or (
+            "risk-limits" if risk_limits else "active-success" if active else "success"
+        )
         fixture = self.root / ("collector-" + fixture_name)
         bin_dir = fixture / "bin"
         app_dir = fixture / "opt/trading/app"
@@ -553,6 +563,28 @@ class C0BToolsTest(unittest.TestCase):
             "MAC_BACKUP_SSH_KEY='/home/ubuntu/.ssh/trading-backup'",
             "MAC_BACKUP_SSH_KEY='/fixture-backup-key-secret'",
         )
+        configured_risk_limits = risk_limits or {
+            "TRADING_OPERATION_RISK_LIMITS_MAX_DAILY_TURNOVER_PCT": "0",
+            "TRADING_OPERATION_RISK_LIMITS_MAX_ORDER_NOTIONAL_USD": "0",
+            "TRADING_OPERATION_RISK_LIMITS_MAX_RETRY_EXPOSURE_USD": "0",
+            "TRADING_OPERATION_RISK_LIMITS_MAX_SLIPPAGE_PCT": "0",
+        }
+        for key, value in configured_risk_limits.items():
+            env_text += f"{key}='{value}'\n"
+        if failure == "risk-limit-invalid":
+            env_text = re.sub(
+                r"^TRADING_OPERATION_RISK_LIMITS_MAX_ORDER_NOTIONAL_USD=.*$",
+                "TRADING_OPERATION_RISK_LIMITS_MAX_ORDER_NOTIONAL_USD='1234567890123'",
+                env_text,
+                flags=re.MULTILINE,
+            )
+        elif failure == "risk-limit-missing":
+            env_text = re.sub(
+                r"^TRADING_OPERATION_RISK_LIMITS_MAX_SLIPPAGE_PCT=.*\n",
+                "",
+                env_text,
+                flags=re.MULTILINE,
+            )
         if failure == "env-shape":
             env_text += "SPRING_PROFILES_ACTIVE=duplicate\n"
         elif failure == "env-allowlist":
@@ -1341,6 +1373,57 @@ class C0BToolsTest(unittest.TestCase):
         )
         self.assertNotEqual(malformed.returncode, 0)
 
+    def test_risk_limit_normalizer_accepts_only_bounded_canonical_numbers(self) -> None:
+        script = str(SCRIPT_DIR / "collect_remote.sh")
+        accepted = {
+            "0": "0",
+            "0.000000": "0",
+            "12.5000": "12.5",
+            "1234567": "1234567",
+            "0.123456": "0.123456",
+            "123456789012.123456": "123456789012.123456",
+        }
+        for value, expected in accepted.items():
+            result = subprocess.run(
+                [script, "--normalize-risk-limit", value],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                check=False,
+                text=True,
+            )
+            with self.subTest(value=value):
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(result.stdout, expected)
+        for value in (
+            "",
+            "-1",
+            "+1",
+            ".5",
+            "01",
+            "1e3",
+            "1234567890123",
+            "1.1234567",
+            "NaN",
+            "$(id)",
+        ):
+            result = subprocess.run(
+                [script, "--normalize-risk-limit", value],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                check=False,
+                text=True,
+            )
+            with self.subTest(value=value):
+                self.assertNotEqual(result.returncode, 0)
+                self.assertEqual(result.stdout, "")
+
+        values = fake_raw_values(self.runtime_sha)
+        values["effective_runtime_config"][
+            "current_file_max_order_notional_usd"
+        ] = "01"
+        with self.assertRaises(C0BError):
+            parse_raw_stream(io.BytesIO(raw_protocol(values)))
+
     def test_env_file_parser_is_canonical_and_rejects_duplicates(self) -> None:
         script = str(SCRIPT_DIR / "collect_remote.sh")
         fixtures = {
@@ -1371,7 +1454,11 @@ class C0BToolsTest(unittest.TestCase):
             "SPRING_DATASOURCE_URL=jdbc:mysql://127.0.0.1:3306/trading\n"
             "KIS_BASE_URL=https://openapi.koreainvestment.com:9443\n"
             "KIS_CONNECT_TIMEOUT=3s\n"
-            "TRADING_CIRCUIT_BREAKER_MA_PERIOD=200\n",
+            "TRADING_CIRCUIT_BREAKER_MA_PERIOD=200\n"
+            "TRADING_OPERATION_RISK_LIMITS_MAX_DAILY_TURNOVER_PCT=12.5\n"
+            "TRADING_OPERATION_RISK_LIMITS_MAX_ORDER_NOTIONAL_USD=2500\n"
+            "TRADING_OPERATION_RISK_LIMITS_MAX_RETRY_EXPOSURE_USD=5000\n"
+            "TRADING_OPERATION_RISK_LIMITS_MAX_SLIPPAGE_PCT=0.8\n",
             encoding="utf-8",
         )
         self.assertEqual(
@@ -1389,6 +1476,8 @@ class C0BToolsTest(unittest.TestCase):
                 "KIS_CONNECTTIMEOUT=3s",
                 "TRADING_CIRCUITBREAKER_MA_PERIOD=200",
                 "TRADING_MARKETCALENDAR_MARKET_ZONE_ID=UTC",
+                "TRADING_OPERATION_RISKLIMITS_MAX_ORDER_NOTIONAL_USD=2500",
+                "TRADING_OPERATION_RISK_LIMITS_MAXORDERNOTIONALUSD=2500",
                 "UNKNOWN_KEY=value",
             )
         ):
@@ -1595,7 +1684,10 @@ class C0BToolsTest(unittest.TestCase):
         )
         expected_protocol = raw_protocol(expected, self.runtime_sha)
         self.assertEqual(result.stdout, expected_protocol)
-        self.assertEqual(len(result.stdout.splitlines()), 145)
+        self.assertEqual(
+            len(result.stdout.splitlines()),
+            2 + sum(len(RAW_FACTS[item_id]) for item_id in ITEM_IDS[:10]),
+        )
         self.assertEqual(parse_raw_stream(io.BytesIO(result.stdout)), expected)
         self.assertEqual(observed_order, self._collector_fixture_sql()[1])
         self._assert_collector_host_call_vectors(fixture, active=False)
@@ -1632,6 +1724,49 @@ class C0BToolsTest(unittest.TestCase):
                 )
             ),
         )
+
+    def test_collector_captures_and_c0a_compares_current_file_risk_limits(self) -> None:
+        configured = {
+            "TRADING_OPERATION_RISK_LIMITS_MAX_DAILY_TURNOVER_PCT": "12.5000",
+            "TRADING_OPERATION_RISK_LIMITS_MAX_ORDER_NOTIONAL_USD": "123456789012.123456",
+            "TRADING_OPERATION_RISK_LIMITS_MAX_RETRY_EXPOSURE_USD": "5000",
+            "TRADING_OPERATION_RISK_LIMITS_MAX_SLIPPAGE_PCT": "0.800000",
+        }
+        result, fixture, observed_order = self._run_collector_fixture(
+            risk_limits=configured
+        )
+        self.assertEqual(result.returncode, 0, result.stderr.decode())
+        expected = fake_raw_values(self.runtime_sha)
+        expected["effective_runtime_config"].update(
+            {
+                "current_file_max_daily_turnover_pct": "12.5",
+                "current_file_max_order_notional_usd": "123456789012.123456",
+                "current_file_max_retry_exposure_usd": "5000",
+                "current_file_max_slippage_pct": "0.8",
+                "decision_config_override_contract": "UNVERIFIED_OVERRIDE_PRESENT",
+                "file_and_unit_override_status": "UNVERIFIED_OVERRIDE_PRESENT",
+            }
+        )
+        self.assertEqual(parse_raw_stream(io.BytesIO(result.stdout)), expected)
+        self.assertEqual(observed_order, self._collector_fixture_sql()[1])
+        self._assert_collector_host_call_vectors(fixture, active=False)
+
+        sanitized = self.sanitize(result.stdout, "collector-risk-limits")
+        self.assertEqual(sanitized.returncode, 0, sanitized.stderr.decode())
+        output = self.root / "collector-risk-limits-bundle"
+        build_bundle_atomic(
+            capture_dir=self.runner_temp / "collector-risk-limits",
+            output_dir=output,
+            decision_file=self.decision_file,
+            snapshot_at="2026-08-09T13:01:00+09:00",
+            compared_at="2026-08-09T13:02:00+09:00",
+            diff_collector="c0b-code-owned-comparison",
+            known_deployments_path=self.known_file,
+            repository_root=self.fake_repository,
+            **self.workflow_context,
+        )
+        diff = json.loads((output / "diff.json").read_text(encoding="utf-8"))
+        self.assertEqual(diff["items"][1]["result"], "DIFF")
 
     def test_collector_active_main_fixture_covers_timestamp_branch(self) -> None:
         result, fixture, observed_order = self._run_collector_fixture(active=True)
@@ -1720,6 +1855,8 @@ class C0BToolsTest(unittest.TestCase):
             "invocation": 41,
             "runtime": 42,
             "config": 43,
+            "risk-limit-invalid": 43,
+            "risk-limit-missing": 43,
             "database": 44,
             "consistency": 45,
             "host-stability": 46,
@@ -2001,6 +2138,35 @@ class C0BToolsTest(unittest.TestCase):
                 **self.workflow_context,
             )
         self.assertFalse(output.exists())
+
+    def test_bundle_validation_rejects_noncanonical_json_bytes(self) -> None:
+        output = self.build_bundle()
+        diff_path = output / "diff.json"
+        original = diff_path.read_bytes()
+        diff_path.write_bytes(b" " + original)
+        with self.assertRaisesRegex(C0BError, "canonical JSON bytes"):
+            validate_bundle_directory(
+                output,
+                decision_file=self.decision_file,
+                known_deployments_path=self.known_file,
+                repository_root=self.fake_repository,
+            )
+        diff_path.write_bytes(original)
+
+        payload = json.loads(original)
+        reordered = dict(reversed(tuple(payload.items())))
+        reordered_bytes = (
+            json.dumps(reordered, ensure_ascii=False, separators=(",", ":")) + "\n"
+        ).encode("utf-8")
+        self.assertNotEqual(reordered_bytes, original)
+        diff_path.write_bytes(reordered_bytes)
+        with self.assertRaisesRegex(C0BError, "canonical JSON bytes"):
+            validate_bundle_directory(
+                output,
+                decision_file=self.decision_file,
+                known_deployments_path=self.known_file,
+                repository_root=self.fake_repository,
+            )
 
     def test_bundle_validation_recomputes_code_owned_results_without_plan(self) -> None:
         output = self.build_bundle()
